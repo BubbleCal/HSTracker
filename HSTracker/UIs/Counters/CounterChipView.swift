@@ -211,6 +211,15 @@ class CounterTooltipController {
         let cardImages = RelatedCardsTooltipPanel.shared
         cardImages.setTitle(counter.localizedName)
         cardImages.setCardIdsFromCards(cardsToDisplay)
+        // The panel is shared with the trackers' own card hovers, which do set
+        // these. A counter has no Outfinder pool of its own, so without clearing
+        // them the chip's grid was drawn next to the last hovered card's
+        // statistics - and vanished outright when that card had set
+        // hasLargePool, since the content view drops the grid in that case.
+        cardImages.setPoolStatistics(nil, relatedCardsSummary: nil, hasLargePool: false)
+        // Same reason: right-clicking here must not open the pool browser for
+        // whatever card was hovered before.
+        RelatedCardsRightClickMonitor.shared.clearHoveredLargePool()
 
         let width = CGFloat(cardImages.gridWidth)
         let height = CGFloat(cardImages.gridHeight)

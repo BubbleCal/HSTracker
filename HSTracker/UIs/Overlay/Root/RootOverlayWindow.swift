@@ -87,6 +87,14 @@ class RootOverlayWindow: OverWindowController {
 
         updateFilterRegionHover(at: viewPoint)
         updateCounterHover()
+        // Above the click-through guard, for the same reason as the counter
+        // hover right before it: which card is under the cursor has nothing to
+        // do with whether the canvas currently has interactive children. Running
+        // it only when it does meant that a card tooltip stayed on screen when
+        // the panel holding the hovered card closed and took the last
+        // interactive region with it in the same pass - the sweep that would
+        // have dismissed it lives at the end of updateCardHover().
+        updateCardHover()
 
         guard !viewModel.interactiveRegions.isEmpty else {
             setIgnoresMouseEvents(true)
@@ -94,8 +102,6 @@ class RootOverlayWindow: OverWindowController {
         }
         let inside = viewModel.interactiveRegions.contains { $0.contains(viewPoint) }
         setIgnoresMouseEvents(!inside)
-
-        updateCardHover()
     }
 
     // HDT's BgsTopBarMask MouseEnter/MouseLeave handlers, which flip

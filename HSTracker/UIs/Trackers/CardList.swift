@@ -14,7 +14,12 @@ class CardList: OverWindowController {
     @IBOutlet var table: NSTableView?
 
     fileprivate var animatedCards: [CardBar] = []
-    let lock = UnfairLock()
+    // Recursive on purpose: internalSet() holds this across NSTableView's
+    // insertRows/removeRows, and the table answers those by calling back into
+    // numberOfRows(in:) and tableView(_:viewFor:row:) on the same thread - both
+    // of which take the lock again. With a non-recursive lock that is a
+    // main-thread deadlock, i.e. a frozen app.
+    let lock = RecursiveLock()
     var isSecretPanel = false
 
     var observer: NSObjectProtocol?
@@ -55,7 +60,10 @@ class CardList: OverWindowController {
         lock.around {
             var newCards = [Card]()
             cards.forEach({ (card: Card) in
-                let existing = animatedCards.first { areEqualForList($0.card!, card) }
+                let existing = animatedCards.first { bar in
+                    guard let barCard = bar.card else { return false }
+                    return areEqualForList(barCard, card)
+                }
                 if existing == nil {
                     newCards.append(card)
                 }
@@ -63,13 +71,16 @@ class CardList: OverWindowController {
 
             var toRemove: [Int] = []
             animatedCards.forEach({ (c: CardBar) in
-                if !cards.any({ areEqualForList($0, c.card!) }) {
+                // A bar with no card is stale by definition, so it goes too -
+                // this used to force-unwrap and take the app down with it.
+                let stillListed = c.card.map { barCard in cards.any({ areEqualForList($0, barCard) }) } ?? false
+                if !stillListed {
                     if let index = animatedCards.firstIndex(of: c), index < table?.numberOfRows ?? 0 {
                         toRemove.append(index)
                     }
                 }
             })
-            
+
             table?.beginUpdates()
             var indexSet = IndexSet(toRemove)
             table?.removeRows(at: indexSet, withAnimation: [.effectFade, .slideRight])
@@ -78,18 +89,18 @@ class CardList: OverWindowController {
             }
             indexSet.removeAll()
             newCards.forEach({
+                guard let index = cards.firstIndex(of: $0) else { return }
                 let newCard = CardBar.factory()
                 newCard.setDelegate(self)
                 newCard.card = $0
                 newCard.playerType = .secrets
-                let index = cards.firstIndex(of: $0)!
-                animatedCards.insert(newCard, at: index)
+                animatedCards.insert(newCard, at: min(index, animatedCards.count))
                 indexSet.insert(index)
             })
             table?.insertRows(at: indexSet, withAnimation: .slideLeft)
-            // need to signal here to avoid a deadlock
         }
-        // needs to be outside of lock.around or it will abort
+        // Deliberately outside the critical section: endUpdates() is where the
+        // table actually applies the batch and asks back for its rows.
         table?.endUpdates()
     }
     
@@ -157,11 +168,18 @@ extension CardList: NSTableViewDelegate {
 // MARK: - CardCellHover
 extension CardList: CardCellHover {
     func hover(cell: CardBar, card: Card) {
-        let row = table!.row(for: cell)
-        let rect = table!.frameOfCell(atColumn: 0, row: row)
+        // Every one of these used to be force-unwrapped. A hover can outlive the
+        // window being torn down (the tracker hides while the cursor is over a
+        // row), and a bar that has just been removed from the table answers
+        // row(for:) with -1, so this ran a real risk of crashing on a mouse move.
+        guard let table, let window = self.window else { return }
+        let row = table.row(for: cell)
+        guard row >= 0 else { return }
+        let rect = table.frameOfCell(atColumn: 0, row: row)
 
-        let offset = rect.origin.y - table!.enclosingScrollView!.documentVisibleRect.origin.y
-        let windowRect = self.window!.frame
+        let visibleOrigin = table.enclosingScrollView?.documentVisibleRect.origin.y ?? 0
+        let offset = rect.origin.y - visibleOrigin
+        let windowRect = window.frame
 
         let hoverFrame = NSRect(x: 0, y: 0, width: 256, height: 388)
 

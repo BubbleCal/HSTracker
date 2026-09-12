@@ -1172,6 +1172,7 @@
 		B8496732289A0CF300D90B30 /* SynchronizedDictionary.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8BD84542860058400F4F224 /* SynchronizedDictionary.swift */; };
 		B8496733289A0CF300D90B30 /* SynchronizedArray.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8FE1F982875BD15004C397C /* SynchronizedArray.swift */; };
 		B8496734289A0D8F00D90B30 /* UnfairLock.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8BD8452285D23C500F4F224 /* UnfairLock.swift */; };
+		B8A1F1032E6A0B0100000003 /* RecursiveLock.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8A1F1012E6A0B0100000001 /* RecursiveLock.swift */; };
 		B8496738289A0DC500D90B30 /* DeckLens.swift in Sources */ = {isa = PBXBuildFile; fileRef = B89C9895280C610C005E9315 /* DeckLens.swift */; };
 		B8496739289A0DCF00D90B30 /* AnimatedCardList.swift in Sources */ = {isa = PBXBuildFile; fileRef = B89C9893280A113A005E9315 /* AnimatedCardList.swift */; };
 		B849673A289A0DD800D90B30 /* Sentry.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8FE1F9B28784ACE004C397C /* Sentry.swift */; };
@@ -1736,6 +1737,7 @@
 		B8BD3BA82C4159EA001E85B7 /* BattlegroundsCompStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8BD3BA72C4159EA001E85B7 /* BattlegroundsCompStats.swift */; };
 		B8BD3BAE2C43507D001E85B7 /* BattlegroundsCompositionStatsRowViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8BD3BAD2C43507D001E85B7 /* BattlegroundsCompositionStatsRowViewModel.swift */; };
 		B8BD8453285D23C500F4F224 /* UnfairLock.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8BD8452285D23C500F4F224 /* UnfairLock.swift */; };
+		B8A1F1022E6A0B0100000002 /* RecursiveLock.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8A1F1012E6A0B0100000001 /* RecursiveLock.swift */; };
 		B8BD84552860058400F4F224 /* SynchronizedDictionary.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8BD84542860058400F4F224 /* SynchronizedDictionary.swift */; };
 		B8BD84572861394100F4F224 /* Regex.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8BD84562861394100F4F224 /* Regex.swift */; };
 		B8BDF9062A9625D9000DA4ED /* AnomalyFactoryProxy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8BDF9052A9625D9000DA4ED /* AnomalyFactoryProxy.swift */; };
@@ -3683,6 +3685,7 @@
 		B8BD3BA52C41596C001E85B7 /* BattlegroundsCompStatsParams.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BattlegroundsCompStatsParams.swift; sourceTree = "<group>"; };
 		B8BD3BA72C4159EA001E85B7 /* BattlegroundsCompStats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BattlegroundsCompStats.swift; sourceTree = "<group>"; };
 		B8BD3BAD2C43507D001E85B7 /* BattlegroundsCompositionStatsRowViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BattlegroundsCompositionStatsRowViewModel.swift; sourceTree = "<group>"; };
+		B8A1F1012E6A0B0100000001 /* RecursiveLock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecursiveLock.swift; sourceTree = "<group>"; };
 		B8BD8452285D23C500F4F224 /* UnfairLock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnfairLock.swift; sourceTree = "<group>"; };
 		B8BD84542860058400F4F224 /* SynchronizedDictionary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynchronizedDictionary.swift; sourceTree = "<group>"; tabWidth = 3; };
 		B8BD84562861394100F4F224 /* Regex.swift */ = {isa = PBXFileReference; explicitFileType = sourcecode.swift; path = Regex.swift; sourceTree = "<group>"; };
@@ -4323,6 +4326,7 @@
 				B8FDE9262CD99D840093BFF7 /* ReflectionHelper.swift */,
 				B8BD84562861394100F4F224 /* Regex.swift */,
 				B8820CCF25603FB00072ECBC /* RemoteConfig.swift */,
+				B8A1F1012E6A0B0100000001 /* RecursiveLock.swift */,
 				B8832DD926057A5000646BA4 /* RepeatingTimer.swift */,
 				B8FE1F982875BD15004C397C /* SynchronizedArray.swift */,
 				B8BD84542860058400F4F224 /* SynchronizedDictionary.swift */,
@@ -7238,6 +7242,7 @@
 				B80B5B332C7508BF005F4321 /* TrinketFactoryProxy.swift in Sources */,
 				B820294D2CD2D38800C19A8C /* ExpeditionSergeantEnchantment.swift in Sources */,
 				B8BD8453285D23C500F4F224 /* UnfairLock.swift in Sources */,
+				B8A1F1022E6A0B0100000002 /* RecursiveLock.swift in Sources */,
 				B8A17C022E5F1A0100C1D2E0 /* MainThreadGuard.swift in Sources */,
 				B8AEB6092FB26BA200CDA2C0 /* AnimalCompanionCounter.swift in Sources */,
 				43F2040F1E93C2E600E0BC4A /* Priest.swift in Sources */,
@@ -9017,6 +9022,7 @@
 				BB5E553A00000000000000C8 /* BattlegroundsSessionOverlayView.swift in Sources */,
 				BB5E551A0000000000000015 /* BattlegroundsCompositionStatsRowView.swift in Sources */,
 				B8496734289A0D8F00D90B30 /* UnfairLock.swift in Sources */,
+				B8A1F1032E6A0B0100000003 /* RecursiveLock.swift in Sources */,
 				B8A17C032E5F1A0100C1D2E0 /* MainThreadGuard.swift in Sources */,
 				B8496732289A0CF300D90B30 /* SynchronizedDictionary.swift in Sources */,
 				B8496733289A0CF300D90B30 /* SynchronizedArray.swift in Sources */,

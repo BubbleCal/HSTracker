@@ -314,5 +314,8 @@ class Database {
         if card.battlegroundsPoolMinion && !Cards.battlegroundsMinions.contains(card) {
             Cards.battlegroundsMinions.append(card)
         }
+        // Cards derives a collectible list and dbf-id indexes lazily; appending
+        // invalidates them so nothing serves a view of a half-loaded database.
+        Cards.invalidateDerived()
     }
 }

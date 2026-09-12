@@ -31,6 +31,11 @@ class CardBar: NSView, CardBarTheme {
     }()
     weak private var delegate: CardCellHover?
 
+    /// Whether the cursor is currently inside this bar, as far as AppKit's
+    /// tracking area has told us. Used to tell a real hover apart from the cases
+    /// where the bar changes out from under a stationary cursor.
+    private var isHovered = false
+
     private var flashLayer: CALayer?
     private var cardLayer: CALayer?
 
@@ -58,6 +63,21 @@ class CardBar: NSView, CardBarTheme {
             oldCard = oldValue
             if oldCard?.id != card?.id {
                 cardTile = nil
+                // The row the cursor is sitting on can be handed a different
+                // card by a list refresh. No mouse event accompanies that, so
+                // without re-arming the hover the popup keeps describing the
+                // card that used to be here.
+                //
+                // Deferred rather than called straight from the setter: the
+                // assignment happens inside AnimatedCardList's lock, and the
+                // delegate's hover handler reaches back into that same list to
+                // update synergy highlighting.
+                if isHovered {
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self, self.isHovered, let current = self.card else { return }
+                        self.delegate?.hover(cell: self, card: current)
+                    }
+                }
             }
         }
     }
@@ -69,48 +89,61 @@ class CardBar: NSView, CardBarTheme {
     var backgroundImage: NSImage?
     var isBattlegrounds: Bool = false
 
+    // A theme is a directory of PNGs shipped inside the bundle: which of them
+    // exist never changes while the app runs. These four checks used to re-stat
+    // every file they name on each access, and draw() reaches all four - so a
+    // 30-card deck list was issuing hundreds of stat() calls per redraw, on the
+    // main thread. The answers are resolved once per theme directory instead.
+    private struct ThemeAvailability {
+        let required: Bool
+        let optionalFrames: Bool
+        let optionalGems: Bool
+        let optionalCountBoxes: Bool
+    }
+
+    private static let themeAvailabilityLock = UnfairLock()
+    private static var themeAvailabilityCache = [String: ThemeAvailability]()
+
+    private var themeAvailability: ThemeAvailability {
+        let dir = themeDir
+        if let cached = CardBar.themeAvailabilityLock.around({ CardBar.themeAvailabilityCache[dir] }) {
+            return cached
+        }
+
+        let resolved: ThemeAvailability
+        if let rp = Bundle.main.resourcePath {
+            let path = "\(rp)/Resources/Themes/Bars/\(dir)/"
+            let manager = FileManager.default
+            func allExist(_ elements: [ThemeElement: ThemeElementInfo]) -> Bool {
+                return elements.values.allSatisfy { manager.fileExists(atPath: "\(path)\($0.filename)") }
+            }
+            resolved = ThemeAvailability(required: allExist(CardBar.requiredElements),
+                                         optionalFrames: allExist(CardBar.optionalFrameElements),
+                                         optionalGems: allExist(CardBar.optionalGemElements),
+                                         optionalCountBoxes: allExist(CardBar.optionalCountBoxElements))
+        } else {
+            resolved = ThemeAvailability(required: false, optionalFrames: false,
+                                         optionalGems: false, optionalCountBoxes: false)
+        }
+
+        CardBar.themeAvailabilityLock.around { CardBar.themeAvailabilityCache[dir] = resolved }
+        return resolved
+    }
+
     var hasAllRequired: Bool {
-        guard let rp = Bundle.main.resourcePath else {
-            return false
-        }
-        let path = "\(rp)/Resources/Themes/Bars/\(themeDir)/"
-        let manager = FileManager.default
-        return required.map { $0.1 } .all {
-            manager.fileExists(atPath: "\(path)\($0.filename)")
-        }
+        return themeAvailability.required
     }
 
     private var hasAllOptionalFrames: Bool {
-        guard let rp = Bundle.main.resourcePath else {
-            return false
-        }
-        let path = "\(rp)/Resources/Themes/Bars/\(themeDir)/"
-        let manager = FileManager.default
-        return optionalFrame.map { $0.1 } .all {
-            manager.fileExists(atPath: "\(path)\($0.filename)")
-        }
+        return themeAvailability.optionalFrames
     }
 
     private var hasAllOptionalGems: Bool {
-        guard let rp = Bundle.main.resourcePath else {
-            return false
-        }
-        let path = "\(rp)/Resources/Themes/Bars/\(themeDir)/"
-        let manager = FileManager.default
-        return optionalGems.map { $0.1 } .all {
-            manager.fileExists(atPath: "\(path)\($0.filename)")
-        }
+        return themeAvailability.optionalGems
     }
 
     private var hasAllOptionalCountBoxes: Bool {
-        guard let rp = Bundle.main.resourcePath else {
-            return false
-        }
-        let path = "\(rp)/Resources/Themes/Bars/\(themeDir)/"
-        let manager = FileManager.default
-        return optionalCountBoxes.map { $0.1 } .all {
-            manager.fileExists(atPath: "\(path)\($0.filename)")
-        }
+        return themeAvailability.optionalCountBoxes
     }
 
     var fadeOffset: CGFloat = -23
@@ -125,15 +158,28 @@ class CardBar: NSView, CardBarTheme {
         return NSColor.white
     }
 
-    let frameRect = NSRect(x: 0, y: 0, width: 217, height: 34)
-    let gemRect = NSRect(x: 0, y: 0, width: 34, height: 34)
-    let boxRect = NSRect(x: 183, y: 0, width: 34, height: 34)
-    let mulliganWinrateBoxRect = NSRect(x: 136, y: 4, width: 54, height: 26)
+    // The rects the shared theme element tables below are built from. They live
+    // at type level because a static table cannot reach an instance property;
+    // the instance properties after them keep every existing `frameRect`-style
+    // reference (including the theme subclasses') working unchanged.
+    enum Metrics {
+        static let frame = NSRect(x: 0, y: 0, width: 217, height: 34)
+        static let gem = NSRect(x: 0, y: 0, width: 34, height: 34)
+        static let box = NSRect(x: 183, y: 0, width: 34, height: 34)
+        static let mulliganWinrateBox = NSRect(x: 136, y: 4, width: 54, height: 26)
+        static let arenaHelper = NSRect(x: 17, y: 0, width: 34, height: 34)
+    }
+
+    var frameRect: NSRect { return Metrics.frame }
+    var gemRect: NSRect { return Metrics.gem }
+    var boxRect: NSRect { return Metrics.box }
+    var mulliganWinrateBoxRect: NSRect { return Metrics.mulliganWinrateBox }
+    var arenaHelperRect: NSRect { return Metrics.arenaHelper }
+
     let imageRect = NSRect(x: 83, y: 0, width: 134, height: 34)
     let imageRectBG = NSRect(x: 0, y: 0, width: 217, height: 34)
     let countTextRect = NSRect(x: 196, y: 9, width: 14, height: 34)
     let costTextRect = NSRect(x: 0, y: 9, width: 34, height: 34)
-    let arenaHelperRect = NSRect(x: 17, y: 0, width: 34, height: 34)
     let tag1 = NSRect(x: 183, y: 0, width: 34, height: 34)
     let tag2 = NSRect(x: 149, y: 0, width: 34, height: 34)
     let coinRect = NSRect(x: 217-25, y: 4, width: 25, height: 25)
@@ -157,50 +203,63 @@ class CardBar: NSView, CardBarTheme {
         }
     }
 
+    // The four tables below are fixed: every entry names a file and a rect built
+    // from this class's own rect constants, none of which any theme subclass
+    // overrides. They used to be computed properties, so each of the dozen-odd
+    // lookups draw() makes allocated a whole new dictionary. They are built once
+    // and handed out by reference instead.
+    private static let requiredElements: [ThemeElement: ThemeElementInfo] = [
+        .defaultFrame: ThemeElementInfo(filename: "frame.png", rect: Metrics.frame),
+        .defaultGem: ThemeElementInfo(filename: "gem.png", rect: Metrics.gem),
+        .defaultCountBox: ThemeElementInfo(filename: "countbox.png", rect: Metrics.box),
+        .darkOverlay: ThemeElementInfo(filename: "dark.png", rect: Metrics.frame),
+        .fadeOverlay: ThemeElementInfo(filename: "fade.png", rect: Metrics.frame),
+        .createdIcon: ThemeElementInfo(filename: "icon_created.png", rect: Metrics.box),
+        .badAsMultipleIcon: ThemeElementInfo(filename: "icon_bad_multiple.png",
+                                             rect: Metrics.arenaHelper),
+        .legendaryIcon: ThemeElementInfo(filename: "icon_legendary.png", rect: Metrics.box),
+        .flashFrame: ThemeElementInfo(filename: "frame_mask.png", rect: Metrics.frame),
+        .defaultKeepRateBox: ThemeElementInfo(filename: "keeprate_box.png", rect: Metrics.mulliganWinrateBox),
+        .defaultKeepRateActiveBox: ThemeElementInfo(filename: "keeprate_active_box.png", rect: Metrics.mulliganWinrateBox),
+        .highlightTeal: ThemeElementInfo(filename: "highlight_teal.png", rect: Metrics.frame),
+        .highlightOrange: ThemeElementInfo(filename: "highlight_orange.png", rect: Metrics.frame),
+        .highlightGreen: ThemeElementInfo(filename: "highlight_green.png", rect: Metrics.frame)
+    ]
+
+    private static let optionalFrameElements: [ThemeElement: ThemeElementInfo] = [
+        .commonFrame: ThemeElementInfo(filename: "frame_common.png", rect: Metrics.frame),
+        .rareFrame: ThemeElementInfo(filename: "frame_rare.png", rect: Metrics.frame),
+        .epicFrame: ThemeElementInfo(filename: "frame_epic.png", rect: Metrics.frame),
+        .legendaryFrame: ThemeElementInfo(filename: "frame_legendary.png", rect: Metrics.frame)
+    ]
+
+    private static let optionalGemElements: [ThemeElement: ThemeElementInfo] = [
+        .commonGem: ThemeElementInfo(filename: "gem_common.png", rect: Metrics.gem),
+        .rareGem: ThemeElementInfo(filename: "gem_rare.png", rect: Metrics.gem),
+        .epicGem: ThemeElementInfo(filename: "gem_epic.png", rect: Metrics.gem),
+        .legendaryGem: ThemeElementInfo(filename: "gem_legendary.png", rect: Metrics.gem)
+    ]
+
+    private static let optionalCountBoxElements: [ThemeElement: ThemeElementInfo] = [
+        .commonCountBox: ThemeElementInfo(filename: "countbox_common.png", rect: Metrics.box),
+        .rareCountBox: ThemeElementInfo(filename: "countbox_rare.png", rect: Metrics.box),
+        .epicCountBox: ThemeElementInfo(filename: "countbox_epic.png", rect: Metrics.box),
+        .legendaryCountBox: ThemeElementInfo(filename: "countbox_legendary.png", rect: Metrics.box)
+    ]
+
     var required: [ThemeElement: ThemeElementInfo] {
-        return [
-            .defaultFrame: ThemeElementInfo(filename: "frame.png", rect: frameRect),
-            .defaultGem: ThemeElementInfo(filename: "gem.png", rect: gemRect),
-            .defaultCountBox: ThemeElementInfo(filename: "countbox.png", rect: boxRect),
-            .darkOverlay: ThemeElementInfo(filename: "dark.png", rect: frameRect),
-            .fadeOverlay: ThemeElementInfo(filename: "fade.png", rect: frameRect),
-            .createdIcon: ThemeElementInfo(filename: "icon_created.png", rect: boxRect),
-            .badAsMultipleIcon: ThemeElementInfo(filename: "icon_bad_multiple.png",
-                                                 rect: arenaHelperRect),
-            .legendaryIcon: ThemeElementInfo(filename: "icon_legendary.png", rect: boxRect),
-            .flashFrame: ThemeElementInfo(filename: "frame_mask.png", rect: frameRect),
-            .defaultKeepRateBox: ThemeElementInfo(filename: "keeprate_box.png", rect: mulliganWinrateBoxRect),
-            .defaultKeepRateActiveBox: ThemeElementInfo(filename: "keeprate_active_box.png", rect: mulliganWinrateBoxRect),
-            .highlightTeal: ThemeElementInfo(filename: "highlight_teal.png", rect: frameRect),
-            .highlightOrange: ThemeElementInfo(filename: "highlight_orange.png", rect: frameRect),
-            .highlightGreen: ThemeElementInfo(filename: "highlight_green.png", rect: frameRect)
-        ]
+        return CardBar.requiredElements
     }
     var optionalFrame: [ThemeElement: ThemeElementInfo] {
-        return [
-            .commonFrame: ThemeElementInfo(filename: "frame_common.png", rect: frameRect),
-            .rareFrame: ThemeElementInfo(filename: "frame_rare.png", rect: frameRect),
-            .epicFrame: ThemeElementInfo(filename: "frame_epic.png", rect: frameRect),
-            .legendaryFrame: ThemeElementInfo(filename: "frame_legendary.png", rect: frameRect)
-        ]
+        return CardBar.optionalFrameElements
     }
 
     var optionalGems: [ThemeElement: ThemeElementInfo] {
-        return [
-            .commonGem: ThemeElementInfo(filename: "gem_common.png", rect: gemRect),
-            .rareGem: ThemeElementInfo(filename: "gem_rare.png", rect: gemRect),
-            .epicGem: ThemeElementInfo(filename: "gem_epic.png", rect: gemRect),
-            .legendaryGem: ThemeElementInfo(filename: "gem_legendary.png", rect: gemRect)
-        ]
+        return CardBar.optionalGemElements
     }
 
     var optionalCountBoxes: [ThemeElement: ThemeElementInfo] {
-        return [
-            .commonCountBox: ThemeElementInfo(filename: "countbox_common.png", rect: boxRect),
-            .rareCountBox: ThemeElementInfo(filename: "countbox_rare.png", rect: boxRect),
-            .epicCountBox: ThemeElementInfo(filename: "countbox_epic.png", rect: boxRect),
-            .legendaryCountBox: ThemeElementInfo(filename: "countbox_legendary.png", rect: boxRect)
-        ]
+        return CardBar.optionalCountBoxElements
     }
 
     init() {
@@ -247,8 +306,7 @@ class CardBar: NSView, CardBarTheme {
                     return
                 }
                 let fullPath = "\(rp)/Resources/Themes/Bars/\(themeDir)/\(themeElement.filename)"
-                if let image = NSImage(contentsOfFile: fullPath),
-                    FileManager.default.fileExists(atPath: fullPath) {
+                if let image = CardBar.themeImage(atPath: fullPath) {
                     let flashingLayer = CALayer()
                     flashingLayer.frame = ratio(frameRect)
                     flashingLayer.backgroundColor = flashColor.cgColor
@@ -412,8 +470,10 @@ class CardBar: NSView, CardBarTheme {
                 return
             }
 
-            self?.cardTile = image
+            // Both on the main thread: the completion can land on any queue, and
+            // cardTile is read from draw().
             DispatchQueue.main.async { [weak self] in
+                self?.cardTile = image
                 self?.needsDisplay = true
             }
         })
@@ -697,6 +757,13 @@ class CardBar: NSView, CardBarTheme {
             height: 30))
     }
     
+    // Fitting a card name is a binary search over NSAttributedString.boundingRect,
+    // i.e. a handful of full text layouts, and draw() does it for every bar every
+    // time it repaints. The answer only depends on the arguments below plus the
+    // row scale, and card names do not change, so it is memoised.
+    private static let fontFitLock = UnfairLock()
+    private static var fontFitCache = [String: CGFloat]()
+
     func fitFontForSize(_ constrainedSize: CGSize,
                         str: String,
                         fontName: String,
@@ -705,6 +772,24 @@ class CardBar: NSView, CardBarTheme {
                         accuracy: CGFloat = 1) -> CGFloat {
         assert(maxFontSize > minFontSize)
 
+        let key = "\(fontName)|\(maxFontSize)|\(minFontSize)|\(accuracy)|\(ratioHeight)"
+            + "|\(constrainedSize.width)x\(constrainedSize.height)|\(str)"
+        if let cached = CardBar.fontFitLock.around({ CardBar.fontFitCache[key] }) {
+            return cached
+        }
+        let fitted = computeFitFontForSize(constrainedSize, str: str, fontName: fontName,
+                                           maxFontSize: maxFontSize, minFontSize: minFontSize,
+                                           accuracy: accuracy)
+        CardBar.fontFitLock.around { CardBar.fontFitCache[key] = fitted }
+        return fitted
+    }
+
+    private func computeFitFontForSize(_ constrainedSize: CGSize,
+                                       str: String,
+                                       fontName: String,
+                                       maxFontSize: CGFloat,
+                                       minFontSize: CGFloat,
+                                       accuracy: CGFloat) -> CGFloat {
         var minFontSize = minFontSize
         var maxFontSize = maxFontSize
         var fittingSize = constrainedSize
@@ -796,8 +881,25 @@ class CardBar: NSView, CardBarTheme {
         }
     }
 
+    // Theme art is a fixed set of small PNGs that ship inside the bundle. This
+    // used to hit the disk - decoding the PNG again - on every draw of every
+    // element of every bar, which for a full deck list meant a few hundred
+    // synchronous file reads per redraw on the main thread. They are decoded
+    // once and kept.
+    private static let themeImageLock = UnfairLock()
+    private static var themeImageCache = [String: NSImage?]()
+
+    private static func themeImage(atPath path: String) -> NSImage? {
+        if let cached = themeImageLock.around({ themeImageCache[path] }) {
+            return cached
+        }
+        let image = NSImage(contentsOfFile: path)
+        themeImageLock.around { themeImageCache[path] = image }
+        return image
+    }
+
     private func add(filename: String, rect: NSRect) {
-        if let image = NSImage(contentsOfFile: filename) {
+        if let image = CardBar.themeImage(atPath: filename) {
             add(image: image, rect: rect)
         }
     }
@@ -876,14 +978,35 @@ class CardBar: NSView, CardBarTheme {
     }
 
     override func mouseEntered(with event: NSEvent) {
+        isHovered = true
         if let card = self.card {
             delegate?.hover(cell: self, card: card)
         }
     }
 
     override func mouseExited(with event: NSEvent) {
+        isHovered = false
         if let card = self.card {
             delegate?.out(card: card)
+        }
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        // AppKit sends no mouseExited to a view that is pulled out of the
+        // hierarchy under the cursor, so a bar removed mid-hover (its card left
+        // the deck, or the tracker was hidden) used to leave its popup on screen
+        // with nothing left that could dismiss it.
+        //
+        // Deferred for the same reason as the re-hover in `card`'s setter: this
+        // runs inside the list's own layout pass, and the delegate reaches back
+        // into that list.
+        guard window == nil, isHovered else { return }
+        isHovered = false
+        guard let card = self.card else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.window == nil else { return }
+            self.delegate?.out(card: card)
         }
     }
 

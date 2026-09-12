@@ -136,40 +136,37 @@ struct ImageUtils {
         return res
     }
     
-    private static func loadImage(type: ImageType, cardId: String, completion: @escaping ((NSImage?) -> Void)) {
-        // Check if the image has been downloaded
-        var path: URL
+    private static func store(_ image: NSImage, type: ImageType, cardId: String) {
         switch type {
         case .tile:
-            path = Paths.tiles.appendingPathComponent("\(cardId).jpg")
+            cache[cardId] = image
         case .art:
-            path = Paths.arts.appendingPathComponent("\(cardId).jpg")
+            cacheArt[cardId] = image
         case .cardArt:
-            path = Paths.cards.appendingPathComponent("\(cardId).jpg")
+            cacheCardArt[cardId] = image
         case .cardArtBG:
-            path = Paths.cardsBG.appendingPathComponent("\(cardId).jpg")
+            cacheCardArtBG[cardId] = image
         case .hero:
-            path = Paths.heroes.appendingPathComponent("\(cardId).png")
+            cacheHero[cardId] = image
         }
-        if let image = NSImage(contentsOf: path) {
-            switch type {
-            case .tile:
-                cache[cardId] = image
-            case .art:
-                cacheArt[cardId] = image
-            case .cardArt:
-                cacheCardArt[cardId] = image
-            case .cardArtBG:
-                cacheCardArtBG[cardId] = image
-            case .hero:
-                cacheHero[cardId] = image
-            }
-            
-            completion(image)
-            return
-        }
+    }
 
-        // Download image
+    private static func localPath(type: ImageType, cardId: String) -> URL {
+        switch type {
+        case .tile:
+            return Paths.tiles.appendingPathComponent("\(cardId).jpg")
+        case .art:
+            return Paths.arts.appendingPathComponent("\(cardId).jpg")
+        case .cardArt:
+            return Paths.cards.appendingPathComponent("\(cardId).jpg")
+        case .cardArtBG:
+            return Paths.cardsBG.appendingPathComponent("\(cardId).jpg")
+        case .hero:
+            return Paths.heroes.appendingPathComponent("\(cardId).png")
+        }
+    }
+
+    private static func remoteURL(type: ImageType, cardId: String) -> URL? {
         let url: String
         switch type {
         case .tile:
@@ -183,35 +180,77 @@ struct ImageUtils {
         case .hero:
             url = heroUrl(cardId: cardId)
         }
-        guard let url = URL(string: url) else {
-            completion(nil)
-            return
-        }
-        logger.verbose("downloading \(type) \(url) to \(path)")
+        return URL(string: url)
+    }
 
-        DispatchQueue.global().async {
+    // Requests in flight, keyed by type+card, each holding the completions still
+    // waiting on it. Hovering a card repeatedly, or a grid that shows the same
+    // art in several slots, used to start a separate disk read and a separate
+    // download per caller.
+    private static let pendingLock = UnfairLock()
+    private static var pending = [String: [(NSImage?) -> Void]]()
+
+    // Off the main thread on purpose. Decoding a card render takes long enough
+    // to be visible, and this is reached straight out of CardBar.draw() and out
+    // of SwiftUI .onAppear - both on the main thread.
+    private static let loadQueue = DispatchQueue(label: "net.hearthsim.hstracker.imageload",
+                                                 qos: .userInitiated, attributes: .concurrent)
+
+    private static func finish(key: String, type: ImageType, cardId: String, image: NSImage?) {
+        if let image {
+            store(image, type: type, cardId: cardId)
+        }
+        let waiting = pendingLock.around { () -> [(NSImage?) -> Void] in
+            let handlers = pending[key] ?? []
+            pending.removeValue(forKey: key)
+            return handlers
+        }
+        guard !waiting.isEmpty else { return }
+        // Delivered on the main queue: every caller of this is UI code putting
+        // the result into a view, and this used to hand it over on whichever
+        // queue the download finished on.
+        DispatchQueue.main.async {
+            for completion in waiting {
+                completion(image)
+            }
+        }
+    }
+
+    private static func loadImage(type: ImageType, cardId: String, completion: @escaping ((NSImage?) -> Void)) {
+        let key = "\(type.rawValue):\(cardId)"
+        let isFirst = pendingLock.around { () -> Bool in
+            if pending[key] != nil {
+                pending[key]?.append(completion)
+                return false
+            }
+            pending[key] = [completion]
+            return true
+        }
+        guard isFirst else { return }
+
+        let path = localPath(type: type, cardId: cardId)
+
+        loadQueue.async {
+            // Check if the image has been downloaded
+            if let image = NSImage(contentsOf: path) {
+                finish(key: key, type: type, cardId: cardId, image: image)
+                return
+            }
+
+            // Download image
+            guard let url = remoteURL(type: type, cardId: cardId) else {
+                finish(key: key, type: type, cardId: cardId, image: nil)
+                return
+            }
+            logger.verbose("downloading \(type) \(url) to \(path)")
+
             URLSession.shared.dataTask(with: url) { data, _, error in
                 if let error = error {
                     logger.error("download error \(error)")
-                    completion(nil)
-                } else if let data = data,
-                    let image = NSImage(data: data) {
+                    finish(key: key, type: type, cardId: cardId, image: nil)
+                } else if let data = data, let image = NSImage(data: data) {
                     try? data.write(to: path, options: [.atomic])
-
-                    switch type {
-                    case .tile:
-                        cache[cardId] = image
-                    case .art:
-                        cacheArt[cardId] = image
-                    case .cardArt:
-                        cacheCardArt[cardId] = image
-                    case .cardArtBG:
-                        cacheCardArtBG[cardId] = image
-                    case .hero:
-                        cacheHero[cardId] = image
-                    }
-                    
-                    completion(image)
+                    finish(key: key, type: type, cardId: cardId, image: image)
                 } else {
                     // A 404 from art.hearthstonejson.com arrives as an HTML body with no
                     // URLSession error - which is what asking for art a card does not have looks
@@ -219,9 +258,9 @@ struct ImageUtils {
                     // completion is never called at all, silently stranding every caller that has
                     // a fallback to run or a placeholder to show.
                     logger.verbose("no \(type) image at \(url)")
-                    completion(nil)
+                    finish(key: key, type: type, cardId: cardId, image: nil)
                 }
-                }.resume()
+            }.resume()
         }
     }
 }

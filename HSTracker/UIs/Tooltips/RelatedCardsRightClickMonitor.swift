@@ -53,21 +53,41 @@ final class RelatedCardsRightClickMonitor {
         hoveredCard = card
         hoveredPool = pool
         self.anchorFrame = anchorFrame
-        startPolling()
+        if card != nil && !pool.isEmpty {
+            startPolling()
+        } else {
+            stopPolling()
+        }
     }
 
     func clearHoveredLargePool() {
         hoveredCard = nil
         hoveredPool = []
+        stopPolling()
     }
 
-    // Left running for the app's lifetime once started, exactly like HDT's poll loop - the
-    // per-tick guards in pollRightClick() do the actual gating, not whether the timer is alive.
+    // HDT leaves its poll loop running for the app's lifetime and gates each tick instead.
+    // Here the timer is torn down whenever no large pool is hovered: every tick with nothing
+    // hovered did no work anyway - pollRightClick() bails on exactly that - and this is a 60Hz
+    // main-thread wakeup that would otherwise never stop once a single large pool had been
+    // hovered, for the rest of the session.
     private func startPolling() {
         guard pollTimer == nil else { return }
-        pollTimer = Timer.scheduledTimer(withTimeInterval: Self.pollInterval, repeats: true) { [weak self] _ in
+        // Explicitly on the main run loop in .common mode: the callers are all on the main
+        // thread, but a scheduled timer is silently dead on a thread without a running run loop,
+        // and .default mode would stop delivering while the cursor is being tracked - which is
+        // precisely when a right-click needs catching.
+        let timer = Timer(timeInterval: Self.pollInterval, repeats: true) { [weak self] _ in
             self?.pollRightClick()
         }
+        pollTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    private func stopPolling() {
+        pollTimer?.invalidate()
+        pollTimer = nil
+        rightButtonWasDown = false
     }
 
     private func pollRightClick() {

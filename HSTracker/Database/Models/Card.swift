@@ -384,7 +384,11 @@ final class Card {
                             spellSchool = school
                         }
                     default:
-                        fatalError("GameTag \(kvp.key) not handled")
+                        // A fake card's tag list comes straight from the game's
+                        // logs: a tag this build has no case for is new data, not
+                        // a programming error, and it used to take the whole app
+                        // down the first time Hearthstone shipped one.
+                        logger.warning("GameTag \(kvp.key) not handled for fake card \(id)")
                     }
                 }
             }

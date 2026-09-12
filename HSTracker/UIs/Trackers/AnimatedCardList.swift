@@ -15,7 +15,12 @@ class AnimatedCardList: NSView {
     
     var delegate: CardCellHover?
     
-    let lock = UnfairLock()
+    // Recursive: the guarded sections add and remove CardBar subviews and assign
+    // their cards, and AppKit answers both by calling back into the bar - which
+    // routes hover changes through the tracker and back into this list's own
+    // shouldHighlightCard. A non-recursive lock turns any of those paths into a
+    // main-thread deadlock.
+    let lock = RecursiveLock()
     
     var isBattlegrounds = false
     
@@ -42,14 +47,18 @@ class AnimatedCardList: NSView {
                     guard let card = animatedCard.card else {
                         continue
                     }
-                    if card.count <= 0 || card.jousted {
-                        animatedCard.card?.highlightColor = .none
-                        DispatchQueue.main.async {
-                            animatedCard.needsDisplay = true
-                        }
+                    let color: HighlightColor = card.count <= 0 || card.jousted
+                        ? .none
+                        : (newValue?(card, cards) ?? .none)
+                    // Only repaint a bar whose highlight actually moved. This
+                    // used to mark every bar dirty on every pass - twice a
+                    // second for a whole deck list - and a CardBar redraw is
+                    // not cheap: it re-measures the card name to fit and
+                    // recomposes all of its theme layers.
+                    guard card.highlightColor != color else {
                         continue
                     }
-                    animatedCard.card?.highlightColor = newValue?(card, cards) ?? .none
+                    card.highlightColor = color
                     DispatchQueue.main.async {
                         animatedCard.needsDisplay = true
                     }
@@ -166,7 +175,7 @@ class AnimatedCardList: NSView {
     
     private func remove(card: CardBar, fadeOut: Bool) {
         if fadeOut {
-            card.fadeOut(highlight: card.card!.count > 0)
+            card.fadeOut(highlight: (card.card?.count ?? 0) > 0)
             let when = DispatchTime.now()
                 + Double(Int64(600 * Double(NSEC_PER_MSEC))) / Double(NSEC_PER_SEC)
             let queue = DispatchQueue.main
@@ -191,15 +200,29 @@ class AnimatedCardList: NSView {
         lock.around {
             let ics = internalIntrinsicContentSize(cardCount)
             var y = ics.height
-            let cardHeight = cardHeight ?? ics.height / CGFloat(animatedCards.count)
-            for view in subviews {
+            let rowHeight = cardHeight ?? (animatedCards.isEmpty ? 0 : ics.height / CGFloat(animatedCards.count))
+            let width = frame.width
+
+            // Only the bars that have actually left the list are detached. This
+            // used to tear the whole hierarchy down and rebuild it on every
+            // refresh - twice a second during a match - which besides the
+            // churn also broke hover: a CardBar pulled out from under the
+            // cursor never gets its mouseExited, and the bar that replaces it
+            // gets no mouseEntered until the mouse moves again, so the card
+            // tooltip kept showing whatever had been hovered before.
+            for view in subviews where !animatedCards.contains(where: { $0 === view }) {
                 view.removeFromSuperview()
             }
 
             for cell in animatedCards {
-                y -= cardHeight
-                cell.frame = NSRect(x: 0, y: y, width: frame.width, height: cardHeight)
-                addSubview(cell)
+                y -= rowHeight
+                let cellFrame = NSRect(x: 0, y: y, width: width, height: rowHeight)
+                if cell.frame != cellFrame {
+                    cell.frame = cellFrame
+                }
+                if cell.superview !== self {
+                    addSubview(cell)
+                }
             }
         }
     }

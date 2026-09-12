@@ -160,6 +160,13 @@ class CardTooltipPanel: NSPanel {
     private let goldenImageView = NSImageView()
     private(set) var currentCardId: String?
     private(set) var currentSource: CardTooltipSource = .registry
+    // Bumped by every show and every hide. Art loads are asynchronous and a
+    // download can take seconds, so `currentCardId == cardId` alone is not
+    // enough to tell a result apart from a stale one: hovering A, moving to B
+    // and back to A would let A's first, abandoned load surface under B's
+    // request. Each load carries the generation it was issued for and is
+    // dropped unless that is still the live one.
+    private var showGeneration = 0
     private var pendingShowWork: DispatchWorkItem?
     private var pendingHideWork: DispatchWorkItem?
     private var pendingGoldenWork: DispatchWorkItem?
@@ -259,9 +266,11 @@ class CardTooltipPanel: NSPanel {
         pendingShowWork?.cancel()
         pendingGoldenWork?.cancel()
         pendingGoldenWork = nil
+        showGeneration += 1
+        let generation = showGeneration
 
         let work = DispatchWorkItem { [weak self, weak sourceView] in
-            guard let self = self else { return }
+            guard let self = self, self.showGeneration == generation else { return }
             self.pendingShowWork = nil
             // Abort if the view that triggered this show was removed from the
             // hierarchy while the 300ms delay was pending (guide closed, user
@@ -317,7 +326,7 @@ class CardTooltipPanel: NSPanel {
                 self.orderFront(nil)
                 self.startMaxDurationTimer()
                 if let goldenCardId {
-                    self.scheduleGolden(cardId: cardId, goldenCardId: goldenCardId)
+                    self.scheduleGolden(cardId: cardId, goldenCardId: goldenCardId, generation: generation)
                 }
             }
 
@@ -333,7 +342,8 @@ class CardTooltipPanel: NSPanel {
             func loadStandardRender() {
                 ImageUtils.cardArt(for: cardId) { [weak self] img in
                     DispatchQueue.main.async {
-                        guard let self = self, self.currentCardId == cardId else { return }
+                        guard let self = self, self.showGeneration == generation,
+                              self.currentCardId == cardId else { return }
                         // Previously this branch scheduled the golden
                         // unconditionally, ignoring showTriple.
                         showPrimary(img)
@@ -347,7 +357,8 @@ class CardTooltipPanel: NSPanel {
                 ImageUtils.cardArtBG(for: cardId, baconTriple: baconTriple) { [weak self] img in
                     if let img = img {
                         DispatchQueue.main.async {
-                            guard let self = self, self.currentCardId == cardId else { return }
+                            guard let self = self, self.showGeneration == generation,
+                                  self.currentCardId == cardId else { return }
                             showPrimary(img)
                         }
                     } else {
@@ -380,15 +391,16 @@ class CardTooltipPanel: NSPanel {
     // HDT scales both cards in from zero (StoryboardShow immediately for the base,
     // StoryboardShowDelayed at 0.8s for the golden); neither is animated here, so
     // the golden simply appears in its slot.
-    private func scheduleGolden(cardId: String, goldenCardId: String) {
+    private func scheduleGolden(cardId: String, goldenCardId: String, generation: Int) {
         pendingGoldenWork?.cancel()
         let work = DispatchWorkItem { [weak self] in
-            guard let self = self, self.currentCardId == cardId else { return }
+            guard let self = self, self.showGeneration == generation,
+                  self.currentCardId == cardId else { return }
             self.pendingGoldenWork = nil
 
             func apply(_ img: NSImage) {
                 DispatchQueue.main.async {
-                    guard self.currentCardId == cardId else { return }
+                    guard self.showGeneration == generation, self.currentCardId == cardId else { return }
                     self.goldenImageView.image = img
                 }
             }
@@ -415,6 +427,7 @@ class CardTooltipPanel: NSPanel {
     }
 
     func hide() {
+        showGeneration += 1
         pendingShowWork?.cancel()
         pendingShowWork = nil
         pendingHideWork?.cancel()
@@ -455,6 +468,7 @@ class CardTooltipPanel: NSPanel {
         pendingGoldenWork = nil
 
         guard currentCardId == cardId else { return }
+        showGeneration += 1
 
         let work = DispatchWorkItem { [weak self] in
             guard let self = self else { return }

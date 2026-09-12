@@ -5020,6 +5020,12 @@ class Game: NSObject, PowerEventHandler {
                         card: hasLargePool ? Cards.by(cardId: hoveredCard.cardId) : nil,
                         pool: hasLargePool ? nonNullableRelatedCards : [],
                         anchorFrame: tooltipFrame)
+                } else {
+                    // Without this the panel keeps whatever the last hover put in
+                    // it, so moving onto a card with no related cards reads as
+                    // that card having the previous card's pool.
+                    windowManager.tooltipGridCards.hide()
+                    RelatedCardsRightClickMonitor.shared.clearHoveredLargePool()
                 }
                 // opponent secrets/objective zone
             } else if hoveredCard.zonePosition > 0 && hoveredCard.isHand == false && hoveredCard.side != PlayerSide.friendly.rawValue {
@@ -5064,6 +5070,11 @@ class Game: NSObject, PowerEventHandler {
                         card: hasLargePool ? Cards.by(cardId: hoveredCard.cardId) : nil,
                         pool: hasLargePool ? nonNullableRelatedCards : [],
                         anchorFrame: tooltipFrame)
+                } else {
+                    // Same as the friendly zone above: no fresh content means
+                    // the panel has to come down, not keep the last card's.
+                    windowManager.tooltipGridCards.hide()
+                    RelatedCardsRightClickMonitor.shared.clearHoveredLargePool()
                 }
             } else {
                 windowManager.tooltipGridCards.hide()
@@ -5077,8 +5088,14 @@ class Game: NSObject, PowerEventHandler {
     }
     
     func onBigCardChange(_ state: BigCardArgs) {
-        hoveredCard = state
         DispatchQueue.main.async {
+            // Assigned here rather than on the watcher queue this is called
+            // from: everything that reads hoveredCard (updateTooltips and the
+            // tooltipDisplay it schedules) is main-thread only, so writing it
+            // from the watcher was an unsynchronised write to a shared optional
+            // struct - a data race, and one that could hand tooltipDisplay a
+            // half-updated hover.
+            self.hoveredCard = state
             // HDT's Watchers.OnBigCardChange calls SetCardOpacityMask first:
             // the game is drawing the hovered card blown up, with its tooltips
             // and enchantment list, and the overlay has to get out of the way.
@@ -5125,80 +5142,100 @@ class Game: NSObject, PowerEventHandler {
         // Not ideal. Maybe we re-position the tooltip on size change and canvas.top/left change?
 
         // HDT's SetRelatedCardsTrigger(DiscoverState) gates this one on OutfinderInDeck.
-        if Settings.showPlayerRelatedCards &&
-            !relatedCardsManager.isOutfinderSuppressed(cardId: state.cardId, surfaceEnabled: Settings.outfinderInDeck) {
-            let relatedCards = getRelatedCards(player: player, cardId: state.cardId)
-            guard relatedCards.count > 0 else {
-                return
-            }
+        // Anything that is not a tooltip to show has to take the current one
+        // down: this used to just return, leaving the previously hovered card's
+        // pool on screen as if it belonged to the card now under the cursor.
+        guard Settings.showPlayerRelatedCards,
+              !relatedCardsManager.isOutfinderSuppressed(cardId: state.cardId, surfaceEnabled: Settings.outfinderInDeck) else {
+            hideRelatedCardsTooltip()
+            return
+        }
+        let relatedCards = getRelatedCards(player: player, cardId: state.cardId)
+        guard relatedCards.count > 0 else {
+            hideRelatedCardsTooltip()
+            return
+        }
+        
+        let frame = SizeHelper.hearthstoneWindow.frame
+        
+        let top = frame.height * 0.2
+        let height = frame.height * 0.53
+        let width = frame.height * 0.3
+        var left = 0.0
+        var tooltipPlacement = PlacementMode.right
+        
+        switch state.zoneSize {
+        case 4:
+            left = (0.116 + Double(state.zonePosition) * 0.2) * frame.width
+            tooltipPlacement = state.zonePosition < 2 ? PlacementMode.right : PlacementMode.left
+        case 3:
+            let centerPosition = 1
+            let offsetXScale = 0.2
             
-            let frame = SizeHelper.hearthstoneWindow.frame
-            
-            let top = frame.height * 0.2
-            let height = frame.height * 0.53
-            let width = frame.height * 0.3
-            var left = 0.0
-            var tooltipPlacement = PlacementMode.right
-            
-            switch state.zoneSize {
-            case 4:
-                left = (0.116 + Double(state.zonePosition) * 0.2) * frame.width
-                tooltipPlacement = state.zonePosition < 2 ? PlacementMode.right : PlacementMode.left
-            case 3:
-                let centerPosition = 1
-                let offsetXScale = 0.2
-                
-                let relativePosition = state.zonePosition - centerPosition
-                let offsetX = 0.5 - 0.088 + Double(relativePosition) * offsetXScale
-                left = offsetX * frame.width
-                tooltipPlacement = PlacementMode.right
-            case 2:
-                left = state.zonePosition == 0 ? 0.318 * frame.width : 0.518 * frame.width
-                tooltipPlacement = state.zonePosition == 0 ? PlacementMode.left : PlacementMode.right
-            case 1:
-                left = (0.5 - 0.088) * frame.width
-                tooltipPlacement = PlacementMode.left
-            default:
-                break
-            }
-            
-            DispatchQueue.main.async {
-                let vm = self.windowManager.tooltipGridCards
-                vm.setTitle(String.localizedString("Related_Cards", comment: ""))
+            let relativePosition = state.zonePosition - centerPosition
+            let offsetX = 0.5 - 0.088 + Double(relativePosition) * offsetXScale
+            left = offsetX * frame.width
+            tooltipPlacement = PlacementMode.right
+        case 2:
+            left = state.zonePosition == 0 ? 0.318 * frame.width : 0.518 * frame.width
+            tooltipPlacement = state.zonePosition == 0 ? PlacementMode.left : PlacementMode.right
+        case 1:
+            left = (0.5 - 0.088) * frame.width
+            tooltipPlacement = PlacementMode.left
+        default:
+            break
+        }
+        
+        DispatchQueue.main.async {
+            let vm = self.windowManager.tooltipGridCards
+            let nonNullableRelatedCards = relatedCards.compactMap({ $0 })
+            vm.setTitle(String.localizedString("Related_Cards", comment: ""))
+            // Content first, then measure. Reading gridWidth/gridHeight
+            // before handing the panel its new cards sized this tooltip from
+            // the *previous* one, which put it on the wrong side of the
+            // card - and off screen entirely when the pools differed a lot.
+            vm.setCardIdsFromCards(nonNullableRelatedCards)
+            let (statistics, summary, hasLargePool) = self.relatedCardsManager.getPoolStatistics(cardId: state.cardId, relatedCards: relatedCards, player: self.player)
+            vm.setPoolStatistics(statistics, relatedCardsSummary: summary, hasLargePool: hasLargePool)
 
-                let tooltipWidth = CGFloat(vm.gridWidth)
-                let tooltipHeight = CGFloat(vm.gridHeight)
+            let tooltipWidth = CGFloat(vm.gridWidth)
+            let tooltipHeight = CGFloat(vm.gridHeight)
 
-                // Correct placement if tooltip would go outside of window, and it fit on the other side
-                switch tooltipPlacement {
-                case PlacementMode.top:
-                    if top - tooltipHeight < 0.0 && top + height + tooltipHeight <= frame.height {
-                        tooltipPlacement = PlacementMode.bottom
-                    }
-                case PlacementMode.bottom:
-                    if top + height + tooltipHeight > frame.height && top - tooltipHeight >= 0.0 {
-                        tooltipPlacement = PlacementMode.top
-                    }
-                case PlacementMode.left:
-                    if left - tooltipWidth < 0.0 && left + width + tooltipWidth <= frame.width {
-                        tooltipPlacement = PlacementMode.right
-                    }
-                case PlacementMode.right:
-                    if left + width + tooltipWidth > frame.width && left - tooltipWidth >= 0.0 {
-                        tooltipPlacement = PlacementMode.left
-                    }
+            // Correct placement if tooltip would go outside of window, and it fit on the other side
+            switch tooltipPlacement {
+            case PlacementMode.top:
+                if top - tooltipHeight < 0.0 && top + height + tooltipHeight <= frame.height {
+                    tooltipPlacement = PlacementMode.bottom
                 }
-
-                vm.setCardIdsFromCards(relatedCards.compactMap({ $0 }))
-                let (statistics, summary, hasLargePool) = self.relatedCardsManager.getPoolStatistics(cardId: state.cardId, relatedCards: relatedCards, player: self.player)
-                vm.setPoolStatistics(statistics, relatedCardsSummary: summary, hasLargePool: hasLargePool)
-                let tooltipFrame = NSRect(x: left, y: frame.height - top - CGFloat(vm.gridHeight), width: CGFloat(vm.gridWidth), height: CGFloat(vm.gridHeight))
-                vm.show(frame: tooltipFrame)
-                RelatedCardsRightClickMonitor.shared.setHoveredLargePool(
-                    card: hasLargePool ? Cards.by(cardId: state.cardId) : nil,
-                    pool: hasLargePool ? relatedCards.compactMap({ $0 }) : [],
-                    anchorFrame: tooltipFrame)
+            case PlacementMode.bottom:
+                if top + height + tooltipHeight > frame.height && top - tooltipHeight >= 0.0 {
+                    tooltipPlacement = PlacementMode.top
+                }
+            case PlacementMode.left:
+                if left - tooltipWidth < 0.0 && left + width + tooltipWidth <= frame.width {
+                    tooltipPlacement = PlacementMode.right
+                }
+            case PlacementMode.right:
+                if left + width + tooltipWidth > frame.width && left - tooltipWidth >= 0.0 {
+                    tooltipPlacement = PlacementMode.left
+                }
             }
+
+            let tooltipFrame = NSRect(x: left, y: frame.height - top - tooltipHeight, width: tooltipWidth, height: tooltipHeight)
+            vm.show(frame: tooltipFrame)
+            RelatedCardsRightClickMonitor.shared.setHoveredLargePool(
+                card: hasLargePool ? Cards.by(cardId: state.cardId) : nil,
+                pool: hasLargePool ? nonNullableRelatedCards : [],
+                anchorFrame: tooltipFrame)
+        }
+    }
+
+    /// Takes the shared related-cards panel down, from any thread.
+    @available(macOS 10.15, *)
+    private func hideRelatedCardsTooltip() {
+        DispatchQueue.main.async {
+            self.windowManager.tooltipGridCards.hide()
+            RelatedCardsRightClickMonitor.shared.clearHoveredLargePool()
         }
     }
     
