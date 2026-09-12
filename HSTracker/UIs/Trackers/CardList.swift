@@ -94,8 +94,13 @@ class CardList: OverWindowController {
                 newCard.setDelegate(self)
                 newCard.card = $0
                 newCard.playerType = .secrets
-                animatedCards.insert(newCard, at: min(index, animatedCards.count))
-                indexSet.insert(index)
+                // Clamped for both: telling the table about a row the array
+                // does not have leaves NSTableView's own count disagreeing with
+                // the data source, which it answers with an exception at
+                // endUpdates().
+                let insertAt = min(index, animatedCards.count)
+                animatedCards.insert(newCard, at: insertAt)
+                indexSet.insert(insertAt)
             })
             table?.insertRows(at: indexSet, withAnimation: .slideLeft)
         }

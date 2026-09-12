@@ -300,6 +300,15 @@ class CardBar: NSView, CardBarTheme {
     }
 
     func update(highlight: Bool) {
+        // This is the call every in-place change to the bar's card is followed
+        // by - a count going 2 -> 1 as a copy is drawn, a new cardNameSuffix -
+        // and the only thing that can ask for the repaint those need. The card
+        // object is mutated rather than reassigned, so the property observer
+        // never fires, and `draw()` used to be reached by accident instead:
+        // updateFrames() detached and re-added every bar on each refresh, and a
+        // view added to a hierarchy is drawn. Now that it leaves the bars that
+        // stayed put alone, an unmarked bar keeps showing the old count.
+        needsDisplay = true
         if highlight && Settings.flashOnDraw {
             if let themeElement = required[.flashFrame] {
                 guard let rp = Bundle.main.resourcePath else {
