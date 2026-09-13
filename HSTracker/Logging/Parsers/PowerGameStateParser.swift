@@ -95,6 +95,12 @@ class PowerGameStateParser: LogEventParser {
 
     private var maxBlockId: Int = 0
     var currentBlock: Block?
+
+    // The action history of the game this parser feeds. Its hooks below only report what the parser
+    // has already stored and never change what the parser itself does.
+    private var actionHistory: ActionHistoryRecorder? {
+        return (eventHandler as? Game)?.actionHistory
+    }
     
     func getCurrentBlock() -> Block? {
         return self.currentBlock
@@ -443,14 +449,18 @@ class PowerGameStateParser: LogEventParser {
                     entity.cardId.hasPrefix("CREATED_BY_") {
                     entity.cardId = cardId
                 }
+                // CHANGE_ENTITY leaves entity.cardId alone, so the card shown before is the latest one
+                let historyFromCardId = entity.info.latestCardId
                 entity.info.latestCardId = cardId
                 if type == "SHOW_ENTITY" {
                     if entity.info.guessedCardState != GuessedCardState.none {
                         entity.info.guessedCardState = GuessedCardState.revealed
                     }
-                    let shouldHideForBlock = AppDelegate.instance().coreManager.logReaderManager.powerGameStateParser.currentBlock?.hideShowEntities ?? false && !(entity.info.revealedOnHistory) && !(entity.has(tag: .displayed_creator))
+                    // The app's only parser is CoreManager's (LogReaderManager), so its current block is this one
+                    let shouldHideForBlock = currentBlock?.hideShowEntities ?? false && !(entity.info.revealedOnHistory) && !(entity.has(tag: .displayed_creator))
                     let beforeMulligan = eventHandler.gameEntity?[.step] ?? Step.main_begin.rawValue < Step.begin_mulligan.rawValue
                     entity.info.hidden = shouldHideForBlock || beforeMulligan
+                    actionHistory?.entityShown(entity: entity, localPlayerId: eventHandler.player?.id ?? 0, entities: eventHandler.entities)
                     
                     if entity.info.deckIndex < 0, let currentBlock = currentBlock, currentBlock.sourceEntityId != 0 {
                         if let source = eventHandler.entities[currentBlock.sourceEntityId], source.hasDredge {
@@ -518,6 +528,9 @@ class PowerGameStateParser: LogEventParser {
 
                 if type == "CHANGE_ENTITY" {
                     let entity = eventHandler.entities[entityId]!
+                    actionHistory?.entityChanged(entity: entity, fromCardId: historyFromCardId, toCardId: cardId,
+                                                 hideShowEntities: currentBlock?.hideShowEntities ?? false,
+                                                 localPlayerId: eventHandler.player?.id ?? 0, entities: eventHandler.entities)
                     if entity.info.originalEntityWasCreated == nil {
                         entity.info.originalEntityWasCreated = entity.info.created
                     }
@@ -703,6 +716,12 @@ class PowerGameStateParser: LogEventParser {
             }
             
             blockStart(type: blockType, cardId: cardId, target: target, targetEntityId: targetEntityId, trigger: triggerKeyword)
+            // Before the TRIGGER/POWER returns below. The history parses the line itself, because
+            // BlockStartRegex does not match blocks of the game or a player (DEATHS, turn-start draws).
+            if let actionHistory, let blockId = currentBlock?.id, let info = ActionHistoryLineParser.parseBlockStart(logLine.line) {
+                actionHistory.blockStarted(blockId: blockId, info: info, localPlayerId: eventHandler.player?.id ?? 0,
+                                           entities: eventHandler.entities, time: logLine.time.date)
+            }
 
             if matches.count > 0 && (blockType == "TRIGGER" || blockType == "POWER") {
                 let player = eventHandler.entities.values
@@ -1490,6 +1509,7 @@ class PowerGameStateParser: LogEventParser {
             }
         } else if logLine.line.contains("CREATE_GAME") {
             reset()
+            actionHistory?.parserReset()
 //            eventHandler.gameStart(at: logLine.time)
         } else if logLine.line.contains("BLOCK_END") {
             if eventHandler.gameTriggerCount < 10 && (eventHandler.gameEntity?.has(tag: .turn) ?? false) {
@@ -1653,6 +1673,9 @@ class PowerGameStateParser: LogEventParser {
                     }
                 }
             }
+            // Before the block is popped, so the history can match it by id
+            actionHistory?.blockEnded(blockId: currentBlock?.id, localPlayerId: eventHandler.player?.id ?? 0,
+                                      entities: eventHandler.entities)
             blockEnd()
         }
 

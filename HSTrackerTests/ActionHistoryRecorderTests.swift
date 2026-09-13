@@ -871,6 +871,24 @@ class ActionHistoryRecorderTests: HSTrackerTests {
         XCTAssertEqual(entries.count, 1)
     }
 
+    func testTurnsRecordedBeforeABattlegroundsGameTypeIsKnownAreDropped() {
+        var gameType = GameType.gt_unknown
+        recorder.gameTypeProvider = { gameType }
+        startGame()
+        let minion = card("BG_CS2_120", controller: 1, zone: .hand)
+        block("PLAY", minion) {
+            zone(minion, .play)
+        }
+        XCTAssertEqual(entries.count, 1)
+
+        gameType = .gt_battlegrounds
+        let other = card("BG_CS2_120", controller: 1, zone: .hand)
+        block("PLAY", other) {
+            zone(other, .play)
+        }
+        XCTAssertEqual(turns, [])
+    }
+
     func testSnapshotsCanBeTakenWhileTheLogQueueRecords() {
         startGame()
         let cards = (0..<200).map { _ in card("CORE_CS2_120", controller: 1, zone: .hand) }

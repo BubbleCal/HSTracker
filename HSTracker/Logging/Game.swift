@@ -134,6 +134,8 @@ class Game: NSObject, PowerEventHandler {
     let activeEffects: ActiveEffects
     let counterManager: CounterManager
     let relatedCardsManager: RelatedCardsManager
+    // Fed by PowerGameStateParser and TagChangeHandler on the log reader queue
+    let actionHistory = ActionHistoryRecorder()
     var isBattlegroundsCombatPhase = false
     // Raw controller tag (not player/opponent side, which aren't resolved yet during CREATE_GAME) of
     // any side whose deck was half-copied from their enemy's (Azalina Soulsever).
@@ -1486,6 +1488,9 @@ class Game: NSObject, PowerEventHandler {
         relatedCardsManager = RelatedCardsManager()
         super.init()
         counterManager.initialize(game: self)
+        actionHistory.gameTypeProvider = { [weak self] in
+            return self?.currentGameType ?? .gt_unknown
+        }
         _battlegroundsBoardState = BattlegroundsBoardState(game: self)
 		player = Player(local: true, game: self)
         opponent = Player(local: false, game: self)
@@ -1625,6 +1630,8 @@ class Game: NSObject, PowerEventHandler {
 		_currentGameMode = .none
         _serverInfo = nil
 
+        // Before opponent.reset() clears the name: an unfinished game is kept in case this is a reconnect
+        actionHistory.reset(opponentName: opponent?.name)
         entities.removeAll()
         isBattlegroundsCombatPhase = false
         controllersWithDeckCopiedFromEnemy.removeAll()
@@ -2026,6 +2033,8 @@ class Game: NSObject, PowerEventHandler {
             if self.gameEntity == nil || self.currentMode != .gameplay {
                 return
             }
+
+            self.restoreActionHistoryAfterReconnect()
             
             if self.isTraditionalHearthstoneMatch {
                 CardLegalityChecker.loadCardsByFormat(gameType: self.currentGameType, format: self.currentFormatType)
@@ -2048,6 +2057,18 @@ class Game: NSObject, PowerEventHandler {
                     self.updateBattlegroundsOverlays()
                 }
             }
+        }
+    }
+
+    // Hearthstone reset the game when it reconnected, which put the turns recorded so far aside.
+    // The recorder matches them by opponent name, which is known only once the match info has been
+    // read (updatePlayers) - the same source the name came from when the game was reset.
+    private func restoreActionHistoryAfterReconnect() {
+        DispatchQueue.global().async {
+            for _ in 0 ..< 20 where self._matchInfo == nil {
+                Thread.sleep(forTimeInterval: 0.5)
+            }
+            self.actionHistory.restoreInterruptedIfReconnect(opponentName: self.opponent.name)
         }
     }
 
@@ -2261,6 +2282,8 @@ class Game: NSObject, PowerEventHandler {
     }
 
     func handleEndGame() {
+        // First, so an ended game is never mistaken for an interrupted one, even when no stats can be saved
+        actionHistory.gameEnded()
 		
 		if self.handledGameEnd {
 			logger.warning("HandleGameEnd was already called.")

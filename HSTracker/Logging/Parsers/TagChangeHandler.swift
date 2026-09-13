@@ -22,8 +22,11 @@ class TagChangeHandler {
 
     private var creationTagActionQueue: [(id: Int, action: (() -> Void))] = []
     private var tagChangeAction = TagChangeActions()
+    // The parser owns this handler; the action history reads its current block's OVERRIDE_HISTORY flag
+    private weak var powerGameStateParser: PowerGameStateParser?
     
     func setPowerGameStateParser(parser: PowerGameStateParser) {
+        powerGameStateParser = parser
         tagChangeAction.setPowerGameStateParser(parser: parser)
     }
 
@@ -52,6 +55,15 @@ class TagChangeHandler {
                 return
             }
             entity[tag] = value
+
+            // The action history reads the raw value as it is set. Queued creation-tag actions run
+            // only after the block moved on, too late to tell which block caused the change.
+            if let game = eventHandler as? Game {
+                game.actionHistory.tagChanged(entity: entity, tag: tag, prevValue: prevValue, value: value,
+                                              isCreationTag: isCreationTag,
+                                              hideShowEntities: powerGameStateParser?.currentBlock?.hideShowEntities ?? false,
+                                              localPlayerId: eventHandler.player?.id ?? 0, entities: eventHandler.entities)
+            }
 
             if isCreationTag {
                 if let action = tagChangeAction.findAction(eventHandler: eventHandler,

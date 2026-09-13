@@ -992,6 +992,11 @@ final class ActionHistoryRecorder {
         }
         let excluded = ActionHistoryRecorder.isExcluded(gameType: gameType)
         excludedGameType = excluded
+        // The mirror can report the game type after the first blocks were read
+        if excluded && !turns.isEmpty {
+            turns.removeAll()
+            markChanged()
+        }
         return excluded
     }
 

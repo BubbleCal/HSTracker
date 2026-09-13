@@ -17,6 +17,7 @@
 		4142FD5EA176D4723926F589 /* ActionHistoryLineParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3204CFFAF449B0F253E1040F /* ActionHistoryLineParserTests.swift */; };
 		7F2C43A935A0A68DA5952807 /* ActionHistoryVisibilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37A3ED54ACAAD229494B4681 /* ActionHistoryVisibilityTests.swift */; };
 		D263D38AEBD00222F3207171 /* ActionHistoryRecorderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 452016FCC727689B4E19D163 /* ActionHistoryRecorderTests.swift */; };
+		EAF95676C6577B2F43E65AD6 /* ActionHistoryReplayTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4980AF37EF880A5414F5B852 /* ActionHistoryReplayTests.swift */; };
 		BB5E553A0000000000000064 /* BattlegroundsSessionOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB5E553A0000000000000001 /* BattlegroundsSessionOverlayView.swift */; };
 		BB5E551A0000000000000002 /* BattlegroundsSessionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB5E551A0000000000000001 /* BattlegroundsSessionViewModel.swift */; };
 		BB5E551A0000000000000005 /* BattlegroundsSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB5E551A0000000000000004 /* BattlegroundsSessionView.swift */; };
@@ -1875,6 +1876,7 @@
 		3204CFFAF449B0F253E1040F /* ActionHistoryLineParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionHistoryLineParserTests.swift; sourceTree = "<group>"; };
 		37A3ED54ACAAD229494B4681 /* ActionHistoryVisibilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionHistoryVisibilityTests.swift; sourceTree = "<group>"; };
 		452016FCC727689B4E19D163 /* ActionHistoryRecorderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionHistoryRecorderTests.swift; sourceTree = "<group>"; };
+		4980AF37EF880A5414F5B852 /* ActionHistoryReplayTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionHistoryReplayTests.swift; sourceTree = "<group>"; };
 		BB5E553A0000000000000001 /* BattlegroundsSessionOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BattlegroundsSessionOverlayView.swift; sourceTree = "<group>"; };
 		BB5E551A0000000000000001 /* BattlegroundsSessionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BattlegroundsSessionViewModel.swift; sourceTree = "<group>"; };
 		BB5E551A0000000000000004 /* BattlegroundsSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BattlegroundsSessionView.swift; sourceTree = "<group>"; };
@@ -4073,6 +4075,7 @@
 				3204CFFAF449B0F253E1040F /* ActionHistoryLineParserTests.swift */,
 				37A3ED54ACAAD229494B4681 /* ActionHistoryVisibilityTests.swift */,
 				452016FCC727689B4E19D163 /* ActionHistoryRecorderTests.swift */,
+				4980AF37EF880A5414F5B852 /* ActionHistoryReplayTests.swift */,
 				1CF1B5891E81426D007DCBF2 /* AlgorithmTests.swift */,
 				439C7E601C7772C100D29859 /* HSTrackerTests.swift */,
 				1CF1B58B1E815810007DCBF2 /* LogReaderTests.swift */,
@@ -8634,6 +8637,7 @@
 				4142FD5EA176D4723926F589 /* ActionHistoryLineParserTests.swift in Sources */,
 				7F2C43A935A0A68DA5952807 /* ActionHistoryVisibilityTests.swift in Sources */,
 				D263D38AEBD00222F3207171 /* ActionHistoryRecorderTests.swift in Sources */,
+				EAF95676C6577B2F43E65AD6 /* ActionHistoryReplayTests.swift in Sources */,
 				439BD8C91EBCD40200959F69 /* EnumTests.swift in Sources */,
 				43C1C9F61E96CCDB008C20B1 /* SecretTests.swift in Sources */,
 				43C1C9FB1E96CCE9008C20B1 /* StatsTests.swift in Sources */,
