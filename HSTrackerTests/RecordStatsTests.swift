@@ -473,6 +473,355 @@ class RecordStatsTests: HSTrackerTests {
         }
         XCTAssertEqual(realm.objects(DefaultDeckStats.self).first?.gameStats.first?.statId, "legacy-1")
     }
+
+    // MARK: - Report
+
+    private static let utc: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        return calendar
+    }()
+
+    /// 2026-09-13 12:00 UTC.
+    private static let now = utc.date(from: DateComponents(year: 2026, month: 9, day: 13, hour: 12))!
+
+    private static let owners = [
+        RecordOwnerInfo(owner: .deck(id: "active"), name: "Active", playerClass: .rogue, isArchived: false),
+        RecordOwnerInfo(owner: .deck(id: "archived"), name: "Archived", playerClass: .mage, isArchived: true),
+        RecordOwnerInfo(owner: .noDeck(.hunter), name: "No deck", playerClass: .hunter, isArchived: false)
+    ]
+
+    private var nextGameOffset: TimeInterval = 0
+
+    /// A game played `hoursAgo` before `now`; later calls default to older games.
+    private func game(_ result: GameResult, owner: RecordOwner = .deck(id: "active"), mode: GameMode = .ranked,
+                      format: Format? = .standard, opponent: CardClass = .mage, coin: Bool? = nil,
+                      turns: Int = 0, hoursAgo: Double? = nil, duration: TimeInterval? = nil,
+                      season: Int? = nil, before: RankSnapshot? = nil, after: RankSnapshot? = nil) -> RecordGame {
+        nextGameOffset += 60
+        let start = RecordStatsTests.now.addingTimeInterval(hoursAgo.map { -$0 * 3600 } ?? -nextGameOffset)
+        return RecordGame(statId: UUID().uuidString, owner: owner, playerClass: .rogue, opponentClass: opponent,
+                          opponentName: "Opponent", result: result, wasConceded: false, mode: mode, format: format,
+                          coin: coin, turns: turns, startTime: start, duration: duration,
+                          season: season ?? Database.season(for: start, calendar: RecordStatsTests.utc),
+                          rankBefore: before, rankAfter: after)
+    }
+
+    private func report(_ games: [RecordGame], filter: RecordFilter = RecordFilter(),
+                        gameLimit: Int = 1000) -> RecordReport {
+        return StatsHelper.buildRecordReport(data: RecordData(owners: RecordStatsTests.owners, games: games),
+                                             filter: filter, now: RecordStatsTests.now,
+                                             calendar: RecordStatsTests.utc, gameLimit: gameLimit)
+    }
+
+    private func rank(_ starLevel: Int, _ stars: Int, legend: Int = 0) -> RankSnapshot {
+        return RankSnapshot(leagueId: 5, starLevel: starLevel, stars: stars, legendRank: legend)
+    }
+
+    func testRecordFilterDefaultsToAllLadderGames() {
+        let filter = RecordFilter()
+        XCTAssertEqual(filter.mode, .all)
+        XCTAssertEqual(filter.format, .all)
+        XCTAssertEqual(filter.timeFrame, .allTime)
+        XCTAssertTrue(filter.includeArchived)
+        XCTAssertTrue(filter.includeNoDeck)
+        XCTAssertNil(filter.owner)
+        XCTAssertEqual(RecordFilter.modes, [.all, .ranked, .casual])
+        XCTAssertEqual(RecordFilter.formats, [.all, .standard, .wild, .classic, .twist])
+    }
+
+    func testReportIsLadderOnly() {
+        var games = [game(.win, mode: .ranked), game(.loss, mode: .casual), game(.win, mode: .casual)]
+        for mode: GameMode in [.arena, .brawl, .friendly, .practice, .spectator, .battlegrounds, .duels,
+                               .mercenaries, .none, .all] {
+            games.append(game(.win, mode: mode))
+        }
+
+        let all = report(games)
+        XCTAssertEqual(all.overall.record.wins, 2)
+        XCTAssertEqual(all.overall.record.losses, 1)
+        XCTAssertEqual(all.gameCount, 3)
+        XCTAssertTrue(all.games.allSatisfy { $0.mode == .ranked || $0.mode == .casual })
+
+        var filter = RecordFilter()
+        filter.mode = .ranked
+        XCTAssertEqual(report(games, filter: filter).overall.record.total, 1)
+        filter.mode = .casual
+        XCTAssertEqual(report(games, filter: filter).overall.record.total, 2)
+        // A mode outside the record's list does not open the record up to it.
+        filter.mode = .arena
+        XCTAssertEqual(report(games, filter: filter).overall.record.total, 0)
+    }
+
+    func testReportFormatFilter() {
+        let games = [game(.win, format: .standard), game(.win, format: .wild), game(.loss, format: .wild),
+                     game(.win, mode: .casual, format: .classic), game(.loss, format: .twist),
+                     game(.win, format: nil)]
+        var filter = RecordFilter()
+        XCTAssertEqual(report(games, filter: filter).overall.record.total, 6)
+        filter.format = .wild
+        XCTAssertEqual(report(games, filter: filter).overall.record.total, 2)
+        filter.format = .classic
+        XCTAssertEqual(report(games, filter: filter).overall.record.wins, 1)
+        filter.format = .twist
+        XCTAssertEqual(report(games, filter: filter).overall.record.losses, 1)
+        filter.format = .standard
+        XCTAssertEqual(report(games, filter: filter).overall.record.total, 1)
+    }
+
+    func testReportTimeFrames() {
+        let currentSeason = Database.season(for: RecordStatsTests.now, calendar: RecordStatsTests.utc)
+        let games = [game(.win, hoursAgo: 1),          // today
+                     game(.win, hoursAgo: 13),         // yesterday
+                     game(.win, hoursAgo: 24 * 6),     // this week, this season
+                     game(.win, hoursAgo: 24 * 20),    // last season
+                     game(.win, hoursAgo: 24 * 60)]    // two seasons ago
+        var filter = RecordFilter()
+        let expected: [(RecordTimeFrame, Int)] = [(.allTime, 5), (.today, 1), (.last7Days, 3),
+                                                  (.last30Days, 4), (.currentSeason, 3), (.lastSeason, 1)]
+        for (timeFrame, count) in expected {
+            filter.timeFrame = timeFrame
+            XCTAssertEqual(report(games, filter: filter).overall.record.total, count, "\(timeFrame)")
+        }
+        XCTAssertEqual(games[3].season, currentSeason - 1)
+    }
+
+    func testReportDeckFilters() {
+        let games = [game(.win, owner: .deck(id: "active"), opponent: .mage),
+                     game(.loss, owner: .deck(id: "active"), opponent: .priest),
+                     game(.win, owner: .deck(id: "archived"), opponent: .mage),
+                     game(.loss, owner: .noDeck(.hunter), opponent: .warrior),
+                     game(.win, owner: .deck(id: "deleted"), opponent: .mage)]
+
+        let all = report(games)
+        XCTAssertEqual(all.overall.record.total, 4, "games of an unknown owner are skipped")
+        XCTAssertEqual(Set(all.decks.map { $0.info.owner }),
+                       [.deck(id: "active"), .deck(id: "archived"), .noDeck(.hunter)])
+        XCTAssertEqual(all.decks.first?.info.owner, .deck(id: "active"), "most games first")
+        XCTAssertEqual(all.decks.first?.summary.record.wins, 1)
+        XCTAssertEqual(all.decks.first?.summary.record.losses, 1)
+
+        var filter = RecordFilter()
+        filter.includeArchived = false
+        XCTAssertEqual(report(games, filter: filter).overall.record.total, 3)
+        filter.includeNoDeck = false
+        let decksOnly = report(games, filter: filter)
+        XCTAssertEqual(decksOnly.overall.record.total, 2)
+        XCTAssertEqual(decksOnly.decks.map { $0.info.owner }, [.deck(id: "active")])
+
+        filter = RecordFilter()
+        filter.owner = .noDeck(.hunter)
+        let bucket = report(games, filter: filter)
+        XCTAssertEqual(bucket.overall.record.losses, 1)
+        XCTAssertEqual(bucket.overall.record.total, 1)
+        XCTAssertEqual(bucket.matchups.map { $0.opponentClass }, [.warrior])
+        XCTAssertEqual(bucket.games.count, 1)
+        // The deck rows still list every deck so the picker can switch back.
+        XCTAssertEqual(bucket.decks.count, 3)
+    }
+
+    func testReportCountsLegacyGamesWithUnknownTurnOrder() {
+        // A row recorded before turn order was stored: coin=false is meaningless.
+        let legacy = GameStats()
+        legacy.statId = "legacy"
+        legacy.gameMode = .ranked
+        legacy.result = .win
+        legacy.coin = false
+        legacy.startTime = RecordStatsTests.now.addingTimeInterval(-7200)
+        legacy.endTime = legacy.startTime
+        let legacyGame = RecordGame(stat: legacy, owner: .deck(id: "active"), ownerClass: .rogue)
+        XCTAssertNil(legacyGame.coin)
+        XCTAssertNil(legacyGame.duration)
+        XCTAssertEqual(legacyGame.playerClass, .rogue, "neutral playerHero falls back to the deck class")
+        XCTAssertNil(legacyGame.rankBefore)
+
+        let recorded = GameStats()
+        recorded.statId = "new"
+        recorded.gameMode = .ranked
+        recorded.result = .loss
+        recorded.playerHero = .warlock
+        recorded.coin = true
+        recorded.coinKnown = true
+        recorded.recordVersion = GameStats.currentRecordVersion
+        recorded.startTime = RecordStatsTests.now.addingTimeInterval(-3600)
+        recorded.endTime = recorded.startTime.addingTimeInterval(420)
+        let recordedGame = RecordGame(stat: recorded, owner: .deck(id: "active"), ownerClass: .rogue)
+        XCTAssertEqual(recordedGame.coin, true)
+        XCTAssertEqual(recordedGame.duration, 420)
+        XCTAssertEqual(recordedGame.playerClass, .warlock)
+
+        let games = [recordedGame, legacyGame, game(.win, coin: false, hoursAgo: 3), game(.win, coin: false, hoursAgo: 4)]
+        let summary = report(games).overall
+        XCTAssertEqual(summary.record.wins, 3)
+        XCTAssertEqual(summary.record.losses, 1)
+        XCTAssertEqual(summary.goingFirst.wins, 2)
+        XCTAssertEqual(summary.goingFirst.total, 2)
+        XCTAssertEqual(summary.onCoin.losses, 1)
+        XCTAssertEqual(summary.onCoin.total, 1)
+        XCTAssertEqual(summary.unknownTurnOrder, 1)
+        XCTAssertEqual(summary.averageDuration, 420)
+
+        // Both Realm rows have no opponent class, so only the mage games form a matchup.
+        let matchups = report(games).matchups
+        XCTAssertEqual(matchups.map { $0.opponentClass }, [.mage])
+        XCTAssertEqual(matchups.first?.summary.goingFirst.total, 2)
+    }
+
+    func testReportStreakLastTenAndAverages() {
+        var games = [game(.win, turns: 8, duration: 300), game(.win, turns: 10, duration: 500),
+                     game(.unknown, turns: 30), game(.win), game(.loss), game(.win)]
+        var summary = report(games).overall
+        XCTAssertEqual(summary.streak, RecordStreak(result: .win, count: 3), "unknown results are skipped")
+        XCTAssertEqual(summary.lastTen, [.win, .win, .win, .loss, .win])
+        XCTAssertEqual(summary.averageTurns, 9)
+        XCTAssertEqual(summary.averageDuration, 400)
+        XCTAssertEqual(summary.lastPlayed, games[0].startTime)
+        XCTAssertEqual(report(games).gameCount, 6, "unknown results are listed but not counted")
+        XCTAssertEqual(summary.record.total, 5)
+
+        nextGameOffset = 0
+        games = [game(.loss), game(.loss), game(.draw), game(.loss)]
+        summary = report(games).overall
+        XCTAssertEqual(summary.streak, RecordStreak(result: .loss, count: 2), "a draw ends the streak")
+
+        nextGameOffset = 0
+        games = [game(.draw), game(.win)]
+        XCTAssertNil(report(games).overall.streak)
+
+        nextGameOffset = 0
+        games = (0 ..< 15).map { game($0 < 12 ? .loss : .win) }
+        summary = report(games, gameLimit: 5).overall
+        XCTAssertEqual(summary.lastTen, Array(repeating: .loss, count: 10))
+        XCTAssertEqual(summary.record.total, 15, "the game limit only caps the list")
+        XCTAssertEqual(report(games, gameLimit: 5).games.count, 5)
+        XCTAssertEqual(report(games, gameLimit: 5).gameCount, 15)
+        XCTAssertEqual(summary.averageTurns, nil)
+    }
+
+    func testReportMatchups() {
+        let games = [game(.win, opponent: .mage, coin: false), game(.loss, opponent: .mage, coin: true),
+                     game(.win, opponent: .mage, coin: true), game(.loss, opponent: .druid),
+                     game(.win, opponent: .neutral), game(.unknown, opponent: .paladin)]
+        let matchups = report(games).matchups
+        XCTAssertEqual(Set(matchups.map { $0.opponentClass }), [.mage, .druid])
+        let mage = matchups.first { $0.opponentClass == .mage }
+        XCTAssertEqual(mage?.summary.record.wins, 2)
+        XCTAssertEqual(mage?.summary.record.losses, 1)
+        XCTAssertEqual(mage?.summary.goingFirst.wins, 1)
+        XCTAssertEqual(mage?.summary.onCoin.wins, 1)
+        XCTAssertEqual(mage?.summary.onCoin.losses, 1)
+        XCTAssertEqual(StatsHelper.getDeckWinRate(record: mage!.summary.record), 2.0 / 3.0, accuracy: 0.0001)
+    }
+
+    func testRankSnapshotOrdering() {
+        XCTAssertEqual(rank(1, 0).ladderStars, 0)
+        XCTAssertEqual(rank(45, 3).ladderStars, 135)
+        XCTAssertEqual(rank(46, 0).ladderStars, 135)
+        XCTAssertEqual(rank(50, 3).ladderStars, 150)
+        // A win at Diamond 1 with three stars reaches Legend, one star further.
+        XCTAssertEqual(rank(51, 0).ladderStars, 151)
+        XCTAssertEqual(rank(51, 0, legend: 500).ladderStars, 151)
+        XCTAssertTrue(rank(51, 0).isLegendLevel)
+        XCTAssertTrue(rank(31, 1).isHigher(than: rank(30, 3)))
+        XCTAssertFalse(rank(30, 3).isHigher(than: rank(30, 3)))
+        XCTAssertTrue(rank(51, 0, legend: 100).isHigher(than: rank(51, 0, legend: 500)))
+        XCTAssertTrue(rank(51, 0, legend: 500).isHigher(than: rank(51, 0)))
+        XCTAssertTrue(rank(51, 0).isHigher(than: rank(50, 3)))
+    }
+
+    func testRankProgressionPerSeasonAndFormat() {
+        let currentSeason = Database.season(for: RecordStatsTests.now, calendar: RecordStatsTests.utc)
+        // Newest first, as the report sorts them.
+        let games = [
+            // Current season, standard: Diamond 5 ★2 -> climbs to Diamond 4 ★1 -> drops to Diamond 5 ★3.
+            game(.loss, hoursAgo: 1, before: rank(46, 1), after: rank(45, 3)),
+            game(.win, hoursAgo: 2, before: rank(45, 3), after: rank(46, 1)),
+            game(.win, hoursAgo: 3, before: rank(45, 2), after: rank(45, 3)),
+            // An unknown post-game read still contributes its pre-game rank.
+            game(.win, hoursAgo: 4, before: rank(45, 1), after: nil),
+            game(.win, hoursAgo: 5, before: rank(45, 0), after: rank(45, 1)),
+            // Legacy ranked game without a rank, and a casual game: not part of it.
+            game(.win, hoursAgo: 6),
+            game(.win, mode: .casual, hoursAgo: 7, before: rank(10, 0), after: rank(10, 1)),
+            // Current season, wild: reaches Legend.
+            game(.win, format: .wild, hoursAgo: 8, before: rank(50, 3), after: rank(51, 0, legend: 900)),
+            // Last season, standard.
+            game(.loss, hoursAgo: 24 * 20, before: rank(51, 0, legend: 300), after: rank(51, 0, legend: 450)),
+            game(.win, hoursAgo: 24 * 21, before: rank(51, 0, legend: 800), after: rank(51, 0, legend: 300))
+        ]
+
+        let progression = report(games).rankProgression
+        XCTAssertEqual(progression.map { $0.season }, [currentSeason, currentSeason, currentSeason - 1])
+        XCTAssertEqual(progression.map { $0.format }, [.standard, .wild, .standard])
+
+        let standard = progression[0]
+        XCTAssertEqual(standard.games, 5)
+        XCTAssertEqual(standard.start, rank(45, 0))
+        XCTAssertEqual(standard.current, rank(45, 3))
+        XCTAssertEqual(standard.peak, rank(46, 1))
+        XCTAssertEqual(standard.netStars, 3)
+
+        let wild = progression[1]
+        XCTAssertEqual(wild.start, rank(50, 3))
+        XCTAssertEqual(wild.current, rank(51, 0, legend: 900))
+        XCTAssertEqual(wild.netStars, 1)
+
+        let lastSeason = progression[2]
+        XCTAssertEqual(lastSeason.start, rank(51, 0, legend: 800))
+        XCTAssertEqual(lastSeason.current, rank(51, 0, legend: 450))
+        XCTAssertEqual(lastSeason.peak, rank(51, 0, legend: 300))
+        XCTAssertNil(lastSeason.netStars, "stars do not move inside Legend")
+
+        // Format and time filters scope it; deck filters do not, the rank is the account's.
+        var filter = RecordFilter()
+        filter.format = .wild
+        XCTAssertEqual(report(games, filter: filter).rankProgression.map { $0.format }, [.wild])
+        filter = RecordFilter()
+        filter.timeFrame = .lastSeason
+        XCTAssertEqual(report(games, filter: filter).rankProgression.map { $0.season }, [currentSeason - 1])
+        filter = RecordFilter()
+        filter.owner = .noDeck(.hunter)
+        filter.includeArchived = false
+        XCTAssertEqual(report(games, filter: filter).rankProgression.count, 3)
+        filter = RecordFilter()
+        filter.mode = .casual
+        XCTAssertTrue(report(games, filter: filter).rankProgression.isEmpty)
+    }
+
+    func testLoadRecordDataReadsDecksAndBucketsOffTheMainThread() throws {
+        let realm = try Realm()
+        let ranked = makeStat(.win)
+        ranked.opponentHero = .mage
+        let archivedDeck = try makeDeck(.mage, games: [ranked, makeStat(.loss, mode: .arena)], in: realm)
+        try realm.write {
+            archivedDeck.isActive = false
+        }
+        RealmHelper.addStatistics(toDefaultDeckFor: .hunter, stats: makeStat(.loss, mode: .casual))
+        RealmHelper.addStatistics(toDefaultDeckFor: .hunter, stats: makeStat(.win, mode: .battlegrounds))
+        let deckId = archivedDeck.deckId
+
+        let loaded = expectation(description: "report built")
+        var data: RecordData?
+        DispatchQueue.global(qos: .userInitiated).async {
+            data = StatsHelper.loadRecordData()
+            loaded.fulfill()
+        }
+        wait(for: [loaded], timeout: 10)
+
+        let result = try XCTUnwrap(data)
+        XCTAssertEqual(result.owners.count, 2)
+        let deckOwner = try XCTUnwrap(result.owners.first { $0.owner == .deck(id: deckId) })
+        XCTAssertTrue(deckOwner.isArchived)
+        XCTAssertEqual(deckOwner.playerClass, .mage)
+        XCTAssertTrue(result.owners.contains { $0.owner == .noDeck(.hunter) && $0.playerClass == .hunter })
+        XCTAssertEqual(result.games.count, 2, "only ladder games are loaded")
+        XCTAssertEqual(Set(result.games.map { $0.mode }), [.ranked, .casual])
+        XCTAssertEqual(result.games.first { $0.owner == .deck(id: deckId) }?.playerClass, .mage)
+
+        let report = StatsHelper.buildRecordReport(data: result, filter: RecordFilter())
+        XCTAssertEqual(report.overall.record.wins, 1)
+        XCTAssertEqual(report.overall.record.losses, 1)
+    }
 }
 
 // MARK: - Schema 8 models
