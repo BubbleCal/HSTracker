@@ -163,7 +163,8 @@ class Tracker: OverWindowController, CardCellHover {
             opponentDrawChance.isHidden = true
             playerDrawChance.isHidden = !Settings.showPlayerDrawChance
             playerClass.isHidden = !Settings.showDeckNameInTracker
-            recordTracker.isHidden = !Settings.showWinLossRatio
+            // Empty without a saved deck; HDT hides its W-L label then too.
+            recordTracker.isHidden = !Settings.showWinLossRatio || recordTrackerMessage.isEmpty
             matchupTracker.isHidden = !Settings.showMatchupWinRate || matchupTrackerMessage.isEmpty
         }
         
