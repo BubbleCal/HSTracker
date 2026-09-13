@@ -63,6 +63,11 @@ class TagChangeHandler {
                                               isCreationTag: isCreationTag,
                                               hideShowEntities: powerGameStateParser?.currentBlock?.hideShowEntities ?? false,
                                               localPlayerId: eventHandler.player?.id ?? 0, entities: eventHandler.entities)
+                // Attacks, freezes and Attack changes don't refresh the trackers on their own, and the
+                // board damage counters must follow them as they happen
+                if BoardState.affectsBoardDamage(entity: entity, tag: tag, prevValue: prevValue, value: value) {
+                    game.updateBoardDamage()
+                }
             }
 
             if isCreationTag {

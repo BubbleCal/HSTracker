@@ -14,7 +14,40 @@ class HeroPower {
     var cost: Int
     var name: String?
 
+    /// Hero powers that give the hero Attack for the turn instead of dealing damage directly, so they
+    /// only add damage while the hero can still attack.
+    var isHeroAttack: Bool {
+        return id == CardIds.NonCollectible.Druid.Shapeshift || HeroPower.heroAttackNames.contains(englishName ?? "")
+    }
+
     var damage: Int {
+        if let damage = tableDamage {
+            return damage
+        }
+        if let englishName = englishName, let damage = HeroPower.damageByName[englishName] {
+            return damage
+        }
+        return 0
+    }
+
+    /// Current basic hero powers and their skins have their own ids (HERO_05bp, HERO_08dbp, ...) that
+    /// the id table below never learned, so the plain ones are matched by English name as well.
+    private static let damageByName: [String: Int] = [
+        "Fireblast": 1,
+        "Shapeshift": 1,
+        "Steady Shot": 2,
+        "Fireblast Rank 2": 2,
+        "Dire Shapeshift": 2,
+        "Ballista Shot": 3
+    ]
+    private static let heroAttackNames: Set<String> = ["Shapeshift", "Dire Shapeshift"]
+
+    private var englishName: String? {
+        // Cards.by(cardId:) leaves hero powers out
+        return Cards.cardsById[id]?.enName
+    }
+
+    private var tableDamage: Int? {
         switch id {
         case CardIds.NonCollectible.Druid.Shapeshift,
              CardIds.NonCollectible.Mage.Fireblast,
@@ -49,7 +82,7 @@ class HeroPower {
         case CardIds.NonCollectible.Neutral.MajordomoExecutus_DieInsects:
             return 16
         default:
-            return 0
+            return nil
         }
     }
 

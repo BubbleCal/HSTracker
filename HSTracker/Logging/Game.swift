@@ -207,6 +207,7 @@ class Game: NSObject, PowerEventHandler {
 	}
 	
 	private var guiNeedsUpdate = false
+	private var boardDamageNeedsUpdate = false
 	private var guiUpdateResets = false
 	private let _queue = DispatchQueue(label: "net.hearthsim.hstracker.guiupdate", attributes: [])
 	
@@ -863,74 +864,57 @@ class Game: NSObject, PowerEventHandler {
     
     func updateBoardStateTrackers() {
         DispatchQueue.main.async {
-            // board damage
-            let board = BoardState(game: self)
-            
             let playerBoardDamage = self.windowManager.playerBoardDamage
             let opponentBoardDamage = self.windowManager.opponentBoardDamage
-            
-            var rect: NSRect?
-            
-            if Settings.playerBoardDamage && self.shouldShowGUIElement && (self.currentGameMode != .battlegrounds && self.currentGameMode != .mercenaries) && self.isMulliganDone() {
-                if !self.gameEnded {
-                    var heroPowerDmg = 0
-                    if let heroPower = board.player.heroPower, self.player.currentMana >= heroPower.cost {
-                        heroPowerDmg = heroPower.damage
 
-                        // Garrison Commander = hero power * 2
-                        if board.player.cards.first(where: { $0.cardId == "AT_080"}) != nil {
-                            heroPowerDmg *= 2
-                        }
-                    }
-                    playerBoardDamage.update(attack: board.player.hasInfiniteDamage ? Int.max : board.player.damage + heroPowerDmg)
-                    if Settings.autoPositionTrackers {
-                        rect = SizeHelper.playerBoardDamageFrame()
-                    } else {
-                        rect = Settings.playerBoardDamageFrame
-                        if rect == nil {
-                            rect = SizeHelper.playerBoardDamageFrame()
-                        }
-                    }
-                    playerBoardDamage.hasValidFrame = true
-                    self.windowManager.show(controller: playerBoardDamage, show: true,
-                         frame: rect, title: nil, overlay: self.hearthstoneRunState.isActive)
-                } else {
-                    self.windowManager.show(controller: playerBoardDamage, show: false)
+            let visible = self.shouldShowGUIElement
+                && self.currentGameMode != .battlegrounds && self.currentGameMode != .mercenaries
+                && self.isMulliganDone() && !self.gameEnded
+            let showPlayer = Settings.playerBoardDamage && visible
+            let showOpponent = Settings.opponentBoardDamage && visible
+            // Nothing to compute while both counters are hidden
+            let board = showPlayer || showOpponent ? BoardState(game: self) : nil
+
+            if showPlayer, let board = board {
+                playerBoardDamage.update(now: board.player.hasInfiniteDamageNow ? Int.max : board.player.damageNow,
+                                         nextTurn: board.player.hasInfiniteDamageNextTurn ? Int.max : board.player.damageNextTurn)
+                var rect: NSRect?
+                if !Settings.autoPositionTrackers {
+                    rect = Settings.playerBoardDamageFrame
                 }
+                playerBoardDamage.hasValidFrame = true
+                self.windowManager.show(controller: playerBoardDamage, show: true,
+                                        frame: rect ?? SizeHelper.playerBoardDamageFrame(), title: nil,
+                                        overlay: self.hearthstoneRunState.isActive)
             } else {
                 self.windowManager.show(controller: playerBoardDamage, show: false)
             }
-            
-            if Settings.opponentBoardDamage && self.shouldShowGUIElement && (self.currentGameMode != .battlegrounds && self.currentGameMode != .mercenaries) && self.isMulliganDone() {
-                if !self.gameEnded {
-                    var heroPowerDmg = 0
-                    if let heroPower = board.opponent.heroPower {
-                        heroPowerDmg = heroPower.damage
 
-                        // Garrison Commander = hero power * 2
-                        if board.opponent.cards.first(where: { $0.cardId == "AT_080"}) != nil {
-                            heroPowerDmg *= 2
-                        }
-                    }
-                    opponentBoardDamage.update(attack: board.opponent.hasInfiniteDamage ? Int.max : board.opponent.damage + heroPowerDmg)
-                    if Settings.autoPositionTrackers {
-                        rect = SizeHelper.opponentBoardDamageFrame()
-                    } else {
-                        rect = Settings.opponentBoardDamageFrame
-                        if rect == nil {
-                            rect = SizeHelper.opponentBoardDamageFrame()
-                        }
-                    }
-                    opponentBoardDamage.hasValidFrame = true
-                    self.windowManager.show(controller: opponentBoardDamage, show: true,
-                         frame: SizeHelper.opponentBoardDamageFrame(), title: nil,
-                         overlay: self.hearthstoneRunState.isActive)
-                } else {
-                    self.windowManager.show(controller: opponentBoardDamage, show: false)
+            if showOpponent, let board = board {
+                opponentBoardDamage.update(now: board.opponent.hasInfiniteDamageNow ? Int.max : board.opponent.damageNow,
+                                           nextTurn: board.opponent.hasInfiniteDamageNextTurn ? Int.max : board.opponent.damageNextTurn)
+                var rect: NSRect?
+                if !Settings.autoPositionTrackers {
+                    rect = Settings.opponentBoardDamageFrame
                 }
+                opponentBoardDamage.hasValidFrame = true
+                // This used to pass the default frame whatever was saved, so a moved opponent counter
+                // jumped back on every refresh.
+                self.windowManager.show(controller: opponentBoardDamage, show: true,
+                                        frame: rect ?? SizeHelper.opponentBoardDamageFrame(), title: nil,
+                                        overlay: self.hearthstoneRunState.isActive)
             } else {
                 self.windowManager.show(controller: opponentBoardDamage, show: false)
             }
+        }
+    }
+
+    /// Asks for the board damage counters to be recomputed on the next GUI update tick, for tag
+    /// changes (attacks, freezes, Attack changes, steps) that don't refresh the trackers otherwise.
+    /// Coalesced, since these tags change many times per turn.
+    func updateBoardDamage() {
+        _queue.async {
+            self.boardDamageNeedsUpdate = true
         }
     }
 	
@@ -1614,6 +1598,7 @@ class Game: NSObject, PowerEventHandler {
     private func internalUpdateCheck() {
         if self.guiNeedsUpdate {
             self.guiNeedsUpdate = false
+            self.boardDamageNeedsUpdate = false
             self.updateAllTrackers()
             self.guiUpdateResets = false
             self.counter = 0
@@ -1637,6 +1622,11 @@ class Game: NSObject, PowerEventHandler {
             self.counter += 1
         }
         
+        // updateAllTrackers above already refreshes the board damage
+        if self.boardDamageNeedsUpdate {
+            self.boardDamageNeedsUpdate = false
+            self.updateBoardStateTrackers()
+        }
         self.updateBoardOverlay()
 
         _queue.asyncAfter(deadline: DispatchTime.now() + Game.guiUpdateDelay, execute: {

@@ -8,65 +8,83 @@
 
 import Foundation
 
+/// The hero and its weapon. The weapon is never counted on its own: hero ATK already includes it on
+/// the current turn, and it is the only Attack that survives to the next turn.
 class BoardHero: IBoardEntity {
-    private(set) var _baseAttack = 0
-    private(set) var _hero: BoardCard
-    private(set) var _weapon: BoardCard?
+    let cardId: String
+    let weaponCardId: String?
+    /// Total health, including armor
+    let health: Int
 
-    var name: String { return _hero.name }
-    var cardId: String { return _hero.cardId }
-    var hasWeapon: Bool { return _weapon != nil }
-    
-    // total health, including armor
-    var health: Int { return _hero.health }
-    
-    // total attack, weapon plus abilities
-    private(set) var attack = 0
-    private(set) var hasInfiniteAttack = false
+    /// The hero could still swing this turn if it had Attack (used for Shapeshift-style hero powers)
+    private(set) var canAttackNow = false
+    /// The hero will be able to swing on its next turn if it has Attack then
+    private(set) var canAttackNextTurn = false
 
-    var attacksThisTurn: Int { return _hero.attacksThisTurn }
-    
-    var exhausted: Bool { return _hero.exhausted }
-    
-    var dormant: Bool { return false }
-    
-    private(set) var include = false
-    
-    var zone: String { return _hero.zone }
-    
-    init(hero: Entity, weapon: Entity?, activeTurn: Bool) {
-        _hero = BoardCard(entity: hero, active: activeTurn)
-        // hero gains windfury with weapon, doubling attack get base attack
-        _baseAttack = hero[.atk]
-        if _baseAttack == 2147483647 {
-            _baseAttack = 0
-            hasInfiniteAttack = true
-        }
-        if let weapon = weapon {
-            _weapon = BoardCard(entity: weapon, active: activeTurn)
-        }
-        include = activeTurn && _hero.include
-        attack = attackWithWeapon()
-    }
-    
-    private func attackWithWeapon() -> Int {
-        // weapon is equipped
-        if include {
-            if let weapon = _weapon {
-                if (_hero.windfury || weapon.windfury) && weapon.health >= 2 && _hero.attacksThisTurn == 0 {
-                    // double the hero attack value
-                    return _baseAttack * 2
-                }
-                if _hero.windfury && !weapon.windfury && weapon.health == 1 {
-                    return _baseAttack * 2 - weapon.attack
-                }
-            } else if _hero.windfury && _hero.attacksThisTurn == 0 {
-                // Hero got windfury from other means (Inara, Sand Art Elemental)
-                return _baseAttack * 2
+    private(set) var damageNow = 0
+    private(set) var hasInfiniteDamageNow = false
+    private(set) var damageNextTurn = 0
+    private(set) var hasInfiniteDamageNextTurn = false
+
+    var hasWeapon: Bool { return weaponCardId != nil }
+
+    init(hero: Entity, weapon: Entity?, isCurrent: Bool, isActing: Bool) {
+        cardId = hero.cardId
+        weaponCardId = weapon?.cardId
+        health = hero[.health] + hero[.armor] - hero[.damage]
+
+        let (heroAttack, heroInfinite) = BoardCard.attack(of: hero)
+        let heroOwnPerTurn = BoardCard.attacksPerTurn(of: hero)
+        let weaponPerTurn = weapon.map { BoardCard.attacksPerTurn(of: $0) } ?? 1
+        let heroPerTurn = max(heroOwnPerTurn, weaponPerTurn >= 2 ? 2 : 1)
+        let attacksThisTurn = hero[.num_attacks_this_turn]
+        let remaining = max(heroPerTurn - attacksThisTurn, 0)
+        let cantAttack = BoardCard.cantAttackHeroes(hero)
+        // NUM_TURNS_IN_PLAY does not matter for heroes; EXHAUSTED is set after their last attack.
+        canAttackNow = isActing && !cantAttack && hero[.frozen] != 1 && hero[.exhausted] != 1 && remaining > 0
+        canAttackNextTurn = !cantAttack
+            && !BoardCard.isFrozenThroughNextTurn(hero, attacksPerTurn: heroPerTurn, isCurrent: isCurrent)
+
+        if canAttackNow && (heroAttack > 0 || heroInfinite) {
+            if heroInfinite {
+                hasInfiniteDamageNow = true
+            } else if let weapon = weapon {
+                // Hero ATK includes the weapon plus any temporary buffs. Swings beyond the weapon's
+                // durability lose the weapon's Attack, and are only there if the hero itself has the
+                // extra attacks: a windfury weapon takes its Windfury with it when it breaks.
+                // This reproduces HDT's BoardHero.AttackWithWeapon expectations.
+                let durability = max(weapon[.health] - weapon[.damage], 0)
+                let weaponAttack = BoardCard.attack(of: weapon).attack
+                let withWeapon = min(remaining, durability)
+                let withoutWeapon = max(heroOwnPerTurn - attacksThisTurn - withWeapon, 0)
+                damageNow = withWeapon * heroAttack + withoutWeapon * max(heroAttack - weaponAttack, 0)
+            } else {
+                damageNow = remaining * heroAttack
             }
         }
 
-        // otherwise normal hero attack is correct
-        return _baseAttack
+        // Hero ATK drops to 0 when the weapon is sheathed at the end of the controller's turn, and
+        // temporary buffs expire then, so next turn only the weapon counts. The weapon's EXHAUSTED only
+        // means sheathed.
+        if let weapon = weapon, canAttackNextTurn {
+            let (weaponAttack, weaponInfinite) = BoardCard.attack(of: weapon)
+            let durability = max(weapon[.health] - weapon[.damage], 0)
+            var perNextTurn = 1
+            if weaponPerTurn >= 2 {
+                perNextTurn = weaponPerTurn
+            } else if !isCurrent && heroOwnPerTurn >= 2 {
+                // On the side not on turn the hero's own Windfury already outlived an end of turn;
+                // on the current side it may be a "this turn" effect.
+                perNextTurn = heroOwnPerTurn
+            }
+            let swings = min(perNextTurn, durability)
+            if swings > 0 {
+                if weaponInfinite {
+                    hasInfiniteDamageNextTurn = true
+                } else {
+                    damageNextTurn = swings * weaponAttack
+                }
+            }
+        }
     }
 }

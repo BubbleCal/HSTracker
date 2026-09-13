@@ -8,20 +8,15 @@
 
 import Foundation
 
+/// A character on the board with the face damage it contributes to the board damage counters.
+/// The turn state is resolved when it is built, since a BoardState is a snapshot of one refresh.
 protocol IBoardEntity {
-    var name: String { get }
     var cardId: String { get }
-    var health: Int { get }
-    var attack: Int { get }
-    var hasInfiniteAttack: Bool { get }
-    // number of attacks made this turn
-    var attacksThisTurn: Int { get }
-    // ability to attack this turn (some exceptions)
-    var exhausted: Bool { get }
-    // whether to include in damage calculation
-    var include: Bool { get }
-    // the zone the entity is in
-    var zone: String { get }
-    // dormant minion
-    var dormant: Bool { get}
+    /// Damage to the enemy hero this character can still deal during the current turn
+    var damageNow: Int { get }
+    var hasInfiniteDamageNow: Bool { get }
+    /// Damage to the enemy hero this character could deal on its controller's next own turn,
+    /// if nothing changes before then
+    var damageNextTurn: Int { get }
+    var hasInfiniteDamageNextTurn: Bool { get }
 }

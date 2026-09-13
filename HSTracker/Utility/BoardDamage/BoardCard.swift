@@ -8,130 +8,121 @@
 
 import Foundation
 
+/// A minion in play. Mirrors HDT's BoardCard, split into what it can still do this turn and what it
+/// could do on its controller's next turn.
 class BoardCard: IBoardEntity {
-    private var _armor = 0
-    private var _cantAttack = false
-    private var _damageTaken = 0
-    private var _frozen = false
-    private var _health = 0
-    private var _stdAttack = 0
-    
-    private(set) var cardId = ""
-    private(set) var silenced = false
-    private(set) var taunt = false
-    private(set) var charge = false
-    private(set) var windfury = false
-    private(set) var megaWindfury = false
-    private(set) var cardType = ""
-    
-    private(set) var name = ""
-    private(set) var attack = 0
-    private(set) var hasInfiniteAttack = false
-    private(set) var health = 0
-    private(set) var include = false
-    
-    private(set) var attacksThisTurn = 0
-    private var attacksPerTurn: Int {
-        if megaWindfury && !silenced {
-            return 4
-        } else if windfury {
-            return 2
-        }
-        return 1
-    }
-    private(set) var exhausted = false
-    private(set) var dormant = false
-    private(set) var titan = false
-    private(set) var titanAbilitiesUsed = 0
-    
-    private(set) var zone = ""
-    
-    init(entity: Entity, active: Bool = true) {
-        let card = Cards.by(cardId: entity.cardId)
-        let cardName = card != nil ? card!.name : ""
-        name = entity.name.isBlank ? cardName : entity.name!
-        
-        _stdAttack = entity.has(tag: .hide_stats) ? 0 : entity[.atk]
-        if _stdAttack == 2147483647 {
-            _stdAttack = 0
-            hasInfiniteAttack = true
-        }
-        _health = entity.has(tag: .hide_stats) ? 0 : entity[.health]
-        _armor = entity[.armor]
-        _damageTaken = entity[.damage]
-        exhausted = entity[.exhausted] == 1 || (entity[.num_turns_in_play] == 0 && !entity.isHero)
-        _cantAttack = entity[.cant_attack] == 1
-        _frozen = entity[.frozen] == 1
-        silenced = entity[.silenced] == 1
-        charge = entity[.charge] == 1
-        windfury = entity[.windfury] == 1
-        megaWindfury = entity[.mega_windfury] == 1 || entity[.windfury] == 3
-        attacksThisTurn = entity[.num_attacks_this_turn]
-        dormant = entity[.dormant] == 1
-        titan = entity[.titan] == 1
-        if titan {
-            if entity[.titan_ability_used_1] == 1 {
-                titanAbilitiesUsed += 1
-            }
-            if entity[.titan_ability_used_2] == 1 {
-                titanAbilitiesUsed += 1
-            }
-            if entity[.titan_ability_used_3] == 1 {
-                titanAbilitiesUsed += 1
-            }
-        }
-        
+    /// ATK value the game uses for "infinite" Attack
+    static let infiniteAttack = 2147483647
+
+    let cardId: String
+    /// ATK, 0 under HIDE_STATS or when infinite
+    let attack: Int
+    let hasInfiniteAttack: Bool
+    let attacksPerTurn: Int
+    let attacksThisTurn: Int
+    let exhausted: Bool
+    let frozen: Bool
+    let charge: Bool
+    let turnsInPlay: Int
+    /// Excluded from both numbers whatever the turn: can't attack (heroes), dormant, a titan with
+    /// abilities left, or no Attack
+    let neverAttacksFace: Bool
+
+    private(set) var damageNow = 0
+    private(set) var hasInfiniteDamageNow = false
+    private(set) var damageNextTurn = 0
+    private(set) var hasInfiniteDamageNextTurn = false
+
+    /// - Parameters:
+    ///   - isCurrent: the controller has CURRENT_PLAYER
+    ///   - isActing: the controller is current and in a step where attacks can happen
+    init(entity: Entity, isCurrent: Bool, isActing: Bool) {
         cardId = entity.cardId
-        taunt = entity[.taunt] == 1
-        if let _zone = Zone(rawValue: entity[.zone]) {
-            zone = "\(_zone)"
+        (attack, hasInfiniteAttack) = BoardCard.attack(of: entity)
+        attacksPerTurn = BoardCard.attacksPerTurn(of: entity)
+        attacksThisTurn = entity[.num_attacks_this_turn]
+        exhausted = entity[.exhausted] == 1
+        frozen = entity[.frozen] == 1
+        charge = entity[.charge] == 1
+        turnsInPlay = entity[.num_turns_in_play]
+        neverAttacksFace = BoardCard.cantAttackHeroes(entity)
+            || entity[.dormant] == 1
+            || BoardCard.isLockedTitan(entity)
+            || (attack <= 0 && !hasInfiniteAttack)
+
+        if neverAttacksFace {
+            return
         }
-        if let _cardType = CardType(rawValue: entity[.cardtype]) {
-            cardType = "\(_cardType)"
+
+        let remaining = max(attacksPerTurn - attacksThisTurn, 0)
+        // A minion that arrived this turn is summoning sick unless it has Charge. Rush minions are
+        // left out too: Rush can't hit heroes, and they come in with EXHAUSTED=0, so the turns in play
+        // are what catches them. EXHAUSTED=1 is set after the last attack, or on arrival, where
+        // Charge given later (without attacking) still lets it go.
+        let summoningSick = turnsInPlay == 0 && !charge
+        let outOfAttacks = exhausted && !(charge && attacksThisTurn == 0)
+        if isActing && !frozen && remaining > 0 && !summoningSick && !outOfAttacks {
+            if hasInfiniteAttack {
+                hasInfiniteDamageNow = true
+            } else {
+                damageNow = remaining * attack
+            }
         }
-        
-        health = calculateHealth(isWeapon: entity.isWeapon)
-        attack = calculateAttack(active: active, isWeapon: entity.isWeapon)
-        include = isAbleToAttack(active: active, isWeapon: entity.isWeapon)
-    }
-    
-    /// since patch 32.0, weapons use HEALTH instead of DURABILITY
-    private func calculateHealth(isWeapon: Bool) -> Int {
-        return isWeapon ? _health - _damageTaken : _health + _armor - _damageTaken
-    }
-    
-    private func calculateAttack(active: Bool, isWeapon: Bool) -> Int {
-        var remainingAttacks = max(attacksPerTurn - (active ? attacksThisTurn : 0), 0)
-        
-        if isWeapon {
-            // for weapons, clamp remaining attacks to health
-            remainingAttacks = min(remainingAttacks, health)
+
+        // By the controller's next MAIN_READY every minion is unexhausted with its attacks reset, so
+        // the turn tags don't matter, except for predicting whether a frozen one thaws first.
+        if !BoardCard.isFrozenThroughNextTurn(entity, attacksPerTurn: attacksPerTurn, isCurrent: isCurrent) {
+            if hasInfiniteAttack {
+                hasInfiniteDamageNextTurn = true
+            } else {
+                damageNextTurn = attacksPerTurn * attack
+            }
         }
-        return remainingAttacks * _stdAttack
     }
-    
-    private func isAbleToAttack(active: Bool, isWeapon: Bool) -> Bool {
-        // TODO: if frozen on turn, may be able to attack next turn
-        // don't include weapons if an active turn, count Hero instead
-        if _cantAttack || _frozen || (isWeapon && active) || dormant || (titan && titanAbilitiesUsed < 3) {
+
+    /// ATK and whether it is infinite. HIDE_STATS hides a real value behind 0.
+    static func attack(of entity: Entity) -> (attack: Int, infinite: Bool) {
+        let atk = entity.has(tag: .hide_stats) ? 0 : entity[.atk]
+        if atk == infiniteAttack {
+            return (0, true)
+        }
+        return (atk, false)
+    }
+
+    /// Mega-Windfury is 4 attacks unless silenced, which leaves the plain WINDFURY behind.
+    static func attacksPerTurn(of entity: Entity) -> Int {
+        if (entity[.mega_windfury] == 1 || entity[.windfury] == 3) && entity[.silenced] != 1 {
+            return 4
+        }
+        return entity[.windfury] >= 1 ? 2 : 1
+    }
+
+    static func cantAttackHeroes(_ entity: Entity) -> Bool {
+        return entity[.cant_attack] == 1 || entity[.cannot_attack_heroes] == 1
+    }
+
+    /// A titan can't attack until its three abilities are used
+    static func isLockedTitan(_ entity: Entity) -> Bool {
+        if entity[.titan] != 1 {
             return false
         }
-        if !active {
-            // include everything that can attack if not an active turn
+        let used = [GameTag.titan_ability_used_1, .titan_ability_used_2, .titan_ability_used_3]
+            .filter { entity[$0] == 1 }.count
+        return used < 3
+    }
+
+    /// Whether a frozen character is still frozen on its controller's next own turn. FROZEN is cleared
+    /// at MAIN_CLEANUP of the controller's turn, but only for a character that still had an attack
+    /// left then. So on the side not on turn the thaw has already passed; on the current side it
+    /// thaws tonight only if it is not exhausted and has attacks left.
+    static func isFrozenThroughNextTurn(_ entity: Entity, attacksPerTurn: Int, isCurrent: Bool) -> Bool {
+        if entity[.frozen] != 1 {
+            return false
+        }
+        if !isCurrent {
             return true
         }
-        if exhausted {
-            // newly played card could be given charge
-            return charge && attacksThisTurn == 0
-        }
-        if attacksThisTurn == attacksPerTurn {
-            return false
-        }
-        // sometimes cards seem to be in wrong zone while in play,
-        // these cards don't become exhausted, so check attacks.
-        if zone.lowercased() == "deck" || zone.lowercased() == "hand" {
-            return (!windfury || attacksThisTurn < 2) && (windfury || attacksThisTurn < 1)
-        }
-        return true
+        let canStillAttack = entity[.exhausted] == 0 && entity[.num_attacks_this_turn] < attacksPerTurn
+        return !canStillAttack
     }
 }
