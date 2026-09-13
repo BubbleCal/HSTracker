@@ -164,9 +164,15 @@ class ActionHistoryPresentationTests: HSTrackerTests {
 
     // MARK: - View model
 
+    // The automatic position the app starts from, not the player's saved one (see the view model's init)
+    @available(macOS 10.15, *)
+    private func makeViewModel() -> ActionHistoryViewModel {
+        return ActionHistoryViewModel(top: 30, left: -1, collapsed: false)
+    }
+
     func testTheLatestTwoTurnsUnfoldUntilThePlayerFoldsThem() {
         guard #available(macOS 10.15, *) else { return }
-        let viewModel = ActionHistoryViewModel()
+        let viewModel = makeViewModel()
         let turns = (1...4).map { HistoryTurn(rawTurn: $0, turn: ($0 + 1) / 2, side: $0 % 2 == 1 ? .player : .opponent) }
         viewModel.apply(ActionHistorySnapshot(turns: turns, version: 1))
 
@@ -185,7 +191,7 @@ class ActionHistoryPresentationTests: HSTrackerTests {
 
     func testANewGameForgetsWhatWasUnfolded() {
         guard #available(macOS 10.15, *) else { return }
-        let viewModel = ActionHistoryViewModel()
+        let viewModel = makeViewModel()
         let played = entry(7)
         viewModel.apply(ActionHistorySnapshot(turns: [HistoryTurn(rawTurn: 3, turn: 2, side: .player, entries: [played])], version: 1))
         viewModel.toggleEntry(played)
@@ -205,7 +211,7 @@ class ActionHistoryPresentationTests: HSTrackerTests {
 
     func testDraggingMovesThePanelFromWhereItWasAndKeepsItOnTheCanvas() {
         guard #available(macOS 10.15, *) else { return }
-        let viewModel = ActionHistoryViewModel()
+        let viewModel = makeViewModel()
         viewModel.panelSize = CGSize(width: ActionHistoryViewModel.panelWidth, height: 300)
         let canvas = CGSize(width: 2000, height: 1000)
         let start = viewModel.origin(canvasSize: canvas)
@@ -230,7 +236,7 @@ class ActionHistoryPresentationTests: HSTrackerTests {
 
     func testTheListNeverRunsPastTheBottomOfTheCanvas() {
         guard #available(macOS 10.15, *) else { return }
-        let viewModel = ActionHistoryViewModel()
+        let viewModel = makeViewModel()
         viewModel.panelSize = CGSize(width: ActionHistoryViewModel.panelWidth, height: 300)
         let canvas = CGSize(width: 1920, height: 1080)
         // Both drags are one gesture, so both translations are from where it started
@@ -250,8 +256,8 @@ class ActionHistoryPresentationTests: HSTrackerTests {
 
     func testTheAutomaticPositionMovesBelowTheSecretHelper() {
         guard #available(macOS 10.15, *) else { return }
-        let viewModel = ActionHistoryViewModel()
-        guard viewModel.left < 0 else { return } // the player moved the panel on this machine
+        let viewModel = makeViewModel()
+        XCTAssertLessThan(viewModel.left, 0)
         let canvas = CGSize(width: 1440, height: 900)
         let top = viewModel.origin(canvasSize: canvas).y
 

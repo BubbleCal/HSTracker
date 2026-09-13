@@ -31,12 +31,12 @@ class ActionHistoryViewModel: ObservableObject {
     // Oldest turn first, as the recorder keeps them
     @Published private(set) var turns: [HistoryTurn] = []
 
-    @Published private(set) var collapsed = Settings.actionHistoryCollapsed
+    @Published private(set) var collapsed: Bool
 
     // Percentages of the canvas size, like BattlegroundsSessionViewModel's top/left. A negative left
     // is the automatic position next to the opponent tracker.
-    @Published private(set) var top = Settings.actionHistoryTop
-    @Published private(set) var left = Settings.actionHistoryLeft
+    @Published private(set) var top: Double
+    @Published private(set) var left: Double
 
     // The panel's laid-out size and the height of the scrolled list's content, reported back by the
     // view so the overlay can work out which pixels it covers and how tall the list may be.
@@ -62,7 +62,13 @@ class ActionHistoryViewModel: ObservableObject {
     private var dragOrigin: CGPoint?
     private var scrollerStyleObserver: NSObjectProtocol?
 
-    init() {
+    // The saved chrome state is passed in so tests can start from a known position rather than
+    // wherever the player last left the panel in the app, whose defaults the hosted tests share.
+    init(top: Double = Settings.actionHistoryTop, left: Double = Settings.actionHistoryLeft,
+         collapsed: Bool = Settings.actionHistoryCollapsed) {
+        self.top = top
+        self.left = left
+        self.collapsed = collapsed
         scrollerStyleObserver = NotificationCenter.default.addObserver(forName: NSScroller.preferredScrollerStyleDidChangeNotification,
                                                                        object: nil, queue: .main) { [weak self] _ in
             let inset = ActionHistoryViewModel.currentScrollerInset()
