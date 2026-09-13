@@ -146,11 +146,17 @@ class SecretsManager {
             }
         }
         // Fallback in case query isn't available
+        // The format test alone lets arena-only secrets (Hand of Salvation, whose Legacy print
+        // counts as Wild) into constructed pools, and keeps secrets arena bans, so apply the
+        // arena lists here. The remote pools already account for both.
+        let isArena = gameMode == .gt_arena || gameMode == .gt_underground_arena
+        let excludedByMode = isArena ? CardIds.Secrets.arenaExcludes : CardIds.Secrets.arenaOnly
+        let candidates = CardIds.Secrets.All.filter { x in !excludedByMode.contains(x) }
         return switch format {
         case .ft_standard:
-            Set<String>(CardIds.Secrets.All.filter { x in x.isStandard }.map { x in x.ids[0] })
+            Set<String>(candidates.filter { x in x.isStandard }.map { x in x.ids[0] })
         default:
-            Set<String>(CardIds.Secrets.All.filter { x in x.isWild }.map { x in x.ids[0] })
+            Set<String>(candidates.filter { x in x.isWild }.map { x in x.ids[0] })
         }
     }
     

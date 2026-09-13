@@ -64,6 +64,8 @@ extension CardIds.Collectible {
         static let ScavengingHyena: String = "EX1_531"
         static let Misdirection: String = "EX1_533"
         static let SavannahHighmane: String = "EX1_534"
+        static let SavannahHighmaneCorePlaceholder: String = "CORE_EX1_534"
+        static let SavannahHighmaneVanilla: String = "VAN_EX1_534"
         static let EaglehornBow: String = "EX1_536"
         static let ExplosiveShot: String = "EX1_537"
         static let UnleashTheHounds: String = "EX1_538"
@@ -379,7 +381,7 @@ extension CardIds.Secrets {
                           HiddenCache, Misdirection, RatTrap, Snipe, SnakeTrap, CatTrick,
                           VenomstrikeTrap, WanderingMonster, PressurePlate, PackTactics,
                           OpenTheCages, IceTrap, EmergencyManeuvers, MotionDenied, Zombeeees,
-                          HiddenMeaning, BaitAndSwitch, BargainBin]
+                          HiddenMeaning, BaitAndSwitch, BargainBin, UntimelyDeath]
         static let BearTrap = MultiIdCard(CardIds.Collectible.Hunter.BearTrap)
         static let CatTrick = MultiIdCard(CardIds.Collectible.Hunter.CatTrick, CardIds.Collectible.Hunter.CatTrickInvalid)
         static let DartTrap = MultiIdCard(CardIds.Collectible.Hunter.DartTrap)

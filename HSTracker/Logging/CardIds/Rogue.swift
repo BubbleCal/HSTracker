@@ -40,6 +40,7 @@ extension CardIds.Collectible {
         static let PoisonedBlade: String = "AT_034"
         static let BeneathTheGrounds: String = "AT_035"
         static let Anubarak: String = "AT_036"
+        static let AnubarakWONDERS: String = "WON_076"
         static let GangUp: String = "BRM_007"
         static let DarkIronSkulker: String = "BRM_008"
         static let LuckydoBuccaneer: String = "CFM_342"

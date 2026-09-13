@@ -142,7 +142,8 @@ extension CardIds.Collectible {
         static let NobleSacrificeVanilla = "VAN_EX1_130"
         static let RedemptionVanilla = "VAN_EX1_136"
         static let RepentanceVanilla = "VAN_EX1_379"
-        static let ReckoningCore = "CS3_016"
+        static let ReckoningLegacy = "CS3_016"
+        static let ReckoningCorePlaceholder = "CORE_CS3_016"
         static let GallopingSavior = "BAR_550"
         static let ConvictionRank1 = "BAR_880"
         static let AldorAttendant = "BT_020"
@@ -382,7 +383,7 @@ extension CardIds.Secrets {
         static let NeverSurrender = MultiIdCard(CardIds.Collectible.Paladin.NeverSurrender)
         static let NobleSacrifice = MultiIdCard(CardIds.Collectible.Paladin.NobleSacrifice, CardIds.Collectible.Paladin.NobleSacrificeCore, CardIds.Collectible.Paladin.NobleSacrificeVanilla)
         static let OhMyYogg = MultiIdCard(CardIds.Collectible.Paladin.OhMyYogg)
-        static let Reckoning = MultiIdCard(CardIds.Collectible.Paladin.ReckoningCore)
+        static let Reckoning = MultiIdCard(CardIds.Collectible.Paladin.ReckoningLegacy, CardIds.Collectible.Paladin.ReckoningCorePlaceholder)
         static let Redemption = MultiIdCard(CardIds.Collectible.Paladin.Redemption, CardIds.Collectible.Paladin.RedemptionVanilla)
         static let Repentance = MultiIdCard(CardIds.Collectible.Paladin.Repentance, CardIds.Collectible.Paladin.RepentanceVanilla)
         static let SacredTrial = MultiIdCard(CardIds.Collectible.Paladin.SacredTrial)

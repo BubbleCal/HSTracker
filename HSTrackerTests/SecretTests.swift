@@ -349,6 +349,84 @@ class SecretTests: HSTrackerTests {
                       triggered: [CardIds.Secrets.Rogue.CheatDeath])
     }
 
+    func testSingleSecret_OnlyMinionDied_MinionWasPlayedTheTurnBefore() {
+        opponentMinion1.info.turnPlayed = 1
+        gameEntity[.turn] = 2
+        game.opponentMinionDeath(entity: opponentMinion1, turn: 2)
+        verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All,
+                      triggered: [CardIds.Secrets.Hunter.EmergencyManeuvers, CardIds.Secrets.Hunter.UntimelyDeath])
+        verifySecrets(secretIndex: 1, allSecrets: CardIds.Secrets.Mage.All,
+                      triggered: [CardIds.Secrets.Mage.Duplicate, CardIds.Secrets.Mage.Effigy])
+        verifySecrets(secretIndex: 2, allSecrets: CardIds.Secrets.Paladin.All,
+                      triggered: [CardIds.Secrets.Paladin.Redemption,
+                                  CardIds.Secrets.Paladin.GetawayKodo])
+        verifySecrets(secretIndex: 3, allSecrets: CardIds.Secrets.Rogue.All,
+                      triggered: [CardIds.Secrets.Rogue.CheatDeath])
+    }
+
+    func testOpponentMinionDied_CoreSavannahHighmaneFillsBoard_RedemptionNotExcluded() {
+        // Five minions stay, so the two Hyenas take the last free slots before Redemption could resummon
+        for _ in 0..<5 {
+            let minion = createNewEntity(cardId: "EX1_020")
+            minion[.cardtype] = CardType.minion.rawValue
+            minion[.controller] = heroOpponent.id
+            minion[.zone] = Zone.play.rawValue
+            game.entities[minion.id] = minion
+        }
+        let highmane = createNewEntity(cardId: CardIds.Collectible.Hunter.SavannahHighmaneCorePlaceholder)
+        highmane[.cardtype] = CardType.minion.rawValue
+        highmane[.controller] = heroOpponent.id
+        highmane[.deathrattle] = 1
+        highmane[.zone] = Zone.graveyard.rawValue
+        game.entities[highmane.id] = highmane
+
+        game.opponentMinionDeath(entity: highmane, turn: 2)
+
+        XCTAssertEqual(game.secretsManager?.secrets[2].isExcluded(cardId: CardIds.Secrets.Paladin.Redemption), false)
+    }
+
+    func testEveryCollectibleSecretIsInItsClassList() {
+        // Placeholder_202204 holds Core prints that cannot appear in games (HearthDb's *CorePlaceholder)
+        let lists: [CardClass: [MultiIdCard]] = [
+            .hunter: CardIds.Secrets.Hunter.All,
+            .mage: CardIds.Secrets.Mage.All,
+            .paladin: CardIds.Secrets.Paladin.All,
+            .rogue: CardIds.Secrets.Rogue.All
+        ]
+        let secretCards = Cards.collectible().filter { card in
+            card.type == .spell && lists[card.playerClass] != nil && card.set != .placeholder_202204
+                && card.enText.replacingOccurrences(of: "[x]", with: "").hasPrefix("<b>Secret:</b>")
+        }
+        XCTAssertGreaterThan(secretCards.count, 50)
+        for card in secretCards {
+            let multiIdCard = CardIds.Secrets.getSecretMultiIdCard(card.id)
+            XCTAssertNotNil(multiIdCard, "\(card.id) \(card.enName)")
+            if let multiIdCard, let list = lists[card.playerClass] {
+                XCTAssertTrue(list.contains(multiIdCard), "\(card.id) \(card.enName)")
+            }
+        }
+        XCTAssertTrue(CardIds.Secrets.getSecretMultiIdCard("CORE_CS3_016") == CardIds.Secrets.Paladin.Reckoning)
+    }
+
+    private struct NoRemoteSecrets: AvailableSecretsProvider {
+        var byType: [String: Set<String>]? { return nil }
+        var createdByTypeByCreator: [String: [String: Set<String>]]? { return nil }
+    }
+
+    func testFallbackSecretPool_ArenaListsApplyByMode() {
+        let manager = SecretsManager(game: game, availableSecrets: NoRemoteSecrets(), relatedCardsManager: game.relatedCardsManager)
+        let handOfSalvation = CardIds.Secrets.Paladin.HandOfSalvation.ids[0]
+        let snipe = CardIds.Secrets.Hunter.Snipe.ids[0]
+
+        let ranked = manager.getAvailableSecrets(gameMode: .gt_ranked, format: .ft_wild)
+        XCTAssertFalse(ranked.contains(handOfSalvation))
+        XCTAssertTrue(ranked.contains(snipe))
+
+        let arena = manager.getAvailableSecrets(gameMode: .gt_arena, format: .ft_wild)
+        XCTAssertTrue(arena.contains(handOfSalvation))
+        XCTAssertFalse(arena.contains(snipe))
+    }
+
     func testSingleSecret_OneMinionDied() {
         opponentMinion2[.zone] = Zone.play.rawValue
         game.opponentMinionDeath(entity: opponentMinion1, turn: 2)
