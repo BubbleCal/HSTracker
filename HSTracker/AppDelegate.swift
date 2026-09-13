@@ -59,7 +59,26 @@ class AppDelegate: NSObject, NSApplicationDelegate, SPUStandardUserDriverDelegat
         return PreferencesWindowController(preferencePanes: panes, style: .toolbarItems, animated: true)
     }()
     
+    /// True when this process is the host of the HSTrackerTests bundle.
+    ///
+    /// The unit tests are injected into HSTracker.app by xcodebuild rather than compiling their
+    /// own copy of the app sources, so the app launches first. It must then stay inert: no
+    /// moving itself to /Applications, no modal alerts, no Realm on the user's real database,
+    /// no Hearthstone log readers, HearthMirror or overlay windows.
+    ///
+    /// Sparkle is the exception: MainMenu.xib starts its updater before this is ever checked, so the
+    /// test actions of both shared schemes pass `-SUEnableAutomaticChecks NO` instead. Otherwise an
+    /// overdue check would fetch the appcast and write SULastCheckTime into the real app's defaults.
+    static let isRunningUnitTests: Bool = {
+        let env = ProcessInfo.processInfo.environment
+        return env["XCTestConfigurationFilePath"] != nil || env["XCTestBundlePath"] != nil
+            || env["XCTestSessionIdentifier"] != nil
+    }()
+
     func applicationWillFinishLaunching(_ notification: Notification) {
+        if AppDelegate.isRunningUnitTests {
+            return
+        }
         do {
             try AppMover.moveApp()
         } catch {
@@ -71,6 +90,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, SPUStandardUserDriverDelegat
         AppDelegate._instance = self
         GameTag.initialize()
         Race.initialize()
+        if AppDelegate.isRunningUnitTests {
+            return
+        }
         //setenv("CFNETWORK_DIAGNOSTICS", "3", 1)
         
         Mixpanel.initialize(token: "da39869dcbc77a77a53506f12ff08094")

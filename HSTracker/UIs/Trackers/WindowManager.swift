@@ -360,6 +360,12 @@ class WindowManager {
     @MainActor
     func show(controller: OverWindowController, show: Bool,
               frame: NSRect? = nil, title: String? = nil, overlay: Bool = true) {
+        // Unit tests drive a bare Game inside the inert test host, where there is no
+        // CoreManager behind AppDelegate.instance() for the overlay views to read, and
+        // nothing should appear on screen anyway. Never load or order in a window there.
+        if AppDelegate.isRunningUnitTests {
+            return
+        }
         // `controller.window` loads the nib on first access, so the hop has to
         // happen before it is touched, not after.
         if !Thread.isMainThread {

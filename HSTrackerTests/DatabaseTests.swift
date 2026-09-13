@@ -5,6 +5,12 @@
 //  Created by Benjamin Michotte on 25/03/17.
 //  Copyright © 2017 Benjamin Michotte. All rights reserved.
 //
+//  NOT BUILT: this file is not in any target's Sources phase, so its tests never run and edits
+//  here are not compiled. It no longer compiles against the app: Card has no `artist` property
+//  since the database moved to CardDefs (2d993bc2), and testFromId/testGetFromName still assert
+//  on it. Dropping or porting those two assertions and adding the file back to HSTrackerTests
+//  restores the Database/Cards field mapping checks.
+//
 
 import XCTest
 @testable import HSTracker
