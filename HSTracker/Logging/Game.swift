@@ -372,6 +372,10 @@ class Game: NSObject, PowerEventHandler {
                         tracker.recordTrackerMessage = StatsHelper
                             .getDeckManagerRecordLabel(deck: deck,
                                                        mode: .all)
+                    } else {
+                        // An unsaved deck has no record; without this the line kept
+                        // showing the previous deck's W-L.
+                        tracker.recordTrackerMessage = ""
                     }
                     tracker.playerName = currentDeck.name
                     if !currentDeck.heroId.isEmpty {
@@ -380,6 +384,7 @@ class Game: NSObject, PowerEventHandler {
                         tracker.playerClassId = currentDeck.playerClass.defaultHeroCardId
                     }
                 } else {
+                    tracker.recordTrackerMessage = ""
                     tracker.playerName = player.name
                     tracker.playerClassId = playerHeroId
                 }

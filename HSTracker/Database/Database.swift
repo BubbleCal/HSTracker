@@ -72,11 +72,19 @@ class Database {
         GameTag.quickdraw.rawValue: "QUICKDRAW"
     ]
     
-    static let currentSeason: Int = {
-        let today = Date()
-        let dc = Calendar.current.dateComponents(in: TimeZone.current, from: today)
-        return (dc.year! - 2014) * 12 - 3 + dc.month!
-    }()
+    /// Computed on every read: a `static let` froze the season at launch, so an
+    /// HSTracker left running across a month boundary kept filing games into the
+    /// previous season.
+    static var currentSeason: Int {
+        return season(for: Date())
+    }
+
+    /// The ranked season a date falls into (one season per calendar month, season 1
+    /// being April 2014), in the local time zone.
+    static func season(for date: Date, calendar: Calendar = .current) -> Int {
+        let dc = calendar.dateComponents([.year, .month], from: date)
+        return ((dc.year ?? 2014) - 2014) * 12 - 3 + (dc.month ?? 4)
+    }
     
     static let validCardSets = CardSet.allCases
 
