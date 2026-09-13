@@ -139,6 +139,12 @@ class MulliganRecorderTests: HSTrackerTests {
         D 22:14:04.3327860 PowerTaskList.DebugPrintPower() - BLOCK_END
         """
 
+    // Once both mulligans are done, as in HearthSim's kotlin-hslog power.log: the first turn starts
+    private static let firstTurnStart = """
+        D 22:13:54.8100220 PowerTaskList.DebugPrintPower() -     TAG_CHANGE Entity=GameEntity tag=NEXT_STEP value=MAIN_READY
+        D 22:13:54.8100220 PowerTaskList.DebugPrintPower() -     TAG_CHANGE Entity=GameEntity tag=STEP value=MAIN_READY
+        """
+
     // MARK: - Game 2: going first as PlayerID 2, the quest kept and both other cards replaced
 
     // The opponent's choice is logged under a name that is not known yet
@@ -387,6 +393,7 @@ class MulliganRecorderTests: HSTrackerTests {
         feed(MulliganRecorderTests.coinGameChoices)
         feed(MulliganRecorderTests.coinGameChosen)
         feed(MulliganRecorderTests.coinGameDealing)
+        feed(MulliganRecorderTests.firstTurnStart)
         feed(MulliganRecorderTests.coinGameFirstDraw)
 
         XCTAssertEqual(game.entities[10]?.cardId, "CAP_805")
@@ -401,7 +408,9 @@ class MulliganRecorderTests: HSTrackerTests {
         XCTAssertEqual(Array(record.finalHandCardIds), ["TLC_817", "TLC_816", "DINO_426", "EDR_463"])
         XCTAssertEqual(record.openingHandCardIds, ["TLC_817", "DINO_426", "TLC_816", "EDR_463"])
         // Game turn 2 is the coin player's first turn
-        XCTAssertEqual(record.draws.map { "\($0.cardId)@\($0.turn)" }, ["CAP_805@1"])
+        XCTAssertEqual(record.draws.map { "\($0.cardId)@\($0.gameTurn)" }, ["CAP_805@2"])
+        XCTAssertEqual(record.draws.first?.transformed, false)
+        XCTAssertEqual(record.drawnCardIds(byOwnTurn: 1, goingFirst: false), ["CAP_805"])
         XCTAssertFalse(record.drawsTruncated)
     }
 
@@ -410,6 +419,7 @@ class MulliganRecorderTests: HSTrackerTests {
         feed(MulliganRecorderTests.firstGameChoices)
         feed(MulliganRecorderTests.firstGameChosen)
         feed(MulliganRecorderTests.firstGameDealing)
+        feed(MulliganRecorderTests.firstTurnStart)
 
         let record = buildRecord()
         XCTAssertEqual(record.status, .complete)
@@ -427,6 +437,7 @@ class MulliganRecorderTests: HSTrackerTests {
                       coinId: 76, deck: [10, 11])
         feed(MulliganRecorderTests.keepAllChoices)
         feed(MulliganRecorderTests.keepAllDealing)
+        feed(MulliganRecorderTests.firstTurnStart)
 
         let record = buildRecord()
         XCTAssertEqual(record.status, .complete)
@@ -446,6 +457,7 @@ class MulliganRecorderTests: HSTrackerTests {
         game.player.id = 2
         game.opponent.id = 1
         feed(MulliganRecorderTests.firstGameDealing)
+        feed(MulliganRecorderTests.firstTurnStart)
 
         let record = buildRecord()
         XCTAssertEqual(record.status, .complete)
@@ -492,6 +504,7 @@ class MulliganRecorderTests: HSTrackerTests {
         feed(MulliganRecorderTests.firstGameChoices)
         feed(MulliganRecorderTests.firstGameChosen)
         feed(MulliganRecorderTests.firstGameDealing)
+        feed(MulliganRecorderTests.firstTurnStart)
         XCTAssertEqual(buildRecord().status, .complete)
 
         let next = buildRecord()
@@ -506,7 +519,113 @@ class MulliganRecorderTests: HSTrackerTests {
         XCTAssertEqual(game.mulliganRecorder.buildRecord(localPlayerId: 0) { _ in nil }.status, .unknownPlayer)
     }
 
+    func testMissingChoiceEchoIsNotComplete() {
+        setUpFirstGame()
+        // The offer and the dealt hand, but no DebugPrintEntitiesChosen for the local player
+        feed(MulliganRecorderTests.firstGameChoices)
+        feed(MulliganRecorderTests.firstGameDealing)
+        feed(MulliganRecorderTests.firstTurnStart)
+
+        let record = buildRecord()
+        XCTAssertEqual(record.status, .mulliganChoiceMissing)
+        XCTAssertFalse(record.isComplete)
+        // The hand itself is still known
+        XCTAssertEqual(offered(record), ["TLC_817 forced", "CAP_801 replaced", "CAP_806 replaced"])
+        XCTAssertEqual(Array(record.replacementCardIds), ["JAIL_940", "CORE_CS2_004"])
+    }
+
+    func testGameEndingBeforeTheFirstTurnIsNotComplete() {
+        setUpFirstGame()
+        // The local mulligan is done, then the game ends while the opponent is still choosing
+        feed(MulliganRecorderTests.firstGameChoices)
+        feed(MulliganRecorderTests.firstGameChosen)
+        feed(MulliganRecorderTests.firstGameDealing)
+
+        let record = buildRecord()
+        XCTAssertEqual(record.status, .endedBeforeFirstTurn)
+        XCTAssertEqual(offered(record), ["TLC_817 forced", "CAP_801 replaced", "CAP_806 replaced"])
+    }
+
+    func testDrawsReplayedBeforeThePlayerIdIsKnown() {
+        setUpCoinGame()
+        // A Power.log backlog replayed in full before HearthMirror answered
+        game.player.id = -1
+        game.opponent.id = -1
+        feed(MulliganRecorderTests.coinGameChoices)
+        feed(MulliganRecorderTests.coinGameChosen)
+        feed(MulliganRecorderTests.coinGameDealing)
+        feed(MulliganRecorderTests.firstTurnStart)
+        feed(MulliganRecorderTests.coinGameFirstDraw)
+        game.player.id = 1
+        game.opponent.id = 2
+
+        let record = buildRecord()
+        XCTAssertEqual(record.status, .complete)
+        XCTAssertEqual(offered(record), ["TLC_817 forced", "CATA_308 replaced", "DINO_426", "CAP_804 replaced"])
+        XCTAssertEqual(record.draws.map { "\($0.cardId)@\($0.gameTurn)" }, ["CAP_805@2"])
+    }
+
+    func testDrawOfACardTransformedInTheDeckKeepsTheDeckCard() throws {
+        setUpCoinGame()
+        feed(MulliganRecorderTests.coinGameChoices)
+        feed(MulliganRecorderTests.coinGameChosen)
+        feed(MulliganRecorderTests.coinGameDealing)
+        feed(MulliganRecorderTests.firstTurnStart)
+        // As if Lady Prestor had turned the deck's Wisp into CAP_805 while it was in the deck
+        let wispDbfId = try XCTUnwrap(Cards.any(byId: "CS2_231")?.dbfId)
+        feed(MulliganRecorderTests.coinGameFirstDraw.replacingOccurrences(
+            of: "        tag=ENTITY_ID value=10\n",
+            with: "        tag=ENTITY_ID value=10\n"
+                + "D 22:14:04.3327860 PowerTaskList.DebugPrintPower() -         tag=TRANSFORMED_FROM_CARD value=\(wispDbfId)\n"))
+
+        XCTAssertEqual(game.entities[10]?[.transformed_from_card], wispDbfId)
+        let record = buildRecord()
+        XCTAssertEqual(record.draws.map { "\($0.cardId)@\($0.gameTurn):\($0.transformed)" }, ["CS2_231@2:true"])
+    }
+
     // MARK: - Recorder rules
+
+    func testQuestsAreForcedByTheirCardDataWithoutTheTag() {
+        let recorder = MulliganRecorder()
+        recorder.mulliganOffered(playerId: 1, entityIds: [4, 5])
+        // Hearthstone lists the quest among the chosen cards, as in every quest game in the log
+        recorder.mulliganChosen(playerId: 1, entityIds: [4, 5])
+        recorder.mulliganDone(playerId: 1, entities: [handEntity(4, "TLC_817", position: 1), handEntity(5, "CS2_231", position: 2)])
+        recorder.turnStarted()
+
+        let record = recorder.buildRecord(localPlayerId: 1) { _ in nil }
+        XCTAssertEqual(record.status, .complete)
+        XCTAssertEqual(offered(record), ["TLC_817 forced", "CS2_231"])
+    }
+
+    func testTransformedDrawsStoreTheCardFromTheDeck() throws {
+        let recorder = MulliganRecorder()
+        recorder.mulliganOffered(playerId: 1, entityIds: [4])
+        recorder.mulliganDone(playerId: 1, entities: [handEntity(4, "CS2_231", position: 1), handEntity(20, "", position: 0, zone: .deck),
+                                                      handEntity(21, "", position: 0, zone: .deck)])
+        // 20 was an Elven Archer turned into a Chillwind Yeti in the deck; 21 was drawn as a Wisp and
+        // transformed in hand afterwards, so its tag names the Wisp
+        let inDeck = handEntity(20, "CS2_182", position: 5)
+        inDeck[.transformed_from_card] = try XCTUnwrap(Cards.any(byId: "CS2_189")?.dbfId)
+        let inHand = handEntity(21, "CS2_120", position: 6)
+        inHand[.transformed_from_card] = try XCTUnwrap(Cards.any(byId: "CS2_231")?.dbfId)
+        recorder.cardDrawn(playerId: 1, entityId: 20, cardId: "CS2_182", gameTurn: 5)
+        recorder.cardDrawn(playerId: 1, entityId: 21, cardId: "CS2_231", gameTurn: 7)
+
+        let record = recorder.buildRecord(localPlayerId: 1) { id in [20: inDeck, 21: inHand][id] }
+        XCTAssertEqual(record.draws.map { "\($0.cardId)@\($0.gameTurn):\($0.transformed)" }, ["CS2_189@5:true", "CS2_231@7:false"])
+    }
+
+    func testDrawnByOwnTurnFollowsTheTurnOrder() {
+        // Game TURN 6 is the second player's third turn
+        let duringOpponentsThirdTurn = MulliganDrawnCard(cardId: "CS2_231", gameTurn: 6)
+        XCTAssertFalse(duringOpponentsThirdTurn.isDrawn(byOwnTurn: 3, goingFirst: true))
+        XCTAssertTrue(duringOpponentsThirdTurn.isDrawn(byOwnTurn: 4, goingFirst: true))
+        XCTAssertTrue(duringOpponentsThirdTurn.isDrawn(byOwnTurn: 3, goingFirst: false))
+        let onOwnThirdTurn = MulliganDrawnCard(cardId: "CS2_231", gameTurn: 5)
+        XCTAssertTrue(onOwnThirdTurn.isDrawn(byOwnTurn: 3, goingFirst: true))
+        XCTAssertFalse(MulliganDrawnCard(cardId: "CS2_231", gameTurn: 7).isDrawn(byOwnTurn: 3, goingFirst: false))
+    }
 
     private func handEntity(_ id: Int, _ cardId: String, position: Int, controller: Int = 1, zone: Zone = .hand) -> Entity {
         let entity = Entity(id: id)
@@ -528,6 +647,7 @@ class MulliganRecorderTests: HSTrackerTests {
             handEntity(7, "EX1_011", position: 1), handEntity(8, "CS2_172", position: 2), handEntity(9, "CS2_168", position: 3),
             handEntity(10, "", position: 0, zone: .deck)
         ])
+        recorder.turnStarted()
 
         let record = recorder.buildRecord(localPlayerId: 1) { _ in nil }
         XCTAssertEqual(record.status, .complete)
@@ -548,6 +668,7 @@ class MulliganRecorderTests: HSTrackerTests {
             handEntity(4, "CS2_231", position: 1), handEntity(5, "CS2_189", position: 0, zone: .deck),
             handEntity(7, "EX1_011", position: 2), created, extra
         ])
+        recorder.turnStarted()
 
         let record = recorder.buildRecord(localPlayerId: 1) { _ in nil }
         XCTAssertEqual(record.status, .complete)
@@ -565,13 +686,16 @@ class MulliganRecorderTests: HSTrackerTests {
         recorder.mulliganDone(playerId: 1, entities: [
             handEntity(4, "CS2_231", position: 1), handEntity(5, "CS2_189", position: 0, zone: .deck)
         ])
+        recorder.turnStarted()
         XCTAssertEqual(recorder.buildRecord(localPlayerId: 1) { _ in nil }.status, .inconsistent)
     }
 
     func testCardIdsUnknownAtTheEndAreFlagged() {
         let recorder = MulliganRecorder()
         recorder.mulliganOffered(playerId: 1, entityIds: [4, 5])
+        recorder.mulliganChosen(playerId: 1, entityIds: [4, 5])
         recorder.mulliganDone(playerId: 1, entities: [handEntity(4, "CS2_231", position: 1), handEntity(5, "", position: 2)])
+        recorder.turnStarted()
         let record = recorder.buildRecord(localPlayerId: 1) { _ in nil }
         XCTAssertEqual(record.status, .unknownCards)
         XCTAssertEqual(offered(record), ["CS2_231", ""])
@@ -580,8 +704,10 @@ class MulliganRecorderTests: HSTrackerTests {
     func testCardIdsRevealedAfterTheMulliganAreLookedUpAtTheEnd() {
         let recorder = MulliganRecorder()
         recorder.mulliganOffered(playerId: 1, entityIds: [4, 5])
+        recorder.mulliganChosen(playerId: 1, entityIds: [4, 5])
         let late = handEntity(5, "", position: 2)
         recorder.mulliganDone(playerId: 1, entities: [handEntity(4, "CS2_231", position: 1), late])
+        recorder.turnStarted()
         late.cardId = "CS2_189"
         let record = recorder.buildRecord(localPlayerId: 1) { id in id == 5 ? late : nil }
         XCTAssertEqual(record.status, .complete)
@@ -598,21 +724,21 @@ class MulliganRecorderTests: HSTrackerTests {
         recorder.mulliganDone(playerId: 1, entities: [handEntity(4, "CS2_231", position: 1)] + deck)
 
         // Before the snapshot of another player, and cards that were not in the deck then
-        recorder.cardDrawn(playerId: 2, entityId: 100, cardId: "EX1_001", turn: 1)
-        recorder.cardDrawn(playerId: 1, entityId: 500, cardId: "EX1_002", turn: 1)
-        recorder.cardDrawn(playerId: 1, entityId: 4, cardId: "CS2_231", turn: 1)
-        recorder.cardDrawn(playerId: 1, entityId: 100, cardId: "EX1_003", turn: 1)
+        recorder.cardDrawn(playerId: 2, entityId: 100, cardId: "EX1_001", gameTurn: 1)
+        recorder.cardDrawn(playerId: 1, entityId: 500, cardId: "EX1_002", gameTurn: 1)
+        recorder.cardDrawn(playerId: 1, entityId: 4, cardId: "CS2_231", gameTurn: 1)
+        recorder.cardDrawn(playerId: 1, entityId: 100, cardId: "EX1_003", gameTurn: 1)
         // The same entity again, e.g. traded back and redrawn
-        recorder.cardDrawn(playerId: 1, entityId: 100, cardId: "EX1_003", turn: 3)
+        recorder.cardDrawn(playerId: 1, entityId: 100, cardId: "EX1_003", gameTurn: 3)
         for id in 101 ..< 100 + MulliganRecord.drawLimit + 5 {
-            recorder.cardDrawn(playerId: 1, entityId: id, cardId: "CS2_\(id)", turn: id - 99)
+            recorder.cardDrawn(playerId: 1, entityId: id, cardId: "CS2_\(id)", gameTurn: id - 99)
         }
 
         let record = recorder.buildRecord(localPlayerId: 1) { _ in nil }
         XCTAssertEqual(record.draws.count, MulliganRecord.drawLimit)
         XCTAssertEqual(record.draws.first?.cardId, "EX1_003")
-        XCTAssertEqual(record.draws.first?.turn, 1)
-        XCTAssertEqual(record.draws[1].turn, 2)
+        XCTAssertEqual(record.draws.first?.gameTurn, 1)
+        XCTAssertEqual(record.draws[1].gameTurn, 2)
         XCTAssertTrue(record.drawsTruncated)
     }
 
@@ -632,7 +758,7 @@ class MulliganRecorderTests: HSTrackerTests {
     func testDrawsBeforeTheMulliganIsDoneAreNotRecorded() {
         let recorder = MulliganRecorder()
         recorder.mulliganOffered(playerId: 1, entityIds: [4])
-        recorder.cardDrawn(playerId: 1, entityId: 4, cardId: "CS2_231", turn: 0)
+        recorder.cardDrawn(playerId: 1, entityId: 4, cardId: "CS2_231", gameTurn: 0)
         recorder.mulliganDone(playerId: 1, entities: [handEntity(4, "CS2_231", position: 1)])
         XCTAssertEqual(recorder.buildRecord(localPlayerId: 1) { _ in nil }.draws.count, 0)
     }
@@ -654,6 +780,31 @@ class MulliganRecorderTests: HSTrackerTests {
         XCTAssertNil(game.buildMulliganRecord())
     }
 
+    func testNoDeckKeepsTheCardsSeenFromTheDeck() {
+        setUpFirstGame()
+        game.setGameType(.gt_ranked, formatType: .ft_standard)
+        feed(MulliganRecorderTests.firstGameChoices)
+        feed(MulliganRecorderTests.firstGameChosen)
+        feed(MulliganRecorderTests.firstGameDealing)
+        feed(MulliganRecorderTests.firstTurnStart)
+        XCTAssertNil(game.currentDeck)
+
+        let record = game.buildMulliganRecord()
+        XCTAssertEqual(record?.status, .complete)
+        XCTAssertEqual(record?.deckSource, .seenCards)
+        XCTAssertEqual(record?.deckstring, "")
+        // The hand, the replacements and the mulliganed cards back in the deck; The Coin and unknown cards are not
+        XCTAssertEqual(record?.deckCards.map { "\($0.id)x\($0.count)" },
+                       ["CAP_801x1", "CAP_806x1", "CORE_CS2_004x1", "JAIL_940x1", "TLC_817x1"])
+    }
+
+    func testNoDeckAndNothingSeenIsUnknown() {
+        game.setGameType(.gt_ranked, formatType: .ft_standard)
+        let record = game.buildMulliganRecord()
+        XCTAssertEqual(record?.deckSource, .unknown)
+        XCTAssertEqual(record?.deckCards.count, 0)
+    }
+
     func testGameResetDropsTheCapture() {
         setUpFirstGame()
         feed(MulliganRecorderTests.firstGameChoices)
@@ -668,13 +819,14 @@ class MulliganRecorderTests: HSTrackerTests {
         record.version = MulliganRecord.currentVersion
         record.status = .complete
         record.deckId = "deck-1"
+        record.deckSource = .seenCards
         record.deckstring = "AAECAa0GBsX7BQ=="
         record.deckCards.append(RealmCard(id: "CS2_004", count: 2))
         record.offered.append(MulliganOfferedCard(cardId: "TLC_817", kept: true, forced: true))
         record.offered.append(MulliganOfferedCard(cardId: "CAP_801", kept: false, forced: false))
         record.replacementCardIds.append("JAIL_940")
         record.finalHandCardIds.append(objectsIn: ["TLC_817", "JAIL_940"])
-        record.draws.append(MulliganDrawnCard(cardId: "CAP_805", turn: 1))
+        record.draws.append(MulliganDrawnCard(cardId: "CAP_805", gameTurn: 2, transformed: true))
         record.drawsTruncated = true
         return record
     }
@@ -685,8 +837,8 @@ class MulliganRecorderTests: HSTrackerTests {
         }
         let deckCards: [String] = record.deckCards.map { "\($0.id)x\($0.count)" }
         let offered: [String] = record.offered.map { "\($0.cardId):\($0.kept):\($0.forced)" }
-        let draws: [String] = record.draws.map { "\($0.cardId)@\($0.turn)" }
-        return "v\(record.version) \(record.status) \(record.deckId) \(record.deckstring) deck=\(deckCards) "
+        let draws: [String] = record.draws.map { "\($0.cardId)@\($0.gameTurn):\($0.transformed)" }
+        return "v\(record.version) \(record.status) \(record.deckId) \(record.deckSource) \(record.deckstring) deck=\(deckCards) "
             + "offered=\(offered) replacements=\(Array(record.replacementCardIds)) "
             + "final=\(Array(record.finalHandCardIds)) draws=\(draws) truncated=\(record.drawsTruncated)"
     }
@@ -694,10 +846,10 @@ class MulliganRecorderTests: HSTrackerTests {
     func testSummaryAndDetachedCopyCoverEveryRecordProperty() {
         // A property added to MulliganRecord has to be copied in detachedCopy and compared in summary
         XCTAssertEqual(MulliganRecord().objectSchema.properties.map { $0.name }.sorted(),
-                       ["_status", "deckCards", "deckId", "deckstring", "draws", "drawsTruncated", "finalHandCardIds",
+                       ["_deckSource", "_status", "deckCards", "deckId", "deckstring", "draws", "drawsTruncated", "finalHandCardIds",
                         "offered", "replacementCardIds", "version"])
         XCTAssertEqual(MulliganOfferedCard().objectSchema.properties.map { $0.name }.sorted(), ["cardId", "forced", "kept"])
-        XCTAssertEqual(MulliganDrawnCard().objectSchema.properties.map { $0.name }.sorted(), ["cardId", "turn"])
+        XCTAssertEqual(MulliganDrawnCard().objectSchema.properties.map { $0.name }.sorted(), ["cardId", "gameTurn", "transformed"])
 
         let original = MulliganRecorderTests.makeRecord()
         let copy = original.detachedCopy()

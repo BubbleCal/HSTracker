@@ -2328,6 +2328,7 @@ class Game: NSObject, PowerEventHandler {
             return nil
         }
         if let currentDeck {
+            record.deckSource = .deck
             // PlayingDeck.shortid holds DeckSerializer's deckstring, despite its name
             record.deckstring = currentDeck.shortid
             if currentDeck.shortid.isEmpty {
@@ -2335,9 +2336,20 @@ class Game: NSObject, PowerEventHandler {
                     record.deckCards.append(RealmCard(id: card.id, count: card.count))
                 }
             }
+        } else {
+            // No deck selected, or auto-detection found none: keep what the game showed of
+            // the player's own deck, the same collectible, not created cards
+            // generateEndgameStatistics confirms for a known deck, less the starting hero
+            let seen = player.revealedCards.filter { $0.collectible && !$0.isCreated && $0.id != player.playerClassId }
+                + player.knownCardsInDeck.filter { $0.collectible && !$0.isCreated }
+            let counts = seen.reduce(into: [String: Int]()) { counts, card in counts[card.id, default: 0] += card.count }
+            for (id, count) in counts.sorted(by: { $0.key < $1.key }) {
+                record.deckCards.append(RealmCard(id: id, count: count))
+            }
+            record.deckSource = counts.isEmpty ? .unknown : .seenCards
         }
         let offered: [String] = record.offered.map { "\($0.cardId)\($0.forced ? "(forced)" : "")\($0.kept ? "" : "(replaced)")" }
-        logger.info("Mulligan record: status=\(record.status) offered=\(offered) replacements=\(Array(record.replacementCardIds)) draws=\(record.draws.count)")
+        logger.info("Mulligan record: status=\(record.status) deck=\(record.deckSource) offered=\(offered) replacements=\(Array(record.replacementCardIds)) draws=\(record.draws.count)")
         return record
     }
 
@@ -3566,7 +3578,6 @@ class Game: NSObject, PowerEventHandler {
         if cardId.isBlank {
             return
         }
-        mulliganRecorder.cardDrawn(playerId: player.id, entityId: entity.id, cardId: cardId ?? "", turn: turn)
         if cardId == CardIds.NonCollectible.Neutral.TheCoinBasic {
             playerGet(entity: entity, cardId: cardId, turn: turn)
         } else {

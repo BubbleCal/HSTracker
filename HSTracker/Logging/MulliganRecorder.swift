@@ -16,8 +16,9 @@ import Foundation
 /// - the MULLIGAN choice and its EntitiesChosen echo (GameState lines, ChoicesHandler),
 /// - each player's MULLIGAN_STATE reaching DONE (PowerTaskList, TagChangeActions),
 ///   where the hand and deck are snapshotted,
-/// - the local player's draws from the deck (Game.playerDraw),
-/// - a reconnect (Game.handleGameReconnect), and the end of the game.
+/// - each player's draws from the deck, as their ZONE tag is set (TagChangeHandler),
+/// - the first turn starting (STEP=MAIN_READY), a reconnect (Game.handleGameReconnect),
+///   and the end of the game.
 ///
 /// Choices and snapshots are kept per player id rather than only for the local player,
 /// because player.id comes from HearthMirror and may still be unknown when the
@@ -30,6 +31,7 @@ final class MulliganRecorder {
         let isCoin: Bool
         /// Quests and questlines always start in the opening hand.
         let isQuest: Bool
+        /// Created before the mulligan was done, by a start-of-game or similar effect.
         let isCreated: Bool
     }
 
@@ -47,7 +49,7 @@ final class MulliganRecorder {
     struct Draw: Equatable {
         let entityId: Int
         let cardId: String
-        let turn: Int
+        let gameTurn: Int
     }
 
     private let lock = UnfairLock()
@@ -56,6 +58,7 @@ final class MulliganRecorder {
     private var done = [Int: MulliganDoneSnapshot]()
     private var draws = [Int: [Draw]]()
     private var drawsTruncated = Set<Int>()
+    private var firstTurnStarted = false
     private var reconnected = false
 
     func reset() {
@@ -65,6 +68,7 @@ final class MulliganRecorder {
             done.removeAll()
             draws.removeAll()
             drawsTruncated.removeAll()
+            firstTurnStarted = false
             reconnected = false
         }
     }
@@ -107,9 +111,7 @@ final class MulliganRecorder {
                 continue
             }
             if entity.hasCardId {
-                cards[entity.id] = CardSnapshot(cardId: entity.cardId, isCoin: entity.isTheCoin,
-                                                isQuest: entity.has(tag: .quest) || entity.has(tag: .questline),
-                                                isCreated: entity.info.created)
+                cards[entity.id] = MulliganRecorder.snapshot(of: entity)
             }
         }
         let snapshot = MulliganDoneSnapshot(hand: hand.sorted { $0.zonePosition < $1.zonePosition }.map { $0.id },
@@ -121,10 +123,18 @@ final class MulliganRecorder {
         }
     }
 
-    /// A card the player drew from the deck. Only cards that were in the deck when the
+    /// A card a player drew from the deck. Only cards that were in the deck when that
     /// player's mulligan was done count, so cards shuffled in or created later are left
     /// out, and each entity counts once.
-    func cardDrawn(playerId: Int, entityId: Int, cardId: String, turn: Int) {
+    ///
+    /// Fed for either controller, like the choices and the DONE snapshot: player.id may
+    /// still be unknown while a Power.log backlog is replayed, and the local player's
+    /// draws are picked when the record is built.
+    ///
+    /// - Parameters:
+    ///   - cardId: the card drawn, as revealed.
+    ///   - gameTurn: the game entity's TURN.
+    func cardDrawn(playerId: Int, entityId: Int, cardId: String, gameTurn: Int) {
         lock.around {
             guard let snapshot = done[playerId], snapshot.deck.contains(entityId), !cardId.isEmpty else {
                 return
@@ -137,8 +147,16 @@ final class MulliganRecorder {
                 drawsTruncated.insert(playerId)
                 return
             }
-            list.append(Draw(entityId: entityId, cardId: cardId, turn: max(turn, 0)))
+            list.append(Draw(entityId: entityId, cardId: cardId, gameTurn: max(gameTurn, 0)))
             draws[playerId] = list
+        }
+    }
+
+    /// STEP=MAIN_READY: the first turn is starting, so both mulligans are over and the
+    /// result of the game can be tied to the opening hand.
+    func turnStarted() {
+        lock.around {
+            firstTurnStarted = true
         }
     }
 
@@ -175,7 +193,16 @@ final class MulliganRecorder {
         done.removeAll()
         draws.removeAll()
         drawsTruncated.removeAll()
+        firstTurnStarted = false
         reconnected = false
+    }
+
+    private static func snapshot(of entity: Entity) -> CardSnapshot {
+        // The entity tags first; the card data too, since the tag is only there when
+        // the log showed it
+        let mechanics = entity.card.mechanics
+        let isQuest = entity.isQuest || mechanics.contains("QUEST") || mechanics.contains("QUESTLINE")
+        return CardSnapshot(cardId: entity.cardId, isCoin: entity.isTheCoin, isQuest: isQuest, isCreated: entity.info.created)
     }
 
     private func fill(record: MulliganRecord, localPlayerId: Int, entity: (Int) -> Entity?) -> MulliganRecordStatus {
@@ -183,7 +210,17 @@ final class MulliganRecorder {
             return .unknownPlayer
         }
         for draw in draws[localPlayerId] ?? [] {
-            record.draws.append(MulliganDrawnCard(cardId: draw.cardId, turn: draw.turn))
+            // TRANSFORMED_FROM_CARD is read only now, since it can follow the ZONE tag in the
+            // SHOW_ENTITY. Naming another card than the one drawn, the entity was transformed
+            // in the deck (Lady Prestor): store the deck's card, so draws stay cards of the deck
+            // list. A card transformed after the draw names the drawn card itself.
+            let transformedFrom = entity(draw.entityId)?[.transformed_from_card] ?? 0
+            let deckCardId = transformedFrom > 0 ? Cards.by(dbfId: transformedFrom, collectible: false)?.id : nil
+            if let deckCardId, deckCardId != draw.cardId {
+                record.draws.append(MulliganDrawnCard(cardId: deckCardId, gameTurn: draw.gameTurn, transformed: true))
+            } else {
+                record.draws.append(MulliganDrawnCard(cardId: draw.cardId, gameTurn: draw.gameTurn))
+            }
         }
         record.drawsTruncated = drawsTruncated.contains(localPlayerId)
 
@@ -199,9 +236,7 @@ final class MulliganRecorder {
             guard let entity = entity(id), entity.hasCardId else {
                 return nil
             }
-            return CardSnapshot(cardId: entity.cardId, isCoin: entity.isTheCoin,
-                                isQuest: entity.has(tag: .quest) || entity.has(tag: .questline),
-                                isCreated: entity.info.created)
+            return MulliganRecorder.snapshot(of: entity)
         }
 
         var hasUnknownCards = false
@@ -213,7 +248,7 @@ final class MulliganRecorder {
             // Keep what was offered so the game still says what the hand looked like.
             for (_, card) in offeredCards {
                 record.offered.append(MulliganOfferedCard(cardId: card?.cardId ?? "", kept: false,
-                                                          forced: card?.isQuest ?? false))
+                                                          forced: (card?.isQuest ?? false) || (card?.isCreated ?? false)))
             }
             return .mulliganUnfinished
         }
@@ -232,7 +267,9 @@ final class MulliganRecorder {
                     isInconsistent = true
                 }
             }
-            // Left in hand without being chosen: the player could not replace it.
+            // Left in hand although a seen echo does not list it: the player could not have
+            // replaced it. Hearthstone lists quests among the chosen cards, so this is only a
+            // guard; the card data is what finds them.
             let forced = (card?.isQuest ?? false) || (card?.isCreated ?? false) || (kept && wasChosen == false)
             if card == nil {
                 hasUnknownCards = true
@@ -262,6 +299,14 @@ final class MulliganRecorder {
             isInconsistent = true
         }
 
+        if !firstTurnStarted {
+            return .endedBeforeFirstTurn
+        }
+        // Kept is read from the hand at DONE, so without the echo nothing says the player
+        // chose it rather than the server keeping the hand on a timeout or disconnect
+        if chosenIds == nil {
+            return .mulliganChoiceMissing
+        }
         if hasUnknownCards {
             return .unknownCards
         }

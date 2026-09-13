@@ -68,6 +68,13 @@ class TagChangeHandler {
                 if BoardState.affectsBoardDamage(entity: entity, tag: tag, prevValue: prevValue, value: value) {
                     game.updateBoardDamage()
                 }
+                // A draw is read here for the same reason, and for either controller: a SHOW_ENTITY's
+                // queued ZONE action waits until both player ids are known, which on a Power.log backlog
+                // replayed before HearthMirror answered is turns later, or never for a game already over
+                if tag == .zone && prevValue == Zone.deck.rawValue && value == Zone.hand.rawValue && id > 3 {
+                    game.mulliganRecorder.cardDrawn(playerId: entity[.controller], entityId: id, cardId: entity.info.latestCardId,
+                                                    gameTurn: eventHandler.gameEntity?[.turn] ?? 0)
+                }
             }
 
             if isCreationTag {

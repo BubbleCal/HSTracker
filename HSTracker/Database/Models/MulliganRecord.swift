@@ -23,11 +23,33 @@ enum MulliganRecordStatus: String {
     /// The game ended before the local player's MULLIGAN_STATE reached DONE, e.g. a
     /// concede while the mulligan was still open.
     case mulliganUnfinished
+    /// The local player's mulligan was done but the game ended before the first turn
+    /// started (STEP=MAIN_READY), e.g. a concede or disconnect while the opponent was
+    /// still choosing: the result has nothing to do with the opening hand.
+    case endedBeforeFirstTurn
+    /// The mulligan was done, but the EntitiesChosen echo of the local player's choice
+    /// was never seen, so there is no sign the player chose anything: the hand may be
+    /// what the server kept on a timeout or a disconnect.
+    case mulliganChoiceMissing
     /// A card of the opening hand had no card id when the mulligan finished.
     case unknownCards
     /// The hand after the mulligan does not add up: the replacements do not match the
     /// replaced cards, or a card the server reported as kept had left the hand.
     case inconsistent
+}
+
+/// Where a record's `deckstring` or `deckCards` came from.
+enum MulliganDeckSource: String {
+    /// The deck HSTracker tracked the game with: a saved deck, or a loaner, template,
+    /// Whizbang or other unsaved deck. `deckstring` holds it, or `deckCards` when it
+    /// had no deckstring.
+    case deck
+    /// No deck was selected. `deckCards` holds only the collectible cards of the
+    /// player's own deck seen during the game, so it is partial and cannot tell two
+    /// decks of the same class apart reliably.
+    case seenCards
+    /// Nothing is known about the deck; `deckstring` and `deckCards` are empty.
+    case unknown
 }
 
 /// The local player's mulligan and draws in one constructed game, kept with its
@@ -67,9 +89,16 @@ class MulliganRecord: EmbeddedObject {
     /// that bucket when the deck is deleted.
     @objc dynamic var deckId = ""
 
+    @objc private dynamic var _deckSource = MulliganDeckSource.unknown.rawValue
+    var deckSource: MulliganDeckSource {
+        get { return MulliganDeckSource(rawValue: _deckSource) ?? .unknown }
+        set { _deckSource = newValue.rawValue }
+    }
+
     /// The deck as it was played, so a game stays interpretable after the saved deck
     /// is edited. Empty when there was no deck or it could not be serialized, in which
-    /// case `deckCards` holds the list instead when one was known.
+    /// case `deckCards` holds a list instead when one was known; `deckSource` says how
+    /// complete that list is.
     @objc dynamic var deckstring = ""
     let deckCards = List<RealmCard>()
 
@@ -99,11 +128,19 @@ class MulliganRecord: EmbeddedObject {
         return keptCardIds + Array(replacementCardIds)
     }
 
+    /// The cards drawn in time to be used on the player's own turn `turn`.
+    ///
+    /// - Parameter goingFirst: `!GameStats.coin`; only meaningful when `coinKnown`.
+    func drawnCardIds(byOwnTurn turn: Int, goingFirst: Bool) -> [String] {
+        return draws.filter { $0.isDrawn(byOwnTurn: turn, goingFirst: goingFirst) }.map { $0.cardId }
+    }
+
     func detachedCopy() -> MulliganRecord {
         let copy = MulliganRecord()
         copy.version = version
         copy._status = _status
         copy.deckId = deckId
+        copy._deckSource = _deckSource
         copy.deckstring = deckstring
         for card in deckCards {
             copy.deckCards.append(RealmCard(id: card.id, count: card.count))
@@ -114,7 +151,7 @@ class MulliganRecord: EmbeddedObject {
         copy.replacementCardIds.append(objectsIn: replacementCardIds)
         copy.finalHandCardIds.append(objectsIn: finalHandCardIds)
         for draw in draws {
-            copy.draws.append(MulliganDrawnCard(cardId: draw.cardId, turn: draw.turn))
+            copy.draws.append(MulliganDrawnCard(cardId: draw.cardId, gameTurn: draw.gameTurn, transformed: draw.transformed))
         }
         copy.drawsTruncated = drawsTruncated
         return copy
@@ -125,10 +162,13 @@ class MulliganOfferedCard: EmbeddedObject {
     @objc dynamic var cardId = ""
     /// Still in hand when the mulligan was done. Forced cards are always kept.
     @objc dynamic var kept = false
-    /// The player had no say in keeping it: a quest or questline, which the game puts
-    /// in the opening hand, a card created there before the mulligan, or any card the
-    /// server left in hand without it being among the chosen ones. Keep rates should
-    /// leave these out.
+    /// The player had no say in keeping it, so keep rates should leave it out: a quest
+    /// or questline (by its entity tags or the card data), which the game always puts
+    /// in the opening hand, or a card created there before the mulligan.
+    ///
+    /// Hearthstone lists such cards among the chosen ones in EntitiesChosen whether the
+    /// player clicked them or not (TLC_817 in every quest game), so the choice echo
+    /// cannot reveal them; a kept card missing from a seen echo is only a guard.
     @objc dynamic var forced = false
 
     convenience init(cardId: String, kept: Bool, forced: Bool) {
@@ -140,15 +180,28 @@ class MulliganOfferedCard: EmbeddedObject {
 }
 
 class MulliganDrawnCard: EmbeddedObject {
+    /// The card as it was in the deck. For a card transformed while in the deck
+    /// (TRANSFORMED_FROM_CARD, e.g. Lady Prestor) this is the card it was transformed
+    /// from, and `transformed` is set.
     @objc dynamic var cardId = ""
-    /// The player's turn as the tracker counts it, (TURN + 1) / 2 of the game entity:
-    /// 1 is either player's first turn, so "drawn by turn N" is `turn <= N` whether
-    /// the player went first or had the coin. 0 for a draw before the first turn.
-    @objc dynamic var turn = 0
+    /// The game entity's TURN when it was drawn: 1 is the first player's first turn,
+    /// 2 the second player's. The player's own turns are odd when going first and even
+    /// on the coin, so a draw during the opponent's turn can only be used on the
+    /// player's next turn; see `isDrawn(byOwnTurn:goingFirst:)`.
+    @objc dynamic var gameTurn = 0
+    /// It was drawn as a different card than the one the deck held.
+    @objc dynamic var transformed = false
 
-    convenience init(cardId: String, turn: Int) {
+    convenience init(cardId: String, gameTurn: Int, transformed: Bool = false) {
         self.init()
         self.cardId = cardId
-        self.turn = turn
+        self.gameTurn = gameTurn
+        self.transformed = transformed
+    }
+
+    /// Drawn in time to be used on the player's own turn `turn`: no later than that
+    /// turn's game TURN, 2 * turn - 1 when going first and 2 * turn on the coin.
+    func isDrawn(byOwnTurn turn: Int, goingFirst: Bool) -> Bool {
+        return gameTurn <= (goingFirst ? 2 * turn - 1 : 2 * turn)
     }
 }

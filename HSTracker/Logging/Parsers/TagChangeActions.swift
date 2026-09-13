@@ -567,6 +567,8 @@ struct TagChangeActions {
         (eventHandler as? Game)?.secretsManager?.resolvePendingChecks()
         if value == Step.begin_mulligan.rawValue {
             eventHandler.handleBeginMulligan()
+        } else if value == Step.main_ready.rawValue {
+            (eventHandler as? Game)?.mulliganRecorder.turnStarted()
         }
         eventHandler.handleMercenariesStateChange()
         if let playerEntity = eventHandler.playerEntity, playerEntity.has(tag: .current_player) {
