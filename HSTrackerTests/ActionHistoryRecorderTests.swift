@@ -1192,6 +1192,21 @@ class ActionHistoryRecorderTests: HSTrackerTests {
         XCTAssertEqual(entries.count, 1)
     }
 
+    func testTheParserIsToldToSkipBlocksOnlyOnceTheGameTypeIsExcluded() {
+        var gameType = GameType.gt_unknown
+        recorder.gameTypeProvider = { gameType }
+        XCTAssertTrue(recorder.wantsBlocks)
+        gameType = .gt_ranked
+        XCTAssertTrue(recorder.wantsBlocks)
+
+        for excluded in [GameType.gt_battlegrounds, .gt_battlegrounds_duo, .gt_mercenaries_pvp] {
+            recorder = ActionHistoryRecorder()
+            gameType = excluded
+            recorder.gameTypeProvider = { gameType }
+            XCTAssertFalse(recorder.wantsBlocks, "\(excluded)")
+        }
+    }
+
     func testTurnsRecordedBeforeABattlegroundsGameTypeIsKnownAreDropped() {
         var gameType = GameType.gt_unknown
         recorder.gameTypeProvider = { gameType }

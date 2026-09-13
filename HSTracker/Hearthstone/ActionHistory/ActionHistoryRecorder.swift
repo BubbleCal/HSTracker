@@ -77,6 +77,20 @@ final class ActionHistoryRecorder {
 
     // MARK: - Parser API (log-reader queue)
 
+    /// Whether the parser should parse a BLOCK_START for the history at all. Battlegrounds and
+    /// Mercenaries write thousands of blocks a game that blockStarted would only drop, so the
+    /// parser asks first instead of running the field regexes on each of them.
+    var wantsBlocks: Bool {
+        return lock.around {
+            guard isExcludedGameType() else {
+                return true
+            }
+            openNodes.removeAll()
+            lastTopLevel = nil
+            return false
+        }
+    }
+
     /// BLOCK_START. `blockId` is the parser's Block.id, used to match the BLOCK_END.
     func blockStarted(blockId: Int, info: HistoryBlockInfo, localPlayerId: Int, entities: Entities, time: Date) {
         lock.around {

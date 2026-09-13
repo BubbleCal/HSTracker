@@ -718,7 +718,8 @@ class PowerGameStateParser: LogEventParser {
             blockStart(type: blockType, cardId: cardId, target: target, targetEntityId: targetEntityId, trigger: triggerKeyword)
             // Before the TRIGGER/POWER returns below. The history parses the line itself, because
             // BlockStartRegex does not match blocks of the game or a player (DEATHS, turn-start draws).
-            if let actionHistory, let blockId = currentBlock?.id, let info = ActionHistoryLineParser.parseBlockStart(logLine.line) {
+            if let actionHistory, let blockId = currentBlock?.id, actionHistory.wantsBlocks,
+               let info = ActionHistoryLineParser.parseBlockStart(logLine.line) {
                 actionHistory.blockStarted(blockId: blockId, info: info, localPlayerId: eventHandler.player?.id ?? 0,
                                            entities: eventHandler.entities, time: logLine.time.date)
             }
