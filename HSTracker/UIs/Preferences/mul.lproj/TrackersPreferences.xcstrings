@@ -284,13 +284,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "显示对局记录"
+            "value" : "显示本局行动记录"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "顯示對局紀錄"
+            "value" : "顯示本局行動紀錄"
           }
         }
       }

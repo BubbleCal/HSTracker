@@ -836,7 +836,7 @@
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "施放奧秘"
+            "value" : "施放秘密"
           }
         }
       }
@@ -1181,7 +1181,7 @@
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "奧秘"
+            "value" : "秘密"
           }
         }
       }
@@ -1244,13 +1244,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "对局记录"
+            "value" : "本局行动记录"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "對局紀錄"
+            "value" : "本局行動紀錄"
           }
         }
       }
@@ -1411,7 +1411,7 @@
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "一個奧秘"
+            "value" : "一個秘密"
           }
         }
       }
@@ -23707,7 +23707,7 @@
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "（已封存）"
+            "value" : "（已存檔）"
           }
         }
       }
@@ -24581,7 +24581,7 @@
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "包含已封存牌組"
+            "value" : "包含已存檔牌組"
           }
         }
       }
@@ -25317,7 +25317,7 @@
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "對局記錄"
+            "value" : "對局紀錄"
           }
         }
       }
@@ -25340,7 +25340,7 @@
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "對局記錄 (%d)"
+            "value" : "對局紀錄 (%d)"
           }
         }
       }
