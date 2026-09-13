@@ -271,6 +271,30 @@
         }
       }
     },
+    "aHc-cL-x01.title" : {
+      "comment" : "Class = \"NSButtonCell\"; title = \"Show action history\"; ObjectID = \"aHc-cL-x01\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Show action history"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示对局记录"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "顯示對局紀錄"
+          }
+        }
+      }
+    },
     "aO1-IW-r7y.ibShadowedToolTip" : {
       "comment" : "Class = \"NSButton\"; ibShadowedToolTip = \"HSTracker will be visible on all your workspace while playing\"; ObjectID = \"aO1-IW-r7y\";",
       "extractionState" : "extracted_with_value",

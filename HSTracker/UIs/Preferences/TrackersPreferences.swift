@@ -27,6 +27,7 @@ class TrackersPreferences: PreferencePaneController, PreferencePane {
     @IBOutlet var showSecretHelper: NSButton!
     @IBOutlet var autoGrayoutSecrets: NSButton!
     @IBOutlet var removeSecretsFromList: NSButton!
+    @IBOutlet var showActionHistory: NSButton!
     @IBOutlet var showRarityColors: NSButton!
     @IBOutlet var showFloatingCard: NSButton!
     @IBOutlet var theme: NSComboBox!
@@ -71,6 +72,7 @@ class TrackersPreferences: PreferencePaneController, PreferencePane {
         autoGrayoutSecrets.state = Settings.autoGrayoutSecrets ? .on : .off
         removeSecretsFromList.state = Settings.removeSecretsFromList ? .on : .off
         updateSecretHelperOptions()
+        showActionHistory.state = Settings.showActionHistory ? .on : .off
         showRarityColors.state = Settings.showRarityColors ? .on : .off
         showFloatingCard.state = Settings.showFloatingCard ? .on : .off
         showExperienceCounter.state = Settings.showExperienceCounter ? .on : .off
@@ -138,6 +140,9 @@ class TrackersPreferences: PreferencePaneController, PreferencePane {
             Settings.autoGrayoutSecrets = autoGrayoutSecrets.state == .on
         } else if sender == removeSecretsFromList {
             Settings.removeSecretsFromList = removeSecretsFromList.state == .on
+        } else if sender == showActionHistory {
+            // Game observes the key (allTrackerUpdateEvents), so the panel follows right away
+            Settings.showActionHistory = showActionHistory.state == .on
         } else if sender == showRarityColors {
             Settings.showRarityColors = showRarityColors.state == .on
         } else if sender == showTimer {
