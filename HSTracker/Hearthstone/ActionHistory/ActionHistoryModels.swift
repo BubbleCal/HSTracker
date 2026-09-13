@@ -32,18 +32,50 @@ struct HistoryCardRef: Codable, Equatable, Hashable {
     let isSecret: Bool
     // Set only when the creator is itself public
     let creatorCardId: String?
+    // Set while the recorder does not know which player is local yet (HSTracker started mid-match
+    // replays Power.log before the mirror has answered). The ref above is what an opponent's card
+    // may show; this keeps what the card would show if it turned out to be the local player's, so
+    // `resolved(localPlayerId:)` can pick one once the local player is known. Never encoded: a
+    // published snapshot is always resolved first.
+    var undetermined: UndeterminedController?
 
-    init(entityId: Int, cardId: String?, side: HistorySide, cardType: Int, isSecret: Bool = false, creatorCardId: String? = nil) {
+    struct UndeterminedController: Equatable, Hashable {
+        let controller: Int
+        let cardIdIfLocal: String?
+        let creatorCardIdIfLocal: String?
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case entityId, cardId, side, cardType, isSecret, creatorCardId
+    }
+
+    init(entityId: Int, cardId: String?, side: HistorySide, cardType: Int, isSecret: Bool = false, creatorCardId: String? = nil,
+         undetermined: UndeterminedController? = nil) {
         self.entityId = entityId
         self.cardId = cardId
         self.side = side
         self.cardType = cardType
         self.isSecret = isSecret
         self.creatorCardId = creatorCardId
+        self.undetermined = undetermined
     }
 
     var isHidden: Bool {
         return cardId == nil
+    }
+
+    /// The ref as it may be shown once the local player's id is known. With no id yet the card is
+    /// treated as the opponent's, which never names more than the client showed.
+    func resolved(localPlayerId: Int) -> HistoryCardRef {
+        guard let undetermined else {
+            return self
+        }
+        if localPlayerId > 0 && undetermined.controller == localPlayerId {
+            return HistoryCardRef(entityId: entityId, cardId: undetermined.cardIdIfLocal, side: .player, cardType: cardType,
+                                  isSecret: isSecret, creatorCardId: undetermined.creatorCardIdIfLocal)
+        }
+        return HistoryCardRef(entityId: entityId, cardId: cardId, side: side, cardType: cardType, isSecret: isSecret,
+                              creatorCardId: creatorCardId)
     }
 }
 
@@ -62,6 +94,10 @@ enum HistoryActionType: String, Codable {
     // JOUST / REVEAL_CARD
     case reveal
     case turnStart
+    // BlockType=DECK_ACTION that moved its card into the deck
+    case trade
+    // Any other BlockType=DECK_ACTION: Prepare, Forge and later hand options
+    case deckAction
     // DEATHS that could not be attached to the action that caused them
     case deaths
     // Time-travel cards rewinding the game (BlockType=GAME_RESET)
@@ -121,7 +157,7 @@ struct HistoryEntry: Codable, Equatable, Identifiable {
     let rawTurn: Int
     // (rawTurn + 1) / 2, 0 before the first turn
     let turn: Int
-    let activeSide: HistorySide
+    var activeSide: HistorySide
     let type: HistoryActionType
     let triggerKeyword: String?
     var source: HistoryCardRef?
@@ -130,15 +166,18 @@ struct HistoryEntry: Codable, Equatable, Identifiable {
     // The weapon a hero attacked with
     var weapon: HistoryCardRef?
     var effects: [HistoryEffect]
-    // Titled sub-actions, such as a Secret triggered by an attack or a Deathrattle during deaths
+    // Titled sub-actions, such as a Deathrattle during deaths
     var children: [HistoryEntry]
-    // The opponent's "played a Secret" entry, filled in once that Secret has become public
-    var revealedLater: HistoryCardRef?
+    // The opponent's hidden Secrets this entry put into play, once each has become public
+    var revealedLater: [HistoryCardRef]
     let time: Date
+    // The PLAYER_ID whose turn it was, so activeSide can be worked out once the local player is known
+    var activePlayerId: Int
 
     init(id: Int, rawTurn: Int, turn: Int, activeSide: HistorySide, type: HistoryActionType, triggerKeyword: String? = nil,
          source: HistoryCardRef? = nil, target: HistoryCardRef? = nil, weapon: HistoryCardRef? = nil,
-         effects: [HistoryEffect] = [], children: [HistoryEntry] = [], revealedLater: HistoryCardRef? = nil, time: Date) {
+         effects: [HistoryEffect] = [], children: [HistoryEntry] = [], revealedLater: [HistoryCardRef] = [], time: Date,
+         activePlayerId: Int = 0) {
         self.id = id
         self.rawTurn = rawTurn
         self.turn = turn
@@ -152,6 +191,7 @@ struct HistoryEntry: Codable, Equatable, Identifiable {
         self.children = children
         self.revealedLater = revealedLater
         self.time = time
+        self.activePlayerId = activePlayerId
     }
 }
 

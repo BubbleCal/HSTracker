@@ -258,7 +258,7 @@ class ActionHistoryReplayTests: HSTrackerTests {
         XCTAssertEqual(play?.source?.entityId, 96)
         XCTAssertEqual(play?.source?.side, .opponent)
         XCTAssertNil(play?.source?.cardId)
-        XCTAssertNil(play?.revealedLater)
+        XCTAssertEqual(play?.revealedLater, [])
         XCTAssertFalse(json(turns).contains("CORE_ULD_152"))
     }
 
@@ -279,12 +279,13 @@ class ActionHistoryReplayTests: HSTrackerTests {
         // The Secret was named once the client showed it
         let secretPlay = turns[0].entries.first
         XCTAssertNil(secretPlay?.source?.cardId)
-        XCTAssertEqual(secretPlay?.revealedLater?.entityId, 96)
-        XCTAssertEqual(secretPlay?.revealedLater?.cardId, "CORE_ULD_152")
+        XCTAssertEqual(secretPlay?.revealedLater.map { $0.entityId }, [96])
+        XCTAssertEqual(secretPlay?.revealedLater.map { $0.cardId }, ["CORE_ULD_152"])
 
+        // The Secret the spell set off is listed on its own, right after the spell
         let entries = turns[1].entries
-        XCTAssertEqual(entries.map { $0.type }, [.play, .attack])
-        guard entries.count == 2 else {
+        XCTAssertEqual(entries.map { $0.type }, [.play, .secret, .attack])
+        guard entries.count == 3 else {
             return
         }
 
@@ -295,20 +296,22 @@ class ActionHistoryReplayTests: HSTrackerTests {
         XCTAssertEqual(play.target?.entityId, 21)
         XCTAssertEqual(play.target?.cardId, "TIME_045")
         // The nested POWER of the spell merges into the play, and the empty quest trigger is dropped
-        XCTAssertEqual(play.children.map { $0.type }, [.secret])
-        let secret = play.children.first
-        XCTAssertEqual(secret?.source?.entityId, 96)
-        XCTAssertEqual(secret?.source?.cardId, "CORE_ULD_152")
-        XCTAssertEqual(secret?.source?.side, .opponent)
-        XCTAssertEqual(secret?.triggerKeyword, "SECRET")
+        XCTAssertEqual(play.children, [])
+        let secret = entries[1]
+        XCTAssertEqual(secret.source?.entityId, 96)
+        XCTAssertEqual(secret.source?.cardId, "CORE_ULD_152")
+        XCTAssertEqual(secret.source?.side, .opponent)
+        XCTAssertEqual(secret.triggerKeyword, "SECRET")
 
-        let deaths = play.effects.filter { $0.kind == .died || $0.kind == .destroyed }.flatMap { $0.targets }
+        // Both were destroyed: TO_BE_DESTROYED is back to 0 by the time each moves to the graveyard
+        XCTAssertTrue(effect(play, .died)?.targets.isEmpty ?? true)
+        let deaths = effect(play, .destroyed)?.targets ?? []
         XCTAssertEqual(Set(deaths.map { $0.entityId }), [21, 108])
         XCTAssertEqual(Set(deaths.compactMap { $0.cardId }), ["TIME_045", "END_010"])
         XCTAssertEqual(effect(play, .summoned)?.targets.map { $0.entityId }, [140])
         XCTAssertEqual(effect(play, .summoned)?.targets.map { $0.cardId }, ["TIME_045"])
 
-        let attack = entries[1]
+        let attack = entries[2]
         XCTAssertEqual(attack.source?.cardId, "JAIL_912")
         XCTAssertEqual(attack.target?.entityId, 71)
         XCTAssertEqual(attack.target?.cardId, "HERO_05bo")

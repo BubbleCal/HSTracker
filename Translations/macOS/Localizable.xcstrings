@@ -381,6 +381,29 @@
         }
       }
     },
+    "ActionHistory_DeckAction" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Used from hand"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "发动"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "發動"
+          }
+        }
+      }
+    },
     "ActionHistory_EffectArmorGained" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -485,13 +508,36 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "被消灭"
+            "value" : "消灭"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "被摧毀"
+            "value" : "摧毀"
+          }
+        }
+      }
+    },
+    "ActionHistory_EffectDestroyedObject" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Destroyed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "摧毁"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "摧毀"
           }
         }
       }
@@ -853,13 +899,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "被夺取控制权"
+            "value" : "夺取控制"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "被奪取控制權"
+            "value" : "奪取控制"
           }
         }
       }
@@ -1083,13 +1129,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "展示"
+            "value" : "揭示"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "展示"
+            "value" : "揭示"
           }
         }
       }
@@ -1205,6 +1251,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "對局紀錄"
+          }
+        }
+      }
+    },
+    "ActionHistory_Trade" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Traded"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "交易"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "交易"
           }
         }
       }

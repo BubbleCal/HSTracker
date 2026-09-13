@@ -24,6 +24,8 @@ class ActionHistoryRecorderTests: HSTrackerTests {
     private var nextEntityId = 4
     private var nextBlockId = 1
     private var hideShowEntities = false
+    // What the parser hooks pass as the local player's id; -1 until the mirror has answered
+    private var hookLocalPlayerId = ActionHistoryRecorderTests.localPlayerId
     private let time = Date(timeIntervalSince1970: 1_700_000_000)
 
     override func setUp() {
@@ -33,6 +35,7 @@ class ActionHistoryRecorderTests: HSTrackerTests {
         nextEntityId = 4
         nextBlockId = 1
         hideShowEntities = false
+        hookLocalPlayerId = ActionHistoryRecorderTests.localPlayerId
 
         gameEntity = Entity(id: 1)
         gameEntity.name = "GameEntity"
@@ -97,7 +100,7 @@ class ActionHistoryRecorderTests: HSTrackerTests {
         }
         entity[gameTag] = value
         recorder.tagChanged(entity: entity, tag: gameTag, prevValue: prevValue, value: value, isCreationTag: creation,
-                            hideShowEntities: hideShowEntities, localPlayerId: ActionHistoryRecorderTests.localPlayerId,
+                            hideShowEntities: hideShowEntities, localPlayerId: hookLocalPlayerId,
                             entities: entities)
     }
 
@@ -111,10 +114,10 @@ class ActionHistoryRecorderTests: HSTrackerTests {
         nextBlockId += 1
         let info = HistoryBlockInfo(blockType: type, sourceKind: sourceKind ?? (source == nil ? .gameEntity : .entity),
                                     sourceEntityId: source?.id, targetEntityId: target?.id, triggerKeyword: keyword)
-        recorder.blockStarted(blockId: blockId, info: info, localPlayerId: ActionHistoryRecorderTests.localPlayerId,
+        recorder.blockStarted(blockId: blockId, info: info, localPlayerId: hookLocalPlayerId,
                               entities: entities, time: time)
         body()
-        recorder.blockEnded(blockId: blockId, localPlayerId: ActionHistoryRecorderTests.localPlayerId, entities: entities)
+        recorder.blockEnded(blockId: blockId, localPlayerId: hookLocalPlayerId, entities: entities)
     }
 
     /// A step or draw block started by a player, logged by name.
@@ -425,6 +428,8 @@ class ActionHistoryRecorderTests: HSTrackerTests {
         let transformed = effects(entries.last, .transformed).first
         XCTAssertEqual(transformed?.targets.first?.cardId, "CORE_CS2_120")
         XCTAssertEqual(transformed?.detailCardId, "hexfrog")
+        // The row names the card that was targeted, not what it became
+        XCTAssertEqual(entries.last?.target?.cardId, "CORE_CS2_120")
     }
 
     func testBattlecryBuffIsRecordedAndAurasAreNot() {
@@ -554,7 +559,7 @@ class ActionHistoryRecorderTests: HSTrackerTests {
         XCTAssertEqual(played?.type, .play)
         XCTAssertNil(played?.source?.cardId)
         XCTAssertEqual(played?.source?.isSecret, true)
-        XCTAssertNil(played?.revealedLater)
+        XCTAssertEqual(played?.revealedLater, [])
 
         startTurn(5, localTurn: true)
         let attacker = card("CORE_CS2_182", controller: 1, zone: .play)
@@ -572,11 +577,15 @@ class ActionHistoryRecorderTests: HSTrackerTests {
             zone(secret, .graveyard)
         }
 
-        XCTAssertEqual(turns.first?.entries.first?.revealedLater?.cardId, "CORE_EX1_130")
-        let attack = entries.last
-        XCTAssertEqual(attack?.children.first?.type, .secret)
-        XCTAssertEqual(attack?.children.first?.source?.cardId, "CORE_EX1_130")
-        XCTAssertEqual(effects(attack?.children.first, .summoned).first?.targets.first?.cardId, "EX1_130a")
+        XCTAssertEqual(turns.first?.entries.first?.revealedLater.map { $0.cardId }, ["CORE_EX1_130"])
+        // The Secret the attack set off is a row of its own, right after the attack
+        XCTAssertEqual(entries.map { $0.type }, [.attack, .secret])
+        let attack = entries.first
+        XCTAssertEqual(attack?.children, [])
+        let secretRow = entries.last
+        XCTAssertEqual(secretRow?.source?.cardId, "CORE_EX1_130")
+        XCTAssertEqual(secretRow?.source?.side, .opponent)
+        XCTAssertEqual(effects(secretRow, .summoned).first?.targets.first?.cardId, "EX1_130a")
         XCTAssertEqual(attack?.target?.cardId, "EX1_130a")
     }
 
@@ -597,7 +606,7 @@ class ActionHistoryRecorderTests: HSTrackerTests {
         let secret = entities[secretPlayed?.targets.first?.entityId ?? 0]!
         secret.cardId = "CORE_EX1_610"
         block("TRIGGER", secret, keyword: "SECRET")
-        XCTAssertEqual(turns.first?.entries.first?.revealedLater?.cardId, "CORE_EX1_610")
+        XCTAssertEqual(turns.first?.entries.first?.revealedLater.map { $0.cardId }, ["CORE_EX1_610"])
     }
 
     func testTrackerHiddenAndOverrideHistoryCardsAreAnonymousForTheLocalPlayer() {
@@ -670,6 +679,318 @@ class ActionHistoryRecorderTests: HSTrackerTests {
             }
         }
         XCTAssertEqual(effects(entries.last, .summoned).first?.targets.map { $0.cardId }, ["CS2_101t"])
+    }
+
+    // MARK: - Review fixes
+
+    func testDeckActionsAreRowsOfTheirOwnAndATradeKeepsItsDraw() {
+        startGame()
+        let minion = card("CORE_CS2_120", controller: 1, zone: .hand)
+        block("PLAY", minion) {
+            zone(minion, .play)
+        }
+        // Traded right after, in the same step: its card goes into the deck and its POWER draws
+        let tradeable = card("SW_441", controller: 1, zone: .hand, type: .spell)
+        let drawn = card("CORE_CS2_029", controller: 1, zone: .deck, type: .spell)
+        block("DECK_ACTION", tradeable) {
+            zone(tradeable, .deck)
+            block("POWER", tradeable) {
+                zone(drawn, .hand)
+            }
+        }
+        // Prepare keeps the card in hand
+        let preparer = card("JAIL_912", controller: 1, zone: .hand)
+        block("DECK_ACTION", preparer) {
+            block("POWER", preparer) {
+                fullEntity("JAIL_912", controller: 1, zone: .setaside)
+            }
+        }
+
+        XCTAssertEqual(entries.map { $0.type }, [.play, .trade, .deckAction])
+        guard entries.count == 3 else {
+            return
+        }
+        XCTAssertEqual(entries[0].children, [])
+        XCTAssertEqual(entries[0].effects, [])
+        let trade = entries[1]
+        XCTAssertEqual(trade.source?.cardId, "SW_441")
+        XCTAssertEqual(effects(trade, .drew).first?.targets.map { $0.cardId }, ["CORE_CS2_029"])
+        XCTAssertTrue(effects(trade, .shuffledIntoDeck).isEmpty, "the traded card itself is the action")
+        XCTAssertEqual(entries[2].source?.cardId, "JAIL_912")
+
+        // The opponent's trade shows neither card
+        startTurn(4, localTurn: false)
+        let hidden = card("", controller: 2, zone: .hand)
+        let opponentDraw = card("", controller: 2, zone: .deck)
+        block("DECK_ACTION", hidden) {
+            zone(hidden, .deck)
+            block("POWER", hidden) {
+                zone(opponentDraw, .hand)
+            }
+        }
+        XCTAssertEqual(entries.map { $0.type }, [.trade])
+        XCTAssertNil(entries.first?.source?.cardId)
+        XCTAssertEqual(effects(entries.first, .drewUnknown).first?.amount, 1)
+    }
+
+    func testSecretsThatFireInsideAnotherActionGetTheirOwnRow() {
+        startGame(rawTurn: 4, localTurn: false)
+        let trap = card("CORE_EX1_611", controller: 1, zone: .secret, type: .spell)
+        trap[.secret] = 1
+        let attacker = card("CORE_CS2_120", controller: 2, zone: .play)
+        let hero = card("HERO_05", controller: 1, zone: .play, type: .hero)
+        hero[.health] = 30
+        block("ATTACK", attacker, target: hero) {
+            block("TRIGGER", trap, keyword: "SECRET") {
+                zone(attacker, .hand)
+            }
+            zone(trap, .graveyard)
+        }
+        // A Secret inside a trigger that shows nothing else
+        let otherTrap = card("CORE_EX1_554", controller: 1, zone: .secret, type: .spell)
+        otherTrap[.secret] = 1
+        let watcher = card("CORE_CS2_172", controller: 2, zone: .play)
+        tag(gameEntity, .step, Step.main_end.rawValue)
+        block("TRIGGER", watcher, keyword: "TAG_NOT_SET") {
+            block("TRIGGER", otherTrap, keyword: "SECRET") {
+                fullEntity("EX1_554t", controller: 1, zone: .play)
+            }
+        }
+
+        XCTAssertEqual(entries.map { $0.type }, [.attack, .secret, .secret])
+        guard entries.count == 3 else {
+            return
+        }
+        XCTAssertEqual(entries[0].children, [])
+        XCTAssertEqual(entries[0].activeSide, .opponent)
+        XCTAssertEqual(entries[1].source?.cardId, "CORE_EX1_611")
+        XCTAssertEqual(entries[1].source?.side, .player)
+        XCTAssertEqual(effects(entries[1], .returnedToHand).first?.targets.map { $0.entityId }, [attacker.id])
+        XCTAssertEqual(entries[2].source?.cardId, "CORE_EX1_554")
+        XCTAssertEqual(effects(entries[2], .summoned).first?.targets.map { $0.cardId }, ["EX1_554t"])
+    }
+
+    func testOpponentClassicTrackingDiscardsStayAnonymous() {
+        startGame(rawTurn: 4, localTurn: false)
+        let tracking = card(TagChangeActions.ClassicTrackingCardId, controller: 2, zone: .hand, type: .spell)
+        let kept = card("", controller: 2, zone: .deck, type: .spell)
+        // The log names the two cards it throws away
+        let discarded = (0..<2).map { _ in card("CORE_CS2_029", controller: 2, zone: .deck, type: .spell) }
+        block("PLAY", tracking) {
+            zone(tracking, .play)
+            block("POWER", tracking) {
+                zone(kept, .hand)
+                for discard in discarded {
+                    zone(discard, .graveyard)
+                }
+            }
+        }
+        let burned = effects(entries.last, .burned).first
+        XCTAssertEqual(burned?.targets.map { $0.entityId }, discarded.map { $0.id })
+        XCTAssertEqual(burned?.targets.compactMap { $0.cardId }, [])
+
+        // Any other card burned from the deck is shown
+        tag(gameEntity, .step, Step.main_action.rawValue)
+        let overdraw = card("CORE_EX1_610", controller: 2, zone: .deck, type: .spell)
+        let spell = card("CORE_CS2_029", controller: 1, zone: .play, type: .spell)
+        block("POWER", spell) {
+            zone(overdraw, .graveyard)
+        }
+        XCTAssertEqual(effects(entries.last, .burned).first?.targets.map { $0.cardId }, ["CORE_EX1_610"])
+    }
+
+    func testCardsRecordedBeforeTheLocalPlayerIsKnownAreResolvedOnceItIs() throws {
+        hookLocalPlayerId = -1
+        startGame()
+        let drawn = Entity(id: nextEntityId)
+        nextEntityId += 1
+        drawn[.controller] = 1
+        drawn[.zone] = Zone.deck.rawValue
+        entities[drawn.id] = drawn
+        let opponentCard = card("CORE_EX1_610", controller: 2, zone: .deck, type: .spell)
+        playerBlock {
+            drawn.cardId = "CORE_CS2_029"
+            tag(drawn, .zone, Zone.hand.rawValue, creation: true)
+            tag(drawn, .cardtype, CardType.spell.rawValue, creation: true)
+            zone(opponentCard, .hand)
+        }
+        let spell = card("CORE_UNG_856", controller: 1, zone: .hand, type: .spell)
+        block("PLAY", spell) {
+            zone(spell, .play)
+            block("POWER", spell) {
+                fullEntity("CS2_022", controller: 1, zone: .hand, type: .spell)
+            }
+        }
+
+        // Until then every card is judged as the opponent's, and nothing else is published
+        var snapshot = recorder.snapshot()
+        XCTAssertEqual(snapshot.turns.last?.side, .neutral)
+        XCTAssertEqual(snapshot.turns.last?.header.map { $0.kind }, [.drewUnknown])
+        XCTAssertEqual(snapshot.turns.last?.header.first?.amount, 2)
+        XCTAssertNil(effects(snapshot.turns.last?.entries.last, .generated).first?.targets.first?.cardId)
+        let unresolved = String(data: try JSONEncoder().encode(snapshot), encoding: .utf8) ?? ""
+        for hiddenCardId in ["CORE_CS2_029", "CS2_022", "CORE_EX1_610"] {
+            XCTAssertFalse(unresolved.contains(hiddenCardId), hiddenCardId)
+        }
+
+        recorder.localPlayerDetermined(ActionHistoryRecorderTests.localPlayerId)
+        snapshot = recorder.snapshot()
+        let turn = try XCTUnwrap(snapshot.turns.last)
+        XCTAssertEqual(turn.side, .player)
+        XCTAssertEqual(turn.header.map { $0.kind }, [.drew, .drewUnknown])
+        XCTAssertEqual(turn.header.first?.targets.map { $0.cardId }, ["CORE_CS2_029"])
+        XCTAssertEqual(turn.header.first?.targets.first?.side, .player)
+        XCTAssertEqual(turn.header.last?.amount, 1)
+        XCTAssertEqual(turn.header.last?.targets.map { $0.cardId }, [nil])
+        let play = try XCTUnwrap(turn.entries.last)
+        XCTAssertEqual(play.activeSide, .player)
+        XCTAssertEqual(play.source?.side, .player)
+        let generated = effects(play, .generated).first
+        XCTAssertEqual(generated?.targets.map { $0.cardId }, ["CS2_022"])
+        XCTAssertNil(generated?.amount)
+        XCTAssertEqual(try JSONDecoder().decode(ActionHistorySnapshot.self, from: JSONEncoder().encode(snapshot)), snapshot)
+    }
+
+    func testDestroyEffectsAreRecognisedAfterTheClientClearsTheMark() {
+        startGame()
+        let spell = card("EDR_463", controller: 1, zone: .hand, type: .spell)
+        let victim = card("TIME_045", controller: 2, zone: .play)
+        let bystander = card("CORE_CS2_172", controller: 2, zone: .play)
+        block("PLAY", spell, target: victim) {
+            zone(spell, .play)
+            block("POWER", spell, target: victim) {
+                tag(victim, .to_be_destroyed, 1)
+                tag(bystander, .damage, 5)
+            }
+            block("DEATHS", nil) {
+                // The client clears the mark right before the move
+                tag(victim, .to_be_destroyed, 0)
+                zone(victim, .graveyard)
+                zone(bystander, .graveyard)
+            }
+        }
+        XCTAssertEqual(effects(entries.last, .destroyed).first?.targets.map { $0.entityId }, [victim.id])
+        XCTAssertEqual(effects(entries.last, .died).first?.targets.map { $0.entityId }, [bystander.id])
+    }
+
+    func testOnlyDiscardsToTheGraveyardAreDiscards() {
+        startGame()
+        // Two pieces in hand combine into a new card
+        let pieceA = card("TLC_817t3", controller: 1, zone: .hand, type: .spell)
+        let pieceB = card("TLC_817t4", controller: 1, zone: .hand, type: .spell)
+        block("TRIGGER", pieceA, keyword: "TAG_NOT_SET") {
+            zone(pieceA, .setaside)
+            zone(pieceB, .removedfromgame)
+            fullEntity("TLC_817t5", controller: 1, zone: .hand, type: .spell)
+        }
+        XCTAssertEqual(entries.last?.effects.map { $0.kind }, [.generated])
+
+        let soulfire = card("CORE_EX1_308", controller: 1, zone: .hand, type: .spell)
+        let victim = card("CORE_CS2_029", controller: 1, zone: .hand, type: .spell)
+        block("PLAY", soulfire) {
+            zone(soulfire, .play)
+            block("POWER", soulfire) {
+                zone(victim, .graveyard)
+            }
+            zone(soulfire, .graveyard)
+        }
+        XCTAssertEqual(effects(entries.last, .discarded).first?.targets.map { $0.entityId }, [victim.id])
+    }
+
+    func testASecretTakenByTheLocalPlayerNamesTheOpponentsRow() {
+        startGame(rawTurn: 4, localTurn: false)
+        func hiddenSecret() -> Entity {
+            let secret = Entity(id: nextEntityId)
+            nextEntityId += 1
+            secret[.controller] = 2
+            secret[.zone] = Zone.hand.rawValue
+            secret[.cardtype] = CardType.spell.rawValue
+            secret[.secret] = 1
+            secret.info.hidden = true
+            entities[secret.id] = secret
+            return secret
+        }
+        let first = hiddenSecret()
+        let second = hiddenSecret()
+        for secret in [first, second] {
+            block("PLAY", secret) {
+                zone(secret, .secret)
+            }
+        }
+
+        startTurn(5, localTurn: true)
+        let mystic = card("GVG_074", controller: 1, zone: .hand)
+        block("PLAY", mystic) {
+            zone(mystic, .play)
+            block("POWER", mystic) {
+                // Shown first, then taken
+                first.cardId = "CORE_EX1_610"
+                first.info.hidden = false
+                recorder.entityShown(entity: first, localPlayerId: hookLocalPlayerId, entities: entities)
+                tag(first, .controller, 1)
+            }
+        }
+        let mystic2 = card("GVG_074", controller: 1, zone: .hand)
+        block("PLAY", mystic2) {
+            zone(mystic2, .play)
+            block("POWER", mystic2) {
+                // Taken first, then shown
+                tag(second, .controller, 1)
+                second.cardId = "CORE_EX1_130"
+                second.info.hidden = false
+                recorder.entityShown(entity: second, localPlayerId: hookLocalPlayerId, entities: entities)
+            }
+        }
+
+        let opponentRows = turns.first?.entries ?? []
+        XCTAssertEqual(opponentRows.map { $0.revealedLater.map { $0.cardId } }, [["CORE_EX1_610"], ["CORE_EX1_130"]])
+    }
+
+    func testEverySecretAnActionPutIntoPlayIsRevealedOnItsOwn() {
+        startGame(rawTurn: 4, localTurn: false)
+        let challenger = card("AT_079", controller: 2, zone: .hand)
+        var secrets: [Entity] = []
+        block("PLAY", challenger) {
+            zone(challenger, .play)
+            block("POWER", challenger) {
+                for _ in 0..<2 {
+                    let secret = card("", controller: 2, zone: .deck, type: .spell)
+                    secret[.secret] = 1
+                    zone(secret, .secret)
+                    secrets.append(secret)
+                }
+            }
+        }
+        XCTAssertEqual(effects(entries.last, .secretPlayed).first?.targets.map { $0.cardId }, [nil, nil])
+
+        startTurn(5, localTurn: true)
+        secrets[0].cardId = "CORE_EX1_610"
+        block("TRIGGER", secrets[0], keyword: "SECRET")
+        XCTAssertEqual(turns.first?.entries.first?.revealedLater.map { $0.entityId }, [secrets[0].id])
+
+        secrets[1].cardId = "CORE_EX1_130"
+        zone(secrets[1], .graveyard)
+        XCTAssertEqual(turns.first?.entries.first?.revealedLater.map { $0.cardId }, ["CORE_EX1_610", "CORE_EX1_130"])
+    }
+
+    func testReconnectWaitsForTheOpponentNameAndIgnoresTheBattleTagNumber() {
+        startGame()
+        let minion = card("CORE_CS2_120", controller: 1, zone: .hand)
+        block("PLAY", minion) {
+            zone(minion, .play)
+        }
+        // The name as MatchInfo gave it, before updatePlayers put the BattleTag in
+        recorder.reset(opponentName: "Opponent", now: time)
+
+        XCTAssertFalse(recorder.restoreInterruptedIfReconnect(opponentName: nil, now: time.addingTimeInterval(10)))
+        XCTAssertFalse(recorder.restoreInterruptedIfReconnect(opponentName: " ", now: time.addingTimeInterval(20)))
+        XCTAssertTrue(recorder.restoreInterruptedIfReconnect(opponentName: "Opponent#1234", now: time.addingTimeInterval(40)))
+        XCTAssertEqual(entries.map { $0.type }, [.play, .reconnected])
+
+        XCTAssertEqual(ActionHistoryRecorder.playerNameKey("Name#1234"), "Name")
+        XCTAssertEqual(ActionHistoryRecorder.playerNameKey("Na#me"), "Na#me")
+        XCTAssertNil(ActionHistoryRecorder.playerNameKey("#1234"))
+        XCTAssertNil(ActionHistoryRecorder.playerNameKey(nil))
     }
 
     // MARK: - Turns, lifecycle and gating

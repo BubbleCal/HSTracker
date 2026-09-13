@@ -91,6 +91,8 @@ enum ActionHistoryPresentation {
         case .heroPower: return localized("ActionHistory_HeroPower")
         case .useLocation: return localized("ActionHistory_UseLocation")
         case .attack: return localized("ActionHistory_Attack")
+        case .trade: return localized("ActionHistory_Trade")
+        case .deckAction: return localized("ActionHistory_DeckAction")
         case .power: return localized("ActionHistory_Power")
         case .trigger: return localized("ActionHistory_Trigger")
         case .secret: return localized("ActionHistory_Secret")
@@ -192,13 +194,14 @@ enum ActionHistoryPresentation {
                 if effect.kind == .transformed, let newCardId = effect.detailCardId {
                     cards.append(HistoryCardRef(entityId: target.entityId, cardId: newCardId, side: target.side, cardType: target.cardType))
                 }
-                lines.append(ActionHistoryEffectLine(id: "\(prefix)/\(targetIndex)", label: label(effect), tone: tone(effect.kind), cards: cards))
+                lines.append(ActionHistoryEffectLine(id: "\(prefix)/\(targetIndex)", label: label(effect, target: target), tone: tone(effect.kind), cards: cards))
             }
         }
         return lines
     }
 
-    static func label(_ effect: HistoryEffect) -> String {
+    /// - Parameter target: the card the line is about, when the wording depends on what kind of card it is.
+    static func label(_ effect: HistoryEffect, target: HistoryCardRef? = nil) -> String {
         let amount = effect.amount ?? 0
         switch effect.kind {
         case .damage: return String(format: localized("ActionHistory_EffectDamage"), amount)
@@ -206,7 +209,12 @@ enum ActionHistoryPresentation {
         case .armorGained: return String(format: localized("ActionHistory_EffectArmorGained"), amount)
         case .armorLost: return String(format: localized("ActionHistory_EffectArmorLost"), amount)
         case .died: return localized("ActionHistory_EffectDied")
-        case .destroyed: return localized("ActionHistory_EffectDestroyed")
+        case .destroyed:
+            // The Chinese clients destroy (消灭) minions but break (摧毁) weapons and locations
+            if let cardType = target?.cardType, cardType == CardType.weapon.rawValue || cardType == CardType.location.rawValue {
+                return localized("ActionHistory_EffectDestroyedObject")
+            }
+            return localized("ActionHistory_EffectDestroyed")
         case .summoned: return localized("ActionHistory_EffectSummoned")
         case .equipped: return localized("ActionHistory_EffectEquipped")
         case .drew: return localized("ActionHistory_EffectDrew")
@@ -247,6 +255,7 @@ enum ActionHistoryPresentation {
         "ActionHistory_Title", "ActionHistory_Collapse", "ActionHistory_Expand",
         "ActionHistory_TurnPlayer", "ActionHistory_TurnOpponent", "ActionHistory_StartOfGame",
         "ActionHistory_Play", "ActionHistory_HeroPower", "ActionHistory_UseLocation", "ActionHistory_Attack",
+        "ActionHistory_Trade", "ActionHistory_DeckAction",
         "ActionHistory_Power", "ActionHistory_Trigger", "ActionHistory_Secret", "ActionHistory_Deathrattle",
         "ActionHistory_Fatigue", "ActionHistory_Reveal", "ActionHistory_TurnStart", "ActionHistory_Deaths",
         "ActionHistory_GameReset", "ActionHistory_Reconnected",
@@ -254,6 +263,7 @@ enum ActionHistoryPresentation {
         "ActionHistory_Weapon", "ActionHistory_SummaryDeaths",
         "ActionHistory_EffectDamage", "ActionHistory_EffectHeal", "ActionHistory_EffectArmorGained",
         "ActionHistory_EffectArmorLost", "ActionHistory_EffectDied", "ActionHistory_EffectDestroyed",
+        "ActionHistory_EffectDestroyedObject",
         "ActionHistory_EffectSummoned", "ActionHistory_EffectEquipped", "ActionHistory_EffectDrew",
         "ActionHistory_EffectDrewCount", "ActionHistory_EffectGenerated", "ActionHistory_EffectGeneratedCount",
         "ActionHistory_EffectDiscarded", "ActionHistory_EffectBurned", "ActionHistory_EffectShuffled",

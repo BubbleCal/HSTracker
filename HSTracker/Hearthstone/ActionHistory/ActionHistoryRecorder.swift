@@ -53,7 +53,12 @@ final class ActionHistoryRecorder {
     private var mulliganDoneEntities = Set<Int>()
     // Weapon entity id per controller, for "attacked with"
     private var weaponByController: [Int: Int] = [:]
+    // Cards a destroy effect marked with TO_BE_DESTROYED. The client sets the tag back to 0 inside
+    // the DEATHS block, right before the card moves to the graveyard, so it has to be remembered.
+    private var markedForDestruction = Set<Int>()
     private var localPlayerId = 0
+    // Something was recorded before the local player was known; snapshots resolve it
+    private var hasUndetermined = false
     private var hasGameEnded = false
     private var excludedGameType: Bool?
     private var interrupted: InterruptedGame?
@@ -95,15 +100,13 @@ final class ActionHistoryRecorder {
             }
 
             let node = Node(blockId: blockId, info: info, time: time, parentSink: parentSink, type: type,
-                            entryId: type != nil ? takeEntryId() : 0, rawTurn: rawTurn, activeSide: currentSide(),
+                            entryId: type != nil ? takeEntryId() : 0, rawTurn: rawTurn, activePlayerId: currentPlayerId(),
                             isStartOfGame: isStartOfGame, suppressesEffects: suppressesEffects)
-            if type == .attack {
-                node.targetEntityId = info.targetEntityId
-                if let source, source.isHero {
-                    node.weaponEntityId = weaponByController[source[.controller]]
-                }
-            } else if type != nil, let targetId = info.targetEntityId {
+            if type != nil, let targetId = info.targetEntityId {
                 setTarget(of: node, targetId, entities: entities)
+            }
+            if type == .attack, let source, source.isHero {
+                node.weaponEntityId = weaponByController[source[.controller]]
             }
             openNodes.append(node)
 
@@ -138,7 +141,7 @@ final class ActionHistoryRecorder {
                     hideShowEntities: Bool, localPlayerId: Int, entities: Entities) {
         switch tag {
         case .zone, .damage, .armor, .controller, .proposed_defender, .card_target, .turn, .step,
-             .current_player, .mulligan_state, .frozen, .silenced, .divine_shield:
+             .current_player, .mulligan_state, .frozen, .silenced, .divine_shield, .to_be_destroyed:
             break
         default:
             return
@@ -183,7 +186,11 @@ final class ActionHistoryRecorder {
             case .proposed_defender:
                 if !isCreationTag && value > 0 && isGameEntity(entity),
                    let attack = openNodes.last(where: { $0.type == .attack }) {
-                    attack.targetEntityId = value
+                    setTarget(of: attack, value, entities: entities)
+                }
+            case .to_be_destroyed:
+                if value > 0 {
+                    markedForDestruction.insert(entity.id)
                 }
             case .card_target:
                 if value > 0, let node = openNodes.last(where: { $0.type != nil && $0.info.sourceEntityId == entity.id }) {
@@ -208,13 +215,11 @@ final class ActionHistoryRecorder {
                   let fromCardId, !fromCardId.isBlank, !toCardId.isBlank, fromCardId != toCardId else {
                 return
             }
-            guard let before = ActionHistoryVisibility.ref(for: entity, context: .transformed, localPlayerId: self.localPlayerId,
-                                                            hideShowEntities: hideShowEntities, displayedCardId: fromCardId,
-                                                            entities: entities) else {
+            guard let before = makeRef(entity, .transformed, hideShowEntities: hideShowEntities, displayedCardId: fromCardId,
+                                       entities: entities) else {
                 return
             }
-            let after = ActionHistoryVisibility.ref(for: entity, context: .transformed, localPlayerId: self.localPlayerId,
-                                                    hideShowEntities: hideShowEntities, entities: entities)
+            let after = makeRef(entity, .transformed, hideShowEntities: hideShowEntities, entities: entities)
             record(EffectRecord(kind: .transformed, target: before, amount: nil, detailCardId: after?.cardId))
         }
     }
@@ -224,9 +229,11 @@ final class ActionHistoryRecorder {
         lock.around {
             updateLocalPlayer(localPlayerId)
             flushPendingCreationZone()
-            // A Secret shown after it left play; one still in the Secret zone is handled by its
-            // TRIGGER block or its move to the graveyard.
-            if excludedGameType != true && entity.isSecret && entity.isInGraveyard {
+            // A Secret shown after it left play, or one the local player took over (Kezan Mystic) and
+            // now sees. One still in the opponent's Secret zone is handled by its TRIGGER block or its
+            // move to the graveyard.
+            if excludedGameType != true && entity.isSecret
+                && (entity.isInGraveyard || (entity.isInSecret && self.localPlayerId > 0 && entity.isControlled(by: self.localPlayerId))) {
                 annotateRevealedSecret(entity, entities: entities)
             }
         }
@@ -245,13 +252,21 @@ final class ActionHistoryRecorder {
 
     // MARK: - Game API
 
+    /// Game.updatePlayers, once the mirror has told which player is local. The parser hooks pass the
+    /// id too, but a quiet stretch of the log would otherwise leave a replayed history unresolved.
+    func localPlayerDetermined(_ id: Int) {
+        lock.around {
+            updateLocalPlayer(id)
+        }
+    }
+
     /// Game.reset. A game that has not ended is kept aside, in case this is a Hearthstone reconnect.
     func reset(opponentName: String?, now: Date = Date()) {
         lock.around {
             if hasGameEnded {
                 interrupted = nil
             } else if !turns.isEmpty {
-                interrupted = InterruptedGame(turns: turns, opponentName: opponentName, date: now)
+                interrupted = InterruptedGame(turns: turns, opponentName: opponentName, date: now, hasUndetermined: hasUndetermined)
             }
             pendingCreationZone = nil
             turns.removeAll()
@@ -259,6 +274,7 @@ final class ActionHistoryRecorder {
             lastTopLevel = nil
             resetGameStateCaches()
             localPlayerId = 0
+            hasUndetermined = false
             hasGameEnded = false
             excludedGameType = nil
             markChanged()
@@ -274,15 +290,23 @@ final class ActionHistoryRecorder {
             guard let saved = interrupted else {
                 return false
             }
-            interrupted = nil
-            guard now.timeIntervalSince(saved.date) <= ActionHistoryRecorder.reconnectWindow,
-                  let opponentName, !opponentName.isBlank, opponentName == saved.opponentName,
-                  var lastSaved = saved.turns.last else {
+            guard now.timeIntervalSince(saved.date) <= ActionHistoryRecorder.reconnectWindow else {
+                interrupted = nil
                 return false
             }
+            // The mirror may not have named the opponent yet; a later call can still match
+            guard let nameKey = ActionHistoryRecorder.playerNameKey(opponentName) else {
+                return false
+            }
+            interrupted = nil
+            guard nameKey == ActionHistoryRecorder.playerNameKey(saved.opponentName), var lastSaved = saved.turns.last else {
+                return false
+            }
+            hasUndetermined = hasUndetermined || saved.hasUndetermined
             var restored = Array(saved.turns.dropLast())
             let marker = HistoryEntry(id: takeEntryId(), rawTurn: lastSaved.rawTurn, turn: ActionHistoryRecorder.turnNumber(lastSaved.rawTurn),
-                                      activeSide: lastSaved.side, type: .reconnected, time: now)
+                                      activeSide: side(forPlayerId: lastSaved.activePlayerId), type: .reconnected, time: now,
+                                      activePlayerId: lastSaved.activePlayerId)
             lastSaved.entries.append(marker)
             var current = turns
             if let first = current.first, first.rawTurn == lastSaved.rawTurn {
@@ -312,12 +336,30 @@ final class ActionHistoryRecorder {
 
     func snapshot() -> ActionHistorySnapshot {
         return lock.around { () -> ActionHistorySnapshot in
-            let built = turns.map { state in
-                HistoryTurn(rawTurn: state.rawTurn, turn: ActionHistoryRecorder.turnNumber(state.rawTurn), side: state.side,
-                            header: ActionHistoryRecorder.aggregate(state.header), entries: state.entries)
+            let built = turns.map { state -> HistoryTurn in
+                var header = ActionHistoryRecorder.aggregate(state.header)
+                var entries = state.entries
+                if hasUndetermined {
+                    header = resolve(header)
+                    entries = entries.map(resolve)
+                }
+                return HistoryTurn(rawTurn: state.rawTurn, turn: ActionHistoryRecorder.turnNumber(state.rawTurn),
+                                   side: side(forPlayerId: state.activePlayerId), header: header, entries: entries)
             }
             return ActionHistorySnapshot(turns: built, version: version)
         }
+    }
+
+    /// The part of a player name that stays the same whether it was read with or without the
+    /// BattleTag number (MatchInfo's name, then updatePlayers' BattleTag). Nil when unknown.
+    static func playerNameKey(_ name: String?) -> String? {
+        guard var key = name?.trimmingCharacters(in: .whitespacesAndNewlines), !key.isEmpty else {
+            return nil
+        }
+        if let hash = key.lastIndex(of: "#"), key[key.index(after: hash)...].allSatisfy({ $0.isNumber }) {
+            key = String(key[..<hash])
+        }
+        return key.isEmpty ? nil : key
     }
 
     static func isExcluded(gameType: GameType) -> Bool {
@@ -362,6 +404,10 @@ final class ActionHistoryRecorder {
             return action(.play)
         case "ATTACK":
             return action(.attack)
+        case "DECK_ACTION":
+            // Trading, Prepare or Forge from the hand: the player's own action, not a reaction to the
+            // previous one. Its POWER block (the trade's draw) merges into it below.
+            return action(.deckAction)
         case "FATIGUE":
             return action(.fatigue)
         case "JOUST", "REVEAL_CARD":
@@ -380,7 +426,7 @@ final class ActionHistoryRecorder {
             break
         }
 
-        // TRIGGER, POWER, RITUAL, DECK_ACTION and anything newer
+        // TRIGGER, POWER, RITUAL and anything newer
         guard !info.isBareEntity, info.sourceEntityId != nil else {
             // The game or a player: turn-start draws, step changes, weapon durability. Effects go to
             // the enclosing action, or to the turn header.
@@ -427,12 +473,22 @@ final class ActionHistoryRecorder {
         if node.isEmpty {
             switch type {
             case .trigger, .power, .deathrattle, .deaths:
+                if node.parentSink == nil && !node.promoted.isEmpty {
+                    // The Secrets it set off still get their rows
+                    let turnIndex = ensureTurn(node.rawTurn)
+                    turns[turnIndex].entries += node.promoted
+                    markChanged()
+                }
                 return
             default:
                 break
             }
         }
         if let parent = node.parentSink {
+            if type == .secret {
+                promote(entry(from: node), from: parent)
+                return
+            }
             parent.children.append(entry(from: node))
             if parent.isFinished {
                 refinalize(parent)
@@ -441,9 +497,32 @@ final class ActionHistoryRecorder {
         }
         let turnIndex = ensureTurn(node.rawTurn)
         turns[turnIndex].entries.append(entry(from: node))
+        turns[turnIndex].entries += node.promoted
+        node.promoted.removeAll()
         node.turnUid = turns[turnIndex].uid
         node.isFinished = true
         lastTopLevel = type == .gameReset ? nil : node
+        markChanged()
+    }
+
+    /// A Secret always gets a row of its own, even though it fires inside the play or attack that
+    /// set it off: it is the other player's action, and folded under the row that provoked it the
+    /// panel would not show that a Secret went off at all. It is listed right after that action.
+    private func promote(_ secret: HistoryEntry, from parent: Node) {
+        var root = parent
+        while let up = root.parentSink {
+            root = up
+        }
+        guard root.isFinished else {
+            root.promoted.append(secret)
+            return
+        }
+        // A finished parent is the last top-level action (see classify), so its turn ends with it
+        // and whatever was already promoted from it
+        guard let turnIndex = turns.lastIndex(where: { $0.uid == root.turnUid }) else {
+            return
+        }
+        turns[turnIndex].entries.append(secret)
         markChanged()
     }
 
@@ -453,20 +532,26 @@ final class ActionHistoryRecorder {
               let entryIndex = turns[turnIndex].entries.lastIndex(where: { $0.id == node.entryId }) else {
             return
         }
-        // Keep a Secret annotation added after the entry was built
+        // Keep Secret annotations added after the entry was built
         let revealedLater = turns[turnIndex].entries[entryIndex].revealedLater
         var rebuilt = entry(from: node)
-        rebuilt.revealedLater = rebuilt.revealedLater ?? revealedLater
+        for revealed in revealedLater where !rebuilt.revealedLater.contains(where: { $0.entityId == revealed.entityId }) {
+            rebuilt.revealedLater.append(revealed)
+        }
         turns[turnIndex].entries[entryIndex] = rebuilt
         markChanged()
     }
 
     private func entry(from node: Node) -> HistoryEntry {
+        var type = node.type ?? .trigger
+        if type == .deckAction && node.movedSourceToDeck {
+            type = .trade
+        }
         return HistoryEntry(id: node.entryId,
                             rawTurn: node.rawTurn,
                             turn: ActionHistoryRecorder.turnNumber(node.rawTurn),
-                            activeSide: node.activeSide,
-                            type: node.type ?? .trigger,
+                            activeSide: side(forPlayerId: node.activePlayerId),
+                            type: type,
                             triggerKeyword: ActionHistoryRecorder.meaningfulKeyword(node.info.triggerKeyword),
                             source: node.sourceRef,
                             target: node.targetRef,
@@ -474,7 +559,8 @@ final class ActionHistoryRecorder {
                             effects: ActionHistoryRecorder.aggregate(node.records),
                             children: node.children,
                             revealedLater: node.revealedLater,
-                            time: node.time)
+                            time: node.time,
+                            activePlayerId: node.activePlayerId)
     }
 
     private static func meaningfulKeyword(_ keyword: String?) -> String? {
@@ -496,10 +582,15 @@ final class ActionHistoryRecorder {
             node.sourceRef = sourceRef(source, type: node.type, entities: entities)
         }
         if let targetId = node.targetEntityId, let target = entities[targetId] {
-            let context: HistoryRefContext = node.type == .attack ? .attackTarget : .inPlayTarget
-            let atEnd = ref(target, context, entities: entities)
-            // A spell's target may have died by now; it was public when it was targeted.
-            node.targetRef = atEnd?.cardId != nil || node.targetRef?.entityId != targetId ? atEnd : node.targetRef
+            // The target as it was when it was chosen: a Polymorph's target is the minion, not the
+            // Sheep it became, and a target that died since is still named. The ref at the end of
+            // the block only helps when the card was not public yet at that point.
+            if let chosen = node.targetRef, chosen.entityId == targetId, !chosen.isHidden {
+                // keep it
+            } else {
+                let context: HistoryRefContext = node.type == .attack ? .attackTarget : .inPlayTarget
+                node.targetRef = ref(target, context, entities: entities)
+            }
         }
         if let weaponId = node.weaponEntityId, let weapon = entities[weaponId] {
             node.weaponRef = ref(weapon, .attackSource, entities: entities)
@@ -552,6 +643,7 @@ final class ActionHistoryRecorder {
     private func turnChanged(_ value: Int) {
         rawTurn = value
         lastTopLevel = nil
+        markedForDestruction.removeAll()
         if isMulliganDone && value > 0 {
             if turns.last?.rawTurn != value {
                 _ = ensureTurn(value)
@@ -571,6 +663,7 @@ final class ActionHistoryRecorder {
         let entity = tap.entity
         let from = Zone(rawValue: tap.prevValue) ?? .invalid
         let to = Zone(rawValue: tap.value) ?? .invalid
+        let wasMarkedForDestruction = from == .play && markedForDestruction.remove(entity.id) != nil
 
         if entity.isWeapon {
             let controller = entity[.controller]
@@ -603,15 +696,25 @@ final class ActionHistoryRecorder {
             }
         case (.invalid, .hand), (.setaside, .hand), (.removedfromgame, .hand), (.graveyard, .hand):
             recordEffect(.generated, entity, .generated, tap)
-        case (.hand, .graveyard), (.hand, .removedfromgame), (.hand, .setaside):
-            if !isPlaying(entity) {
+        case (.hand, .graveyard):
+            // Only the graveyard is a discard. Cards set aside or removed from the hand are the
+            // mechanics of another effect (Solitos' pieces combining, Prepare) that the client does
+            // not show as a discard.
+            if !isActing(entity) {
                 recordEffect(.discarded, entity, .discarded, tap)
             }
         case (.deck, .graveyard):
-            recordEffect(.burned, entity, .burned, tap)
+            // Classic Tracking discards the cards it did not keep. The log names them, and
+            // TagChangeActions.zoneChangeFromDeck hides them from the tracker right after this tap, but
+            // the client never shows them.
+            let hidden = tap.hideShowEntities || isInside(cardId: TagChangeActions.ClassicTrackingCardId, tap.entities)
+            recordEffect(.burned, entity, .burned, tap, hideShowEntities: hidden)
         case (_, .deck):
             if from != .deck {
-                if let target = ref(entity, .shuffled, tap, sourceIsLocalPlayer: sinkSourceIsLocalPlayer(tap.entities)) {
+                if let deckAction = openNodes.last(where: { $0.info.blockType == "DECK_ACTION" && $0.info.sourceEntityId == entity.id }) {
+                    // A trade: the card going into the deck is the action itself
+                    deckAction.movedSourceToDeck = true
+                } else if let target = ref(entity, .shuffled, tap, sourceController: sinkSourceController(tap.entities)) {
                     record(EffectRecord(kind: .shuffledIntoDeck, target: target, amount: nil, detailCardId: nil))
                 }
             }
@@ -619,15 +722,16 @@ final class ActionHistoryRecorder {
             recordEffect(.returnedToHand, entity, .returnedToHand, tap)
         case (_, .play):
             if entity.isWeapon {
-                if !isPlaying(entity) {
+                if !isActing(entity) {
                     recordEffect(.equipped, entity, .equipped, tap)
                 }
-            } else if (entity.isMinion || entity.isLocation) && from != .play && !isPlaying(entity) {
+            } else if (entity.isMinion || entity.isLocation) && from != .play && !isActing(entity) {
                 recordEffect(.summoned, entity, .summoned, tap)
             }
         case (.play, .graveyard):
             if entity.isMinion || (entity.isHero && entity.health <= 0) {
-                recordEffect(entity.has(tag: .to_be_destroyed) ? .destroyed : .died, entity, .died, tap)
+                let destroyed = wasMarkedForDestruction || entity.has(tag: .to_be_destroyed)
+                recordEffect(destroyed ? .destroyed : .died, entity, .died, tap)
             } else if entity.isWeapon || entity.isLocation {
                 recordEffect(.destroyed, entity, .died, tap)
             }
@@ -638,7 +742,7 @@ final class ActionHistoryRecorder {
         case (_, .secret):
             // Quests, Sigils and Objectives are public cards; only a Secret, or a card too hidden to
             // tell, is "played a Secret"
-            if from != .secret && !isPlaying(entity) && (entity.isSecret || !entity.hasCardId) {
+            if from != .secret && !isActing(entity) && (entity.isSecret || !entity.hasCardId) {
                 recordEffect(.secretPlayed, entity, .secretPlayed, tap)
             }
         default:
@@ -673,6 +777,10 @@ final class ActionHistoryRecorder {
         case .controller:
             if tap.prevValue > 0 && (entity[.zone] == Zone.play.rawValue || entity[.zone] == Zone.secret.rawValue) {
                 recordEffect(.stolen, entity, .stolen, tap)
+                // The local player now sees a Secret they took from the opponent
+                if entity.isSecret && entity.isInSecret && localPlayerId > 0 && tap.value == localPlayerId {
+                    annotateRevealedSecret(entity, entities: tap.entities)
+                }
             }
         case .frozen:
             if tap.prevValue == 0 && tap.value > 0 && entity.isInPlay {
@@ -691,17 +799,25 @@ final class ActionHistoryRecorder {
         }
     }
 
-    /// Whether `entity` is the card of an open PLAY block, whose own zone moves are the action itself.
-    private func isPlaying(_ entity: Entity) -> Bool {
-        return openNodes.contains { $0.info.blockType == "PLAY" && $0.info.sourceEntityId == entity.id }
+    /// Whether `entity` is the card of an open PLAY or DECK_ACTION block, whose own zone moves are the
+    /// action itself.
+    private func isActing(_ entity: Entity) -> Bool {
+        return openNodes.contains { ($0.info.blockType == "PLAY" || $0.info.blockType == "DECK_ACTION") && $0.info.sourceEntityId == entity.id }
     }
 
-    private func sinkSourceIsLocalPlayer(_ entities: Entities) -> Bool {
-        guard localPlayerId > 0, let sourceId = openNodes.last?.sink?.info.sourceEntityId,
-              let source = entities[sourceId] else {
-            return false
+    /// Whether any open block comes from a card with this cardId.
+    private func isInside(cardId: String, _ entities: Entities) -> Bool {
+        return openNodes.contains { node in
+            node.info.sourceEntityId.flatMap { entities[$0] }?.cardId == cardId
         }
-        return source.isControlled(by: localPlayerId)
+    }
+
+    /// The controller of the card whose action is being recorded, for shuffles.
+    private func sinkSourceController(_ entities: Entities) -> Int? {
+        guard let sourceId = openNodes.last?.sink?.info.sourceEntityId, let source = entities[sourceId] else {
+            return nil
+        }
+        return source[.controller]
     }
 
     // An enchantment entering play as the effect of a POWER or TRIGGER block of the card that
@@ -725,11 +841,9 @@ final class ActionHistoryRecorder {
                   enchantment[.creator] == node.info.sourceEntityId,
                   let attached = entities[enchantment[.attached]], !attached.isEnchantment,
                   attached[.cardtype] != CardType.game.rawValue, attached[.cardtype] != CardType.player.rawValue,
-                  let target = ActionHistoryVisibility.ref(for: attached, context: .inPlayTarget, localPlayerId: localPlayerId,
-                                                           hideShowEntities: pending.hideShowEntities, entities: entities),
+                  let target = makeRef(attached, .inPlayTarget, hideShowEntities: pending.hideShowEntities, entities: entities),
                   !target.isHidden,
-                  let enchantmentRef = ActionHistoryVisibility.ref(for: enchantment, context: .enchantment, localPlayerId: localPlayerId,
-                                                                   hideShowEntities: pending.hideShowEntities, entities: entities),
+                  let enchantmentRef = makeRef(enchantment, .enchantment, hideShowEntities: pending.hideShowEntities, entities: entities),
                   let enchantmentCardId = enchantmentRef.cardId else {
                 continue
             }
@@ -757,20 +871,46 @@ final class ActionHistoryRecorder {
         return isMulliganDone
     }
 
-    private func ref(_ entity: Entity, _ context: HistoryRefContext, _ tap: Tap, sourceIsLocalPlayer: Bool = false) -> HistoryCardRef? {
-        return ActionHistoryVisibility.ref(for: entity, context: context, localPlayerId: localPlayerId,
-                                           hideShowEntities: tap.hideShowEntities, sourceIsLocalPlayer: sourceIsLocalPlayer,
-                                           entities: tap.entities)
+    /// Every ref the recorder stores. While the local player is unknown the card is judged as the
+    /// opponent's, and what it would show as the local player's is kept alongside for snapshots.
+    /// - Parameter sourceController: the controller of the card whose action this is, for shuffles.
+    private func makeRef(_ entity: Entity, _ context: HistoryRefContext, hideShowEntities: Bool, sourceController: Int? = nil,
+                         displayedCardId: String? = nil, entities: Entities) -> HistoryCardRef? {
+        if localPlayerId > 0 {
+            return ActionHistoryVisibility.ref(for: entity, context: context, localPlayerId: localPlayerId, hideShowEntities: hideShowEntities,
+                                               sourceIsLocalPlayer: sourceController == localPlayerId,
+                                               displayedCardId: displayedCardId, entities: entities)
+        }
+        guard var ref = ActionHistoryVisibility.ref(for: entity, context: context, localPlayerId: 0, hideShowEntities: hideShowEntities,
+                                                    displayedCardId: displayedCardId, entities: entities) else {
+            return nil
+        }
+        let controller = entity[.controller]
+        if controller > 0 {
+            let asLocal = ActionHistoryVisibility.ref(for: entity, context: context, localPlayerId: controller, hideShowEntities: hideShowEntities,
+                                                      sourceIsLocalPlayer: sourceController == controller,
+                                                      displayedCardId: displayedCardId, entities: entities)
+            ref.undetermined = HistoryCardRef.UndeterminedController(controller: controller, cardIdIfLocal: asLocal?.cardId,
+                                                                     creatorCardIdIfLocal: asLocal?.creatorCardId)
+            hasUndetermined = true
+        }
+        return ref
+    }
+
+    private func ref(_ entity: Entity, _ context: HistoryRefContext, _ tap: Tap, sourceController: Int? = nil,
+                     hideShowEntities: Bool? = nil) -> HistoryCardRef? {
+        return makeRef(entity, context, hideShowEntities: hideShowEntities ?? tap.hideShowEntities, sourceController: sourceController,
+                       entities: tap.entities)
     }
 
     private func ref(_ entity: Entity, _ context: HistoryRefContext, entities: Entities) -> HistoryCardRef? {
-        return ActionHistoryVisibility.ref(for: entity, context: context, localPlayerId: localPlayerId,
-                                           hideShowEntities: false, entities: entities)
+        return makeRef(entity, context, hideShowEntities: false, entities: entities)
     }
 
-    private func recordEffect(_ kind: HistoryEffectKind, _ entity: Entity, _ context: HistoryRefContext, _ tap: Tap, amount: Int? = nil) {
+    private func recordEffect(_ kind: HistoryEffectKind, _ entity: Entity, _ context: HistoryRefContext, _ tap: Tap, amount: Int? = nil,
+                              hideShowEntities: Bool? = nil) {
         // DONT_SHOW_IN_HISTORY cards are left out entirely
-        guard let target = ref(entity, context, tap) else {
+        guard let target = ref(entity, context, tap, hideShowEntities: hideShowEntities) else {
             return
         }
         record(EffectRecord(kind: kind, target: target, amount: amount, detailCardId: nil))
@@ -877,11 +1017,12 @@ final class ActionHistoryRecorder {
 
     /// Names the opponent's earlier "played a Secret" row once the Secret is public. Only rows after
     /// the last game reset are searched, since a rewind can reuse entity ids.
+    ///
+    /// Whether a row may be annotated depends on the row, not on who controls the Secret now: only
+    /// rows that kept the Secret anonymous match, and those are the opponent's. A Secret the local
+    /// player has since taken over (Kezan Mystic) is shown to them and names its row too.
     private func annotateRevealedSecret(_ secret: Entity, entities: Entities) {
-        guard let revealed = ActionHistoryVisibility.ref(for: secret, context: .secretRevealed, localPlayerId: localPlayerId,
-                                                         hideShowEntities: false, entities: entities),
-              !revealed.isHidden, revealed.side != .player else {
-            // The local player's own Secrets were named when they were played
+        guard let revealed = makeRef(secret, .secretRevealed, hideShowEntities: false, entities: entities), !revealed.isHidden else {
             return
         }
         var annotated = false
@@ -902,8 +1043,13 @@ final class ActionHistoryRecorder {
             }
         }
         // Actions still open, or finished actions that may be rebuilt
-        for node in openNodes + [lastTopLevel].compactMap({ $0 }) where node.revealedLater == nil && node.hidesSecret(secret.id) {
-            node.revealedLater = revealed
+        for node in openNodes + [lastTopLevel].compactMap({ $0 }) {
+            if node.hidesSecret(secret.id) && !node.revealedLater.contains(where: { $0.entityId == secret.id }) {
+                node.revealedLater.append(revealed)
+            }
+            for index in node.promoted.indices {
+                _ = ActionHistoryRecorder.annotate(&node.promoted[index], secretId: secret.id, with: revealed)
+            }
         }
         if annotated {
             markChanged()
@@ -912,11 +1058,11 @@ final class ActionHistoryRecorder {
 
     private static func annotate(_ entry: inout HistoryEntry, secretId: Int, with revealed: HistoryCardRef) -> Bool {
         var changed = false
-        if entry.revealedLater == nil {
+        if !entry.revealedLater.contains(where: { $0.entityId == secretId }) {
             let playedIt = entry.type == .play && entry.source?.entityId == secretId && entry.source?.isHidden == true
             let putIt = entry.effects.contains { $0.kind == .secretPlayed && $0.targets.contains { $0.entityId == secretId && $0.isHidden } }
             if playedIt || putIt {
-                entry.revealedLater = revealed
+                entry.revealedLater.append(revealed)
                 changed = true
             }
         }
@@ -926,13 +1072,88 @@ final class ActionHistoryRecorder {
         return changed
     }
 
+    // MARK: - Resolving the local player
+
+    private func resolve(_ entry: HistoryEntry) -> HistoryEntry {
+        var entry = entry
+        if entry.activePlayerId > 0 {
+            entry.activeSide = side(forPlayerId: entry.activePlayerId)
+        }
+        entry.source = entry.source?.resolved(localPlayerId: localPlayerId)
+        entry.target = entry.target?.resolved(localPlayerId: localPlayerId)
+        entry.weapon = entry.weapon?.resolved(localPlayerId: localPlayerId)
+        entry.effects = resolve(entry.effects)
+        entry.children = entry.children.map(resolve)
+        // A Secret that turned out to be the local player's own was named all along
+        let named = Set(([entry.source].compactMap { $0 } + entry.effects.filter { $0.kind == .secretPlayed }.flatMap { $0.targets })
+                            .filter { !$0.isHidden }.map { $0.entityId })
+        entry.revealedLater = entry.revealedLater.map { $0.resolved(localPlayerId: localPlayerId) }.filter { !named.contains($0.entityId) }
+        return entry
+    }
+
+    /// Resolves effect targets. Draws and generated cards are grouped by whether they are hidden, so
+    /// those are grouped again once it is known which of them the local player may see.
+    private func resolve(_ effects: [HistoryEffect]) -> [HistoryEffect] {
+        guard effects.contains(where: { $0.targets.contains { $0.undetermined != nil } }) else {
+            return effects
+        }
+        enum Slot {
+            case effect(HistoryEffect)
+            case draws
+            case generated
+        }
+        var slots: [Slot] = []
+        var drawn: [HistoryCardRef] = []
+        var generated: [HistoryCardRef] = []
+        for var effect in effects {
+            effect.targets = effect.targets.map { $0.resolved(localPlayerId: localPlayerId) }
+            switch effect.kind {
+            case .drew, .drewUnknown:
+                if drawn.isEmpty {
+                    slots.append(.draws)
+                }
+                drawn += effect.targets
+            case .generated:
+                if generated.isEmpty {
+                    slots.append(.generated)
+                }
+                generated += effect.targets
+            default:
+                slots.append(.effect(effect))
+            }
+        }
+        func split(_ cards: [HistoryCardRef], publicKind: HistoryEffectKind, hiddenKind: HistoryEffectKind) -> [HistoryEffect] {
+            var result: [HistoryEffect] = []
+            let named = cards.filter { !$0.isHidden }
+            let hidden = cards.filter { $0.isHidden }
+            if !named.isEmpty {
+                result.append(HistoryEffect(kind: publicKind, targets: named))
+            }
+            if !hidden.isEmpty {
+                result.append(HistoryEffect(kind: hiddenKind, targets: hidden, amount: hidden.count))
+            }
+            return result
+        }
+        return slots.flatMap { slot -> [HistoryEffect] in
+            switch slot {
+            case .effect(let effect):
+                return [effect]
+            case .draws:
+                return split(drawn, publicKind: .drew, hiddenKind: .drewUnknown)
+            case .generated:
+                return split(generated, publicKind: .generated, hiddenKind: .generated)
+            }
+        }
+    }
+
     // MARK: - Turns and caches
 
     private struct TurnState {
         // Identifies the turn for open blocks even when restored turns are put in front
         var uid: Int
         let rawTurn: Int
-        let side: HistorySide
+        // The PLAYER_ID whose turn it is; the side is worked out when a snapshot is taken
+        let activePlayerId: Int
         var header: [EffectRecord]
         var entries: [HistoryEntry]
     }
@@ -941,6 +1162,7 @@ final class ActionHistoryRecorder {
         let turns: [TurnState]
         let opponentName: String?
         let date: Date
+        let hasUndetermined: Bool
     }
 
     private var isMulliganDone: Bool {
@@ -952,13 +1174,20 @@ final class ActionHistoryRecorder {
         if let last = turns.indices.last, turns[last].rawTurn == rawTurn {
             return last
         }
-        turns.append(TurnState(uid: nextTurnUid, rawTurn: rawTurn, side: currentSide(), header: [], entries: []))
+        turns.append(TurnState(uid: nextTurnUid, rawTurn: rawTurn, activePlayerId: currentPlayerId(), header: [], entries: []))
         nextTurnUid += 1
         return turns.count - 1
     }
 
-    private func currentSide() -> HistorySide {
+    private func currentPlayerId() -> Int {
         let playerId = currentPlayerEntity?[.player_id] ?? 0
+        if localPlayerId <= 0 {
+            hasUndetermined = true
+        }
+        return playerId
+    }
+
+    private func side(forPlayerId playerId: Int) -> HistorySide {
         guard playerId > 0, localPlayerId > 0 else {
             return .neutral
         }
@@ -970,8 +1199,13 @@ final class ActionHistoryRecorder {
     }
 
     private func updateLocalPlayer(_ id: Int) {
-        if id > 0 {
-            localPlayerId = id
+        guard id > 0, id != localPlayerId else {
+            return
+        }
+        localPlayerId = id
+        // What was recorded before can now be shown with the right sides and names
+        if hasUndetermined && (!turns.isEmpty || interrupted != nil) {
+            markChanged()
         }
     }
 
@@ -981,6 +1215,7 @@ final class ActionHistoryRecorder {
         currentPlayerEntity = nil
         mulliganDoneEntities.removeAll()
         weaponByController.removeAll()
+        markedForDestruction.removeAll()
     }
 
     private func isExcludedGameType() -> Bool {
@@ -1036,7 +1271,7 @@ final class ActionHistoryRecorder {
         let type: HistoryActionType?
         let entryId: Int
         let rawTurn: Int
-        let activeSide: HistorySide
+        let activePlayerId: Int
         // Inherited: START_OF_GAME triggers are recorded before the mulligan ends
         let isStartOfGame: Bool
         // Inherited: a GAME_RESET re-creates the board, which is not something anyone did
@@ -1047,7 +1282,11 @@ final class ActionHistoryRecorder {
         var records: [EffectRecord] = []
         var children: [HistoryEntry] = []
         var pendingEnchantments: [(entityId: Int, hideShowEntities: Bool)] = []
-        var revealedLater: HistoryCardRef?
+        var revealedLater: [HistoryCardRef] = []
+        // Secrets that fired inside this top-level action, listed after it once it is added
+        var promoted: [HistoryEntry] = []
+        // A DECK_ACTION that put its card into the deck is a trade
+        var movedSourceToDeck = false
 
         var refsBuilt = false
         var sourceRef: HistoryCardRef?
@@ -1059,7 +1298,7 @@ final class ActionHistoryRecorder {
         var turnUid = 0
 
         init(blockId: Int, info: HistoryBlockInfo, time: Date, parentSink: Node?, type: HistoryActionType?, entryId: Int,
-             rawTurn: Int, activeSide: HistorySide, isStartOfGame: Bool, suppressesEffects: Bool) {
+             rawTurn: Int, activePlayerId: Int, isStartOfGame: Bool, suppressesEffects: Bool) {
             self.blockId = blockId
             self.info = info
             self.time = time
@@ -1067,7 +1306,7 @@ final class ActionHistoryRecorder {
             self.type = type
             self.entryId = entryId
             self.rawTurn = rawTurn
-            self.activeSide = activeSide
+            self.activePlayerId = activePlayerId
             self.isStartOfGame = isStartOfGame
             self.suppressesEffects = suppressesEffects
         }

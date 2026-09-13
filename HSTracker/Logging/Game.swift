@@ -1903,6 +1903,8 @@ class Game: NSObject, PowerEventHandler {
         player.id = matchInfo.localPlayer.playerId
         opponent.id = matchInfo.opposingPlayer.playerId
         logger.info("\(pname) [PlayerId=\(player.id)] vs \(oname) [PlayerId=\(opponent.id)]")
+        // A Power.log replayed before the mirror answered was recorded without knowing whose cards were whose
+        actionHistory.localPlayerDetermined(player.id)
     }
     
     private func getCurrentDeckIdIfAppropriate() -> String {
@@ -2087,10 +2089,12 @@ class Game: NSObject, PowerEventHandler {
 
     // Hearthstone reset the game when it reconnected, which put the turns recorded so far aside.
     // The recorder matches them by opponent name, which is known only once the match info has been
-    // read (updatePlayers) - the same source the name came from when the game was reset.
+    // read (updatePlayers) - the same source the name came from when the game was reset. That can
+    // take as long as cacheMatchInfo keeps retrying (31 s), so this waits a little longer than it
+    // does. A name that is still unknown leaves the saved turns in place rather than dropping them.
     private func restoreActionHistoryAfterReconnect() {
         DispatchQueue.global().async {
-            for _ in 0 ..< 20 where self._matchInfo == nil {
+            for _ in 0 ..< 80 where self._matchInfoCacheInvalid || self._matchInfo == nil || (self.opponent.name ?? "").isBlank {
                 Thread.sleep(forTimeInterval: 0.5)
             }
             self.actionHistory.restoreInterruptedIfReconnect(opponentName: self.opponent.name)

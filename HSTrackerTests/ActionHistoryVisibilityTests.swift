@@ -306,7 +306,7 @@ class ActionHistoryVisibilityTests: HSTrackerTests {
                                    time: Date(timeIntervalSince1970: 1_000))
         let attack = HistoryEntry(id: 1, rawTurn: 5, turn: 3, activeSide: .opponent, type: .attack, source: minion, target: hero,
                                   effects: [HistoryEffect(kind: .damage, targets: [hero], amount: 3)], children: [trigger],
-                                  revealedLater: nil, time: Date(timeIntervalSince1970: 1_000))
+                                  revealedLater: [], time: Date(timeIntervalSince1970: 1_000))
         let turn = HistoryTurn(rawTurn: 5, turn: 3, side: .opponent,
                                header: [HistoryEffect(kind: .drewUnknown, targets: [], amount: 1)], entries: [attack])
         let snapshot = ActionHistorySnapshot(turns: [turn], version: 7)

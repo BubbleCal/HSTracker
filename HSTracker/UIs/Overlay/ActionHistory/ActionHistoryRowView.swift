@@ -154,7 +154,8 @@ struct ActionHistoryRowView: View {
         .padding(.vertical, 3)
         // Whose action it was. An overlay rather than an HStack sibling, so the stripe takes the
         // row's height instead of proposing one.
-        .overlay(ActionHistoryStyle.sideColor(entry.activeSide).frame(width: 3), alignment: .leading)
+        .overlay(ActionHistoryStyle.sideColor(entry.type == .secret ? sourceSide(entry) : entry.activeSide).frame(width: 3),
+                 alignment: .leading)
     }
 
     // A Secret or Deathrattle belongs to the card's owner, not to whoever's turn it is
@@ -213,7 +214,8 @@ struct ActionHistoryActionTitle: View {
                     ActionHistoryCardName(ref: target, placement: placement)
                 }
             }
-            if let revealed = entry.revealedLater {
+            // One line per Secret the action put into play and the game has since shown
+            ForEach(entry.revealedLater, id: \.entityId) { revealed in
                 HStack(spacing: 3) {
                     Text(ActionHistoryPresentation.localized("ActionHistory_RevealedLater"))
                         .font(ActionHistoryStyle.detailFont)
