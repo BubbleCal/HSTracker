@@ -25,6 +25,8 @@ class TrackersPreferences: PreferencePaneController, PreferencePane {
     @IBOutlet var showTimer: NSButton!
     @IBOutlet var autoPositionTrackers: NSButton!
     @IBOutlet var showSecretHelper: NSButton!
+    @IBOutlet var autoGrayoutSecrets: NSButton!
+    @IBOutlet var removeSecretsFromList: NSButton!
     @IBOutlet var showRarityColors: NSButton!
     @IBOutlet var showFloatingCard: NSButton!
     @IBOutlet var theme: NSComboBox!
@@ -66,6 +68,9 @@ class TrackersPreferences: PreferencePaneController, PreferencePane {
         showTimer.state = Settings.showTimer ? .on : .off
         autoPositionTrackers.state = Settings.autoPositionTrackers ? .on : .off
         showSecretHelper.state = Settings.showSecretHelper ? .on : .off
+        autoGrayoutSecrets.state = Settings.autoGrayoutSecrets ? .on : .off
+        removeSecretsFromList.state = Settings.removeSecretsFromList ? .on : .off
+        updateSecretHelperOptions()
         showRarityColors.state = Settings.showRarityColors ? .on : .off
         showFloatingCard.state = Settings.showFloatingCard ? .on : .off
         showExperienceCounter.state = Settings.showExperienceCounter ? .on : .off
@@ -82,6 +87,12 @@ class TrackersPreferences: PreferencePaneController, PreferencePane {
         enableMulliganGV2.state = Settings.enableMulliganGV2 ? .on : .off
         showMulliganGuidePreLobby.state = Settings.showMulliganGuidePreLobby ? .on : .off
         autoShowMulliganGuide.state = Settings.autoShowMulliganGuide ? .on : .off
+    }
+
+    // The two secret options only mean something while the helper is shown
+    private func updateSecretHelperOptions() {
+        autoGrayoutSecrets.isEnabled = showSecretHelper.state == .on
+        removeSecretsFromList.isEnabled = showSecretHelper.state == .on
     }
 
     @IBAction func sliderChange(_ sender: AnyObject) {
@@ -120,7 +131,13 @@ class TrackersPreferences: PreferencePaneController, PreferencePane {
                 Settings.windowsLocked = true
             }
         } else if sender == showSecretHelper {
+            // Game's settings observer refreshes the panel for all three
             Settings.showSecretHelper = showSecretHelper.state == .on
+            updateSecretHelperOptions()
+        } else if sender == autoGrayoutSecrets {
+            Settings.autoGrayoutSecrets = autoGrayoutSecrets.state == .on
+        } else if sender == removeSecretsFromList {
+            Settings.removeSecretsFromList = removeSecretsFromList.state == .on
         } else if sender == showRarityColors {
             Settings.showRarityColors = showRarityColors.state == .on
         } else if sender == showTimer {

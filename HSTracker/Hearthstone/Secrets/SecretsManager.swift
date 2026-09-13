@@ -65,6 +65,12 @@ private struct PlayerTurnEnd {
     var minionIds: Set<Int>
 }
 
+// One candidate of one secret's pool. Impossible candidates stay in the list as count 0 rows.
+private struct SecretCandidate {
+    let card: MultiIdCard
+    let possible: Bool
+}
+
 private enum PendingSecretCheck {
     case spellCast(SpellCastSnapshot)
     case threeCards(CardPlaySnapshot)
@@ -108,6 +114,10 @@ class SecretsManager {
     private var lastMinionPlay: MinionPlaySnapshot?
     
     var onChanged: (([Card]) -> Void)?
+    // The two secret helper settings, read through closures so tests can set them without writing
+    // the app's defaults (the hosted test bundle shares them with the user's HSTracker)
+    var autoGrayoutSecrets: () -> Bool = { Settings.autoGrayoutSecrets }
+    var removeSecretsFromList: () -> Bool = { Settings.removeSecretsFromList }
     // Fired on the parser thread for every candidate that becomes impossible or possible again
     var onExclusionChanged: ((SecretExclusionEvent) -> Void)?
     private var nextEntryOrder = 0
@@ -120,7 +130,8 @@ class SecretsManager {
     
     private var freeSpaceOnBoard: Bool { return game.opponentBoardCount < 7 }
     private var freeSpaceInHand: Bool { return game.opponentHandCount < 10 }
-    private var handleAction: Bool { return hasActiveSecrets }
+    // HDT SecretsEventHandler.HandleAction: with Gray out secrets off, no event rules anything out
+    private var handleAction: Bool { return hasActiveSecrets && autoGrayoutSecrets() }
     private var isAnyMinionInOpponentsHand: Bool { return entititesInHandOnMinionsPlayed.first(where: { entity in entity.isMinion }) != nil }
     
     private var hasActiveSecrets: Bool {
@@ -150,6 +161,11 @@ class SecretsManager {
     @discardableResult
     private func applyExclusions(_ entries: [(card: MultiIdCard, reason: SecretExclusionReason?)], secretIds: Set<Int>?, turn: Int?,
                                  invokeCallback: Bool) -> [(secretId: Int, card: MultiIdCard)] {
+        // Also covers checks queued before Gray out secrets was turned off. A revealed copy is not a
+        // deduction but a game rule (HDT's NewSecret and RemoveSecret exclude it either way), and a
+        // reason-less exclusion is a manual toggle.
+        let isAutomatic: (SecretExclusionReason?) -> Bool = { reason in reason != nil && reason != .copyRevealed }
+        let entries = autoGrayoutSecrets() ? entries : entries.filter { !isAutomatic($0.reason) }
         guard !entries.isEmpty else { return [] }
         let turn = turn ?? game.turnNumber()
         var events = [SecretExclusionEvent]()
@@ -199,22 +215,25 @@ class SecretsManager {
         onChanged?(getSecretList())
     }
 
-    // The hover line for a dimmed row, e.g. "Turn 5: You attacked the enemy hero". A row is dimmed
-    // once no active secret allows the card, so the latest exclusion is the one that dimmed it.
+    // The hover text for a dimmed row, e.g. "Turn 5: You attacked the enemy hero". A row is dimmed
+    // once no active secret allows the card, and different secrets may have ruled it out for
+    // different reasons, so this lists each distinct reason once, newest first, at most three.
     func exclusionSummary(cardId: String) -> String? {
         guard let card = CardIds.Secrets.getSecretMultiIdCard(cardId) else { return nil }
-        let latest = secrets.array()
+        var seen = Set<String>()
+        let format = String.localizedString("SecretHelper_RuledOutFormat", comment: "")
+        var lines = secrets.array()
             .compactMap { $0.exclusion(for: card) }
-            .filter { $0.reason != nil }
-            .max { $0.turn < $1.turn }
-        if let latest, let reason = latest.reason {
-            let text = String.localizedString(reason.localizationKey, comment: "")
-            return String(format: String.localizedString("SecretHelper_RuledOutFormat", comment: ""), latest.turn, text)
-        }
+            .sorted { $0.turn > $1.turn }
+            .compactMap { exclusion -> String? in
+                guard let reason = exclusion.reason, seen.insert("\(exclusion.turn):\(reason.rawValue)").inserted else { return nil }
+                return String(format: format, exclusion.turn, String.localizedString(reason.localizationKey, comment: ""))
+            }
+            .take(3)
         if gameModeHasCardLimit(game.currentGameType) && hasPlayedBothCopies(card) {
-            return String.localizedString("SecretReason_BothCopiesPlayed", comment: "")
+            lines.append(String.localizedString("SecretReason_BothCopiesPlayed", comment: ""))
         }
-        return nil
+        return lines.isEmpty ? nil : lines.joined(separator: "\n")
     }
 
     private func gameModeHasCardLimit(_ gameMode: GameType) -> Bool {
@@ -349,6 +368,11 @@ class SecretsManager {
         return nil
     }
 
+    // Every candidate in the pool of at least one active secret, with the number of secrets that
+    // still allow it. HDT's GetSecretsFromDeck drops the impossible ones since fc4c39a635 (Oct 2025);
+    // HSTracker keeps them as count 0 rows, which the panel darkens (HDT's behaviour before that),
+    // unless Remove impossible secrets is on. concatCardList sums the created and the deck half, so a
+    // row is only dimmed when neither half allows it.
     func getSecretList() -> [Card] {
         let gameMode = game.currentGameType
         let format = game.currentFormatType
@@ -356,8 +380,40 @@ class SecretsManager {
         let deckSecrets = getSecretsFromDeck(gameMode, format)
         let createdSecretsList = getSecretsCreatedBy(gameMode, format)
         
-        return createdSecretsList.concatCardList(deckSecrets)
+        var cards = createdSecretsList.concatCardList(deckSecrets)
+        if removeSecretsFromList() {
+            cards = cards.filter { $0.count > 0 }
+        }
+        return SecretsManager.sortedForPanel(cards)
     }
+
+    // Possible candidates first, then the impossible ones, each group in class-list order (HDT's
+    // GroupBy order). The list is rebuilt from dictionaries, so without this the rows would move
+    // around on every refresh.
+    static func sortedForPanel(_ cards: [Card]) -> [Card] {
+        return cards.sorted { a, b in
+            let aPossible = a.count > 0, bPossible = b.count > 0
+            if aPossible != bPossible {
+                return aPossible
+            }
+            let aIndex = secretOrderIndex[a.id] ?? Int.max, bIndex = secretOrderIndex[b.id] ?? Int.max
+            if aIndex != bIndex {
+                return aIndex < bIndex
+            }
+            return a.id < b.id
+        }
+    }
+
+    // Position of every print of every secret in CardIds.Secrets.All (Hunter, Mage, Paladin, Rogue)
+    static let secretOrderIndex: [String: Int] = {
+        var index = [String: Int]()
+        for (position, card) in CardIds.Secrets.All.enumerated() {
+            for id in card.ids where index[id] == nil {
+                index[id] = position
+            }
+        }
+        return index
+    }()
     
     private func getSecretsFromDeck(_ gameMode: GameType, _ format: FormatType) -> [Card] {
         let gameModeHasCardLimit = gameModeHasCardLimit(gameMode)
@@ -380,10 +436,10 @@ class SecretsManager {
         }
         
         let cards = filteredSecretsFromDeck
-            .group { m in m }
+            .group { m in m.card }
             .compactMap { group in
                 if let multiIdCard = CardIds.Secrets.getSecretMultiIdCard(group.key.ids[0]) {
-                    return QuantifiedMultiIdCard(baseCard: group.key, count: adjustCount(multiIdCard, group.value.count))
+                    return QuantifiedMultiIdCard(baseCard: group.key, count: adjustCount(multiIdCard, group.value.filter { $0.possible }.count))
                 } else {
                     return QuantifiedMultiIdCard(baseCard: group.key, count: 0)
                 }
@@ -401,7 +457,7 @@ class SecretsManager {
             return getArenaCreatedSecrets(createdBySecrets, availableSecrets, gameMode, format)
         }
         
-        var secretsCreated = [MultiIdCard]()
+        var secretsCreated = [SecretCandidate]()
 
         for secret in createdBySecrets {
             let creator = tryGetCreator(secret)
@@ -450,7 +506,7 @@ class SecretsManager {
     }
     
     private func getArenaCreatedSecrets(_ createdBySecrets: [Secret], _ availableSecrets: Set<String>, _ gameMode: GameType, _ format: FormatType) -> [Card] {
-        var secretsCreated = [MultiIdCard]()
+        var secretsCreated = [SecretCandidate]()
         if let availableCreatedBy = getCreatedBySecretsByCreator(gameMode: gameMode, format: format) {
             let creators = createdBySecrets.compactMap { s in (s, game.opponent.revealedEntities.first { e in e.id == s.entity.info.getCreatorId()})}
             for (secret, creator) in creators {
@@ -466,67 +522,44 @@ class SecretsManager {
                     }
                 } else {
                     if let creator, let creatableSecrets = availableCreatedBy[creator.cardId] {
-                        let secrets = secret.excluded.filter { x in x.key.ids.any { creatableSecrets.contains($0) }}
-                        secretsCreated.append(contentsOf: secrets.filter { x in !x.value }.compactMap { x in x.key })
+                        secretsCreated.append(contentsOf: getFilteredSecrets(secret, creatableSecrets))
                     } else {
-                        let secrets = secret.excluded.filter { x in x.key.ids.any { availableSecrets.contains($0) }}
-                        secretsCreated.append(contentsOf: secrets.filter { x in !x.value }.compactMap { x in x.key })
+                        secretsCreated.append(contentsOf: getFilteredSecrets(secret, availableSecrets))
                     }
                 }
             }
             
-            let quantified = secretsCreated
-                .group { m in m }
-                .compactMap { g in
-                    if CardIds.Secrets.getSecretMultiIdCard(g.key.ids[0]) != nil {
-                        return QuantifiedMultiIdCard(baseCard: g.key, count: g.value.count)
-                    } else {
-                        return QuantifiedMultiIdCard(baseCard: g.key, count: 0)
-                    }
-                }
-            return SecretsManager.quantifiedCardsToCards(quantified, format)
+            return quantifyAndConvertSecrets(secretsCreated, format)
         }
         
-        let filteredSecrets = getFilteredSecretsByDrawer(createdBySecrets, availableSecrets)
-        
-        let quantifiedSecrets = filteredSecrets
-            .group { x in x }
-            .compactMap { g in
-                if CardIds.Secrets.getSecretMultiIdCard(g.key.ids[0]) != nil {
-                    return QuantifiedMultiIdCard(baseCard: g.key, count: g.value.count)
-                } else {
-                    return QuantifiedMultiIdCard(baseCard: g.key, count: 0)
-                }
-            }
-        
-        return SecretsManager.quantifiedCardsToCards(quantifiedSecrets, format)
+        return quantifyAndConvertSecrets(getFilteredSecretsByDrawer(createdBySecrets, availableSecrets), format)
     }
     
-    private func getFilteredSecretsByDrawer(_ allSecrets: [Secret], _ availableSecrets: Set<String>) -> [MultiIdCard] {
+    private func getFilteredSecretsByDrawer(_ allSecrets: [Secret], _ availableSecrets: Set<String>) -> [SecretCandidate] {
         let secretAndDrawSource = allSecrets.compactMap { s in
             (s, game.opponent.revealedEntities.first { e in e.id == s.entity.info.getDrawerId() })
         }
 
-        var filteredSecrets = [MultiIdCard]()
+        var filteredSecrets = [SecretCandidate]()
         for (secret, drawSource) in secretAndDrawSource {
             if let drawSource, let spellSchoolTutor = _relatedCardsManager.getSpellSchoolTutor(drawSource.cardId) {
                 filteredSecrets.append(contentsOf: SecretsManager.getFilteredSecretsByDrawerFromSingleSecret(secret, spellSchoolTutor, availableSecrets))
             } else {
-                let secrets = secret.excluded.filter { x in x.key.ids.any { availableSecrets.contains($0) } }
-                filteredSecrets.append(contentsOf: secrets.filter { x in !x.value }.compactMap { x in x.key })
+                filteredSecrets.append(contentsOf: getFilteredSecrets(secret, availableSecrets))
             }
         }
 
         return filteredSecrets
     }
 
-    private static func getFilteredSecretsByDrawerFromSingleSecret(_ secret: Secret, _ spellSchoolTutor: ISpellSchoolTutor, _ availableSecrets: Set<String>) -> [MultiIdCard] {
+    // The pool is what a tutor could have drawn; whether a candidate is still possible is kept apart
+    private static func getFilteredSecretsByDrawerFromSingleSecret(_ secret: Secret, _ spellSchoolTutor: ISpellSchoolTutor, _ availableSecrets: Set<String>) -> [SecretCandidate] {
         let spellSchools = spellSchoolTutor.tutoredSpellSchools
         return secret.excluded
-            .filter { x in x.key.ids.any { availableSecrets.contains($0) && !x.value }}
-            .compactMap { x in Card(id: x.key.ids[0]) }
-            .filter { c in spellSchools.contains(c.spellSchool.rawValue) }
-            .compactMap { c in CardIds.Secrets.getSecretMultiIdCard(c.id) }
+            .filter { x in x.key.ids.any { availableSecrets.contains($0) }}
+            .map { x in (card: Card(id: x.key.ids[0]), possible: !x.value) }
+            .filter { x in spellSchools.contains(x.card.spellSchool.rawValue) }
+            .compactMap { x in CardIds.Secrets.getSecretMultiIdCard(x.card.id).map { SecretCandidate(card: $0, possible: x.possible) } }
     }
     
     private func tryGetCreator(_ secret: Secret) -> Entity? {
@@ -600,16 +633,19 @@ class SecretsManager {
             .flatMap { m in m.ids })
     }
     
-    private func getFilteredSecrets(_ secret: Secret, _ allowedSecrets: Set<String>) -> [MultiIdCard] {
-        return secret.excluded.filter { x in x.key.ids.any { allowedSecrets.contains($0) && !x.value }}.compactMap { x in x.key }
+    private func getFilteredSecrets(_ secret: Secret, _ allowedSecrets: Set<String>) -> [SecretCandidate] {
+        return secret.excluded
+            .filter { x in x.key.ids.any { allowedSecrets.contains($0) }}
+            .map { x in SecretCandidate(card: x.key, possible: !x.value) }
     }
     
-    private func quantifyAndConvertSecrets(_ secrets: [MultiIdCard], _ format: FormatType) -> [Card] {
+    // count is the number of secrets whose pool holds the card and that still allow it
+    private func quantifyAndConvertSecrets(_ secrets: [SecretCandidate], _ format: FormatType) -> [Card] {
         let quantified = secrets
-            .group { m in m }
+            .group { m in m.card }
             .compactMap { g in
                 if CardIds.Secrets.getSecretMultiIdCard(g.key.ids[0]) != nil {
-                    return QuantifiedMultiIdCard(baseCard: g.key, count: g.value.count)
+                    return QuantifiedMultiIdCard(baseCard: g.key, count: g.value.filter { $0.possible }.count)
                 } else {
                     return QuantifiedMultiIdCard(baseCard: g.key, count: 0)
                 }

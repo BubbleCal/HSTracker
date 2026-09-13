@@ -41,6 +41,9 @@ class PowerParserTests: HSTrackerTests {
         super.setUp()
 
         game = Game(hearthstoneRunState: HearthstoneRunState(isRunning: false, isActive: false))
+        // The defaults the settings live in are the user's own HSTracker defaults in this hosted bundle
+        game.secretsManager?.autoGrayoutSecrets = { true }
+        game.secretsManager?.removeSecretsFromList = { false }
         parser = PowerGameStateParser(with: game)
 
         let gameEntity = createEntity(cardId: "")

@@ -469,6 +469,11 @@ class Game: NSObject, PowerEventHandler {
         self.updateSecretTracker()
     }
     
+    // Rebuilds the panel for settings that change what it lists or whether it shows at all
+    func refreshSecretHelper() {
+        updateSecretTracker(cards: secretsManager?.getSecretList() ?? [])
+    }
+    
     func updateSecretTracker() {
         DispatchQueue.main.async { [weak self] in
             guard let self else {
@@ -1497,6 +1502,14 @@ class Game: NSObject, PowerEventHandler {
 		                              Events.hearthstone_active, Events.hearthstone_deactived, Settings.can_join_fullscreen,
 		                              Settings.hide_all_trackers_when_not_in_game, Settings.hide_all_trackers_when_game_in_background,
 		                              Settings.card_size, Settings.theme_token]
+        
+        // Toggling Show secret helper used to wait for the next secret change to take effect
+        for option in [Settings.show_secret_helper, Settings.auto_grayout_secrets, Settings.remove_secrets_from_list] {
+            let observer = center.addObserver(forName: NSNotification.Name(rawValue: option), object: nil, queue: OperationQueue.main) { [weak self] _ in
+                self?.refreshSecretHelper()
+            }
+            self.observers.append(observer)
+        }
         
         for option in playerTrackerUpdateEvents {
             let observer = center.addObserver(forName: NSNotification.Name(rawValue: option), object: nil, queue: OperationQueue.main) { _ in

@@ -1957,6 +1957,54 @@
         }
       }
     },
+    "sAg-Gr-Cel.title" : {
+      "comment" : "Class = \"NSButtonCell\"; title = \"Gray out secrets whose trigger was met\"; ObjectID = \"sAg-Gr-Cel\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Gray out secrets whose trigger was met"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "触发条件已满足的奥秘显示为灰色"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "觸發條件已達成的秘密顯示為灰色"
+          }
+        }
+      }
+    },
+    "sRm-Fl-Cel.title" : {
+      "comment" : "Class = \"NSButtonCell\"; title = \"Remove impossible secrets from the list\"; ObjectID = \"sRm-Fl-Cel\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Remove impossible secrets from the list"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "从列表中移除不可能的奥秘"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "從列表中移除不可能的秘密"
+          }
+        }
+      }
+    },
     "UXw-QE-lUP.title" : {
       "comment" : "Class = \"NSButtonCell\"; title = \"Show mulligan overlay at start of game\"; ObjectID = \"UXw-QE-lUP\";",
       "extractionState" : "extracted_with_value",

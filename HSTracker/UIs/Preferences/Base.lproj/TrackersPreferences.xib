@@ -9,6 +9,7 @@
         <customObject id="-2" userLabel="File's Owner" customClass="TrackersPreferences" customModule="HSTracker" customModuleProvider="target">
             <connections>
                 <outlet property="allowFullscreen" destination="aO1-IW-r7y" id="Y7p-zj-Y0J"/>
+                <outlet property="autoGrayoutSecrets" destination="sAg-Gr-Btn" id="sAg-Gr-Out"/>
                 <outlet property="autoPositionTrackers" destination="TNp-Jh-qS9" id="tWk-Iu-CQp"/>
                 <outlet property="autoShowMulliganGuide" destination="dj6-Ot-tpw" id="nEW-22-jgP"/>
                 <outlet property="cardSize" destination="oRs-V7-1J6" id="hMc-ok-6ju"/>
@@ -22,6 +23,7 @@
                 <outlet property="highlightLastDrawn" destination="PL6-uo-7RN" id="uTk-hD-3zS"/>
                 <outlet property="opacity" destination="KBy-Iy-S6O" id="HNP-7K-Wm4"/>
                 <outlet property="removeCards" destination="Q3s-94-J32" id="FLy-Eg-f3R"/>
+                <outlet property="removeSecretsFromList" destination="sRm-Fl-Btn" id="sRm-Fl-Out"/>
                 <outlet property="showExperienceCounter" destination="eYz-mj-UcC" id="zf7-cd-l4x"/>
                 <outlet property="showFlavorText" destination="7ps-Br-1Oh" id="hkm-br-Rt7"/>
                 <outlet property="showFloatingCard" destination="o0k-Kb-VAL" id="xCp-4x-8Ul"/>
@@ -189,6 +191,26 @@
                     </buttonCell>
                     <connections>
                         <action selector="checkboxClicked:" target="-2" id="vNS-Xb-p9X"/>
+                    </connections>
+                </button>
+                <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="sAg-Gr-Btn">
+                    <rect key="frame" x="38" y="325" width="281" height="18"/>
+                    <buttonCell key="cell" type="check" title="Gray out secrets whose trigger was met" bezelStyle="regularSquare" imagePosition="left" state="on" inset="2" id="sAg-Gr-Cel">
+                        <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
+                        <font key="font" metaFont="system"/>
+                    </buttonCell>
+                    <connections>
+                        <action selector="checkboxClicked:" target="-2" id="sAg-Gr-Act"/>
+                    </connections>
+                </button>
+                <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="sRm-Fl-Btn">
+                    <rect key="frame" x="38" y="299" width="281" height="18"/>
+                    <buttonCell key="cell" type="check" title="Remove impossible secrets from the list" bezelStyle="regularSquare" imagePosition="left" inset="2" id="sRm-Fl-Cel">
+                        <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
+                        <font key="font" metaFont="system"/>
+                    </buttonCell>
+                    <connections>
+                        <action selector="checkboxClicked:" target="-2" id="sRm-Fl-Act"/>
                     </connections>
                 </button>
                 <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="HPM-az-sML">
@@ -408,6 +430,10 @@
                 <constraint firstAttribute="trailing" secondItem="Q3s-94-J32" secondAttribute="trailing" constant="20" symbolic="YES" id="mxL-gG-aSs"/>
                 <constraint firstItem="dGD-b8-UwI" firstAttribute="leading" secondItem="51m-9V-RQO" secondAttribute="leading" constant="20" symbolic="YES" id="nuX-Dp-eeP"/>
                 <constraint firstItem="jqc-dr-ATS" firstAttribute="leading" secondItem="51m-9V-RQO" secondAttribute="leading" constant="20" symbolic="YES" id="oXu-3m-8aR"/>
+                <constraint firstItem="sAg-Gr-Btn" firstAttribute="leading" secondItem="51m-9V-RQO" secondAttribute="leading" constant="40" id="sAg-Gr-Ldg"/>
+                <constraint firstAttribute="trailing" secondItem="sAg-Gr-Btn" secondAttribute="trailing" constant="20" symbolic="YES" id="sAg-Gr-Trl"/>
+                <constraint firstItem="sRm-Fl-Btn" firstAttribute="leading" secondItem="51m-9V-RQO" secondAttribute="leading" constant="40" id="sRm-Fl-Ldg"/>
+                <constraint firstAttribute="trailing" secondItem="sRm-Fl-Btn" secondAttribute="trailing" constant="20" symbolic="YES" id="sRm-Fl-Trl"/>
                 <constraint firstAttribute="trailing" secondItem="TNp-Jh-qS9" secondAttribute="trailing" constant="20" symbolic="YES" id="tFn-7F-esx"/>
                 <constraint firstItem="eYz-mj-UcC" firstAttribute="leading" secondItem="51m-9V-RQO" secondAttribute="leading" constant="20" symbolic="YES" id="tYq-Y9-RTY"/>
                 <constraint firstItem="VdV-Vo-AfO" firstAttribute="leading" secondItem="51m-9V-RQO" secondAttribute="leading" constant="20" symbolic="YES" id="u2t-XD-TRv"/>
@@ -438,8 +464,12 @@
                 <integer value="1000"/>
                 <integer value="1000"/>
                 <integer value="1000"/>
+                <integer value="1000"/>
+                <integer value="1000"/>
             </visibilityPriorities>
             <customSpacing>
+                <real value="3.4028234663852886e+38"/>
+                <real value="3.4028234663852886e+38"/>
                 <real value="3.4028234663852886e+38"/>
                 <real value="3.4028234663852886e+38"/>
                 <real value="3.4028234663852886e+38"/>

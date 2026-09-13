@@ -50,6 +50,9 @@ class SecretTests: HSTrackerTests {
         super.setUp()
 
         game = Game(hearthstoneRunState: HearthstoneRunState(isRunning: false, isActive: false))
+        // The defaults the settings live in are the user's own HSTracker defaults in this hosted bundle
+        game.secretsManager?.autoGrayoutSecrets = { true }
+        game.secretsManager?.removeSecretsFromList = { false }
         gameEntity = createNewEntity(cardId: "")
         gameEntity.name = "GameEntity"
         heroPlayer = createNewEntity(cardId: "HERO_01");
@@ -1753,6 +1756,114 @@ class SecretTests: HSTrackerTests {
         XCTAssertEqual(secret(secretRogue1)?.isExcluded(cardId: CardIds.Secrets.Rogue.Shenanigans), false)
     }
 
+    // MARK: - Secret helper list
+
+    private func listedCard(_ card: MultiIdCard, in list: [Card]?) -> Card? {
+        return list?.first { card.ids.contains($0.id) }
+    }
+
+    private func attackOpponentHeroWithHero() {
+        setPlayerAsCurrentPlayer()
+        playerMinion1[.zone] = Zone.hand.rawValue
+        heroPlayer[.health] = 10
+        game.secretsManager?.handleAttack(attacker: heroPlayer, defender: heroOpponent)
+    }
+
+    func testSecretList_ExcludedCandidateHasCountZero() {
+        attackOpponentHeroWithHero()
+
+        let list = game.secretsManager?.getSecretList()
+        XCTAssertEqual(listedCard(CardIds.Secrets.Hunter.ExplosiveTrap, in: list)?.count, 0)
+        XCTAssertEqual(listedCard(CardIds.Secrets.Hunter.SnakeTrap, in: list)?.count, 1)
+        XCTAssertEqual(listedCard(CardIds.Secrets.Mage.IceBarrier, in: list)?.count, 0)
+        XCTAssertEqual(listedCard(CardIds.Secrets.Mage.Counterspell, in: list)?.count, 1)
+    }
+
+    func testSecretList_TwoSecretsOneExcluded_CountOne() {
+        addOpponentSecret(secretHunter2)
+        game.secretsManager?.exclude(cardId: CardIds.Secrets.Hunter.ExplosiveTrap, reason: .attackedHero, secretIds: [secretHunter1.id])
+
+        var list = game.secretsManager?.getSecretList()
+        XCTAssertEqual(listedCard(CardIds.Secrets.Hunter.ExplosiveTrap, in: list)?.count, 1)
+        XCTAssertEqual(listedCard(CardIds.Secrets.Hunter.SnakeTrap, in: list)?.count, 2)
+
+        game.secretsManager?.exclude(cardId: CardIds.Secrets.Hunter.ExplosiveTrap, reason: .attackedHero, secretIds: [secretHunter2.id])
+        list = game.secretsManager?.getSecretList()
+        XCTAssertEqual(listedCard(CardIds.Secrets.Hunter.ExplosiveTrap, in: list)?.count, 0)
+    }
+
+    func testSecretList_ImpossibleRowsSortedLast_StableClassOrder() {
+        attackOpponentHeroWithHero()
+
+        guard let list = game.secretsManager?.getSecretList() else { return XCTFail("no secrets manager") }
+        XCTAssertTrue(list.contains { $0.count == 0 })
+        let firstImpossible = list.firstIndex { $0.count <= 0 } ?? list.count
+        XCTAssertTrue(list[firstImpossible...].allSatisfy { $0.count <= 0 }, "a possible row is listed below an impossible one")
+        for group in [list[..<firstImpossible], list[firstImpossible...]] {
+            let positions = group.map { SecretsManager.secretOrderIndex[$0.id] ?? Int.max }
+            XCTAssertEqual(positions, positions.sorted(), "rows are not in class-list order")
+        }
+        // Hunter's list comes before Mage's
+        let snakeTrap = list.firstIndex { CardIds.Secrets.Hunter.SnakeTrap.ids.contains($0.id) } ?? Int.max
+        let counterspell = list.firstIndex { CardIds.Secrets.Mage.Counterspell.ids.contains($0.id) } ?? -1
+        XCTAssertLessThan(snakeTrap, counterspell)
+        // The same state gives the same rows in the same order
+        XCTAssertEqual(game.secretsManager?.getSecretList().map { $0.id }, list.map { $0.id })
+    }
+
+    func testSecretList_RemoveSecretsFromListSetting_DropsCountZero() {
+        game.secretsManager?.removeSecretsFromList = { true }
+        attackOpponentHeroWithHero()
+
+        let list = game.secretsManager?.getSecretList()
+        XCTAssertFalse(list?.isEmpty ?? true)
+        XCTAssertFalse(list?.contains { $0.count <= 0 } ?? true)
+        XCTAssertNil(listedCard(CardIds.Secrets.Hunter.ExplosiveTrap, in: list))
+        XCTAssertEqual(listedCard(CardIds.Secrets.Hunter.SnakeTrap, in: list)?.count, 1)
+    }
+
+    func testSecretList_AutoGrayoutOff_NoExclusions() {
+        game.secretsManager?.autoGrayoutSecrets = { false }
+        attackOpponentHeroWithHero()
+        game.secretsManager?.handleMinionPlayed(entity: playerMinion1)
+
+        verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All)
+        verifySecrets(secretIndex: 1, allSecrets: CardIds.Secrets.Mage.All)
+        XCTAssertFalse(game.secretsManager?.getSecretList().contains { $0.count <= 0 } ?? true)
+    }
+
+    func testSecretList_AutoGrayoutTurnedOffBeforeBoundary_PendingCheckExcludesNothing() {
+        game.secretsManager?.handleCardPlayed(entity: playerSpell2, parentCardId: "")
+        game.secretsManager?.autoGrayoutSecrets = { false }
+        resolve()
+
+        verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All)
+    }
+
+    func testSecretList_AutoGrayoutOff_RevealedCopyStillExcluded() {
+        game.secretsManager?.autoGrayoutSecrets = { false }
+        secretHunter2.cardId = CardIds.Secrets.Hunter.ExplosiveTrap.ids[0]
+        addOpponentSecret(secretHunter2)
+
+        verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All, triggered: [CardIds.Secrets.Hunter.ExplosiveTrap])
+    }
+
+    func testExclusionSummary_ListsEachSecretsReasonNewestFirst() {
+        addOpponentSecret(secretMage2)
+        gameEntity[.turn] = 5
+        let earlierTurn = game.turnNumber()
+        game.secretsManager?.exclude(cardId: CardIds.Secrets.Mage.Vaporize, reason: .attackedHero, secretIds: [secretMage1.id])
+        gameEntity[.turn] = 9
+        let laterTurn = game.turnNumber()
+        game.secretsManager?.exclude(cardId: CardIds.Secrets.Mage.Vaporize, reason: .minionAttacked, secretIds: [secretMage2.id])
+
+        let lines = game.secretsManager?.exclusionSummary(cardId: CardIds.Secrets.Mage.Vaporize.ids[0])?.components(separatedBy: "\n") ?? []
+        XCTAssertEqual(lines.count, 2, lines.joined(separator: " | "))
+        XCTAssertTrue(lines.first?.contains("\(laterTurn)") ?? false, lines.joined(separator: " | "))
+        XCTAssertTrue(lines.last?.contains("\(earlierTurn)") ?? false, lines.joined(separator: " | "))
+        XCTAssertEqual(lines.first?.contains(String.localizedString(SecretExclusionReason.minionAttacked.localizationKey, comment: "")), true)
+    }
+
     // MARK: - Secret helper panel
 
     func testSecretPanel_UpdatesCountInPlaceAndMovesImpossibleRowDown() {
@@ -1792,6 +1903,27 @@ class SecretTests: HSTrackerTests {
         panel.set(cards: [])
         XCTAssertEqual(panel.cardCount(), 0)
         XCTAssertEqual(table.numberOfRows, 0)
+    }
+
+    func testTrackersPreferences_SecretOptionsSitIndentedUnderShowSecretHelper() {
+        let pane = TrackersPreferences(nibName: "TrackersPreferences", bundle: nil)
+        _ = pane.view
+        guard let showSecretHelper = pane.showSecretHelper, let grayOut = pane.autoGrayoutSecrets,
+              let remove = pane.removeSecretsFromList else {
+            return XCTFail("the secret helper checkboxes are not connected")
+        }
+        XCTAssertEqual(grayOut.action, #selector(TrackersPreferences.checkboxClicked(_:)))
+        XCTAssertEqual(remove.action, #selector(TrackersPreferences.checkboxClicked(_:)))
+
+        guard let stack = showSecretHelper.superview as? NSStackView,
+              let index = stack.arrangedSubviews.firstIndex(of: showSecretHelper) else {
+            return XCTFail("Show secret helper is not in the pane's stack")
+        }
+        XCTAssertEqual(stack.arrangedSubviews[index + 1], grayOut)
+        XCTAssertEqual(stack.arrangedSubviews[index + 2], remove)
+        stack.layoutSubtreeIfNeeded()
+        XCTAssertGreaterThan(grayOut.frame.minX, showSecretHelper.frame.minX)
+        XCTAssertEqual(remove.frame.minX, grayOut.frame.minX)
     }
 
     func setPlayerAsCurrentPlayer() {
