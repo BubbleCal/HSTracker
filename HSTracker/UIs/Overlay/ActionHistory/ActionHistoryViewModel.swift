@@ -5,6 +5,7 @@
 //  Copyright © 2026 Benjamin Michotte. All rights reserved.
 //
 
+import AppKit
 import SwiftUI
 
 // What the action history panel on the RootOverlay canvas shows: the turns of the current match as
@@ -20,6 +21,9 @@ class ActionHistoryViewModel: ObservableObject {
     static let maxListHeightRatio: CGFloat = 0.45
     // The number of most recent turns shown unfolded until the player folds them
     static let autoExpandedTurns = 2
+    static let titleBarHeight: CGFloat = 24
+    // Room kept free under the panel and below the secret helper
+    static let margin: CGFloat = 8
 
     // Driven by Game.updateActionHistory, the way Game.updateCounters drives the counters.
     @Published var isShown = false
@@ -39,6 +43,16 @@ class ActionHistoryViewModel: ObservableObject {
     @Published var panelSize: CGSize = .zero
     @Published var listContentHeight: CGFloat = 0
 
+    // The bottom edge of the secret helper in canvas pixels, 0 while it is hidden. Game.updateSecretTracker
+    // sets it: the helper is its own window in the same column as the automatic position, above the
+    // overlay, so it would hide the panel's title bar - its only drag handle.
+    @Published var secretHelperBottom: CGFloat = 0
+
+    // How much of the list's width a legacy (always shown) scroller takes. Overlay scrollers draw
+    // over the content and take none; a mouse or "Show scroll bars: Always" switches to legacy ones,
+    // which would cover the totals and fold glyphs at each row's right edge.
+    @Published private(set) var scrollerInset = ActionHistoryViewModel.currentScrollerInset()
+
     // Turns the player folded or unfolded by hand, by ActionHistoryTurnSection.key. The others
     // follow autoExpandedTurns, so a new turn unfolds and the one before the previous folds.
     @Published private(set) var turnExpansion: [String: Bool] = [:]
@@ -46,6 +60,30 @@ class ActionHistoryViewModel: ObservableObject {
 
     private var version: Int?
     private var dragOrigin: CGPoint?
+    private var scrollerStyleObserver: NSObjectProtocol?
+
+    init() {
+        scrollerStyleObserver = NotificationCenter.default.addObserver(forName: NSScroller.preferredScrollerStyleDidChangeNotification,
+                                                                       object: nil, queue: .main) { [weak self] _ in
+            let inset = ActionHistoryViewModel.currentScrollerInset()
+            if self?.scrollerInset != inset {
+                self?.scrollerInset = inset
+            }
+        }
+    }
+
+    deinit {
+        if let scrollerStyleObserver {
+            NotificationCenter.default.removeObserver(scrollerStyleObserver)
+        }
+    }
+
+    static func currentScrollerInset() -> CGFloat {
+        guard NSScroller.preferredScrollerStyle == .legacy else {
+            return 0
+        }
+        return NSScroller.scrollerWidth(for: .regular, scrollerStyle: .legacy)
+    }
 
     var hasTurns: Bool {
         return !turns.isEmpty
@@ -104,13 +142,22 @@ class ActionHistoryViewModel: ObservableObject {
     /// Hearthstone window cannot push it out of reach.
     func origin(canvasSize: CGSize) -> CGPoint {
         let width = panelSize.width > 0 ? panelSize.width : ActionHistoryViewModel.panelWidth
-        // Right of the opponent tracker, where SizeHelper.secretTrackerFrame puts the secret helper
-        let x = left < 0 ? SizeHelper.trackerWidth + 25 : canvasSize.width * CGFloat(left) / 100.0
-        let y = canvasSize.height * CGFloat(top) / 100.0
+        var y = canvasSize.height * CGFloat(top) / 100.0
+        let x: CGFloat
+        if left < 0 {
+            // Right of the opponent tracker, in the secret helper's column (SizeHelper.secretTrackerFrame),
+            // so the automatic position moves down below the helper while it is up. A position the
+            // player dragged to is left where it was put.
+            x = SizeHelper.trackerWidth + 25
+            if secretHelperBottom > 0 {
+                y = max(y, secretHelperBottom + ActionHistoryViewModel.margin)
+            }
+        } else {
+            x = canvasSize.width * CGFloat(left) / 100.0
+        }
         // Keep at least the title bar on the canvas
-        let titleBarHeight: CGFloat = 24
         return CGPoint(x: min(max(0, x), max(0, canvasSize.width - width)),
-                       y: min(max(0, y), max(0, canvasSize.height - titleBarHeight)))
+                       y: min(max(0, y), max(0, canvasSize.height - ActionHistoryViewModel.titleBarHeight)))
     }
 
     /// Opens the card image on the side of the panel facing the middle of the screen.
@@ -119,8 +166,13 @@ class ActionHistoryViewModel: ObservableObject {
         return origin(canvasSize: canvasSize).x + width / 2 < canvasSize.width / 2 ? .right : .left
     }
 
+    /// The tallest the scrolled list may be: a share of the canvas, and never past its bottom edge,
+    /// or the oldest turns would scroll into a part of the viewport nobody can see.
     func maxListHeight(canvasSize: CGSize) -> CGFloat {
-        return max(80, canvasSize.height * ActionHistoryViewModel.maxListHeightRatio)
+        let preferred = max(80, canvasSize.height * ActionHistoryViewModel.maxListHeightRatio)
+        // The title bar and the 1 pt rule under it
+        let listTop = origin(canvasSize: canvasSize).y + ActionHistoryViewModel.titleBarHeight + 1
+        return min(preferred, max(0, canvasSize.height - listTop - ActionHistoryViewModel.margin))
     }
 
     // Moves by the drag's total translation from where the panel was when the drag began, which is

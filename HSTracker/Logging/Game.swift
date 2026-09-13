@@ -505,6 +505,8 @@ class Game: NSObject, PowerEventHandler {
             }
             
             let tracker = self.windowManager.secretTracker
+            // Where the helper ends on the Hearthstone window, top down, so the action history panel can stay clear of it
+            var helperBottom: CGFloat = 0
             
             if Settings.showSecretHelper && !self.gameEnded &&
                 ((Settings.hideAllWhenGameInBackground && self.hearthstoneRunState.isActive)
@@ -516,11 +518,16 @@ class Game: NSObject, PowerEventHandler {
                     self.windowManager.show(controller: tracker, show: true,
                                             frame: rect,
                                             title: nil, overlay: self.hearthstoneRunState.isActive)
+                    helperBottom = SizeHelper.hearthstoneWindow.frame.maxY - rect.minY
                 } else {
                     self.windowManager.show(controller: tracker, show: false)
                 }
             } else {
                 self.windowManager.show(controller: tracker, show: false)
+            }
+            if #available(macOS 10.15, *), let actionHistory = self.windowManager.rootOverlay?.viewModel.actionHistory,
+               actionHistory.secretHelperBottom != helperBottom {
+                actionHistory.secretHelperBottom = helperBottom
             }
         }
     }

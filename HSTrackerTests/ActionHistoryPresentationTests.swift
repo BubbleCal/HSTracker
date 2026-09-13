@@ -228,6 +228,54 @@ class ActionHistoryPresentationTests: HSTrackerTests {
         XCTAssertEqual(viewModel.tooltipPlacement(canvasSize: canvas), .left)
     }
 
+    func testTheListNeverRunsPastTheBottomOfTheCanvas() {
+        guard #available(macOS 10.15, *) else { return }
+        let viewModel = ActionHistoryViewModel()
+        viewModel.panelSize = CGSize(width: ActionHistoryViewModel.panelWidth, height: 300)
+        let canvas = CGSize(width: 1920, height: 1080)
+        // Both drags are one gesture, so both translations are from where it started
+        let start = viewModel.origin(canvasSize: canvas)
+        // High up, the list takes its share of the canvas
+        viewModel.drag(translation: CGSize(width: 0, height: canvas.height * 0.1 - start.y), canvasSize: canvas)
+        XCTAssertEqual(viewModel.maxListHeight(canvasSize: canvas), canvas.height * ActionHistoryViewModel.maxListHeightRatio, accuracy: 0.01)
+
+        // Dragged low, it stops above the bottom edge
+        viewModel.drag(translation: CGSize(width: 0, height: canvas.height * 0.7 - start.y), canvasSize: canvas)
+        let origin = viewModel.origin(canvasSize: canvas)
+        let height = viewModel.maxListHeight(canvasSize: canvas)
+        XCTAssertLessThanOrEqual(origin.y + ActionHistoryViewModel.titleBarHeight + 1 + height, canvas.height)
+        XCTAssertGreaterThan(height, 0)
+        XCTAssertLessThan(height, canvas.height * ActionHistoryViewModel.maxListHeightRatio)
+    }
+
+    func testTheAutomaticPositionMovesBelowTheSecretHelper() {
+        guard #available(macOS 10.15, *) else { return }
+        let viewModel = ActionHistoryViewModel()
+        guard viewModel.left < 0 else { return } // the player moved the panel on this machine
+        let canvas = CGSize(width: 1440, height: 900)
+        let top = viewModel.origin(canvasSize: canvas).y
+
+        viewModel.secretHelperBottom = top + 52
+        XCTAssertEqual(viewModel.origin(canvasSize: canvas).y, top + 52 + ActionHistoryViewModel.margin, accuracy: 0.01)
+        viewModel.secretHelperBottom = max(0, top - 100)
+        XCTAssertEqual(viewModel.origin(canvasSize: canvas).y, top, accuracy: 0.01)
+
+        // A panel the player placed stays where it was put
+        viewModel.drag(translation: .zero, canvasSize: canvas)
+        viewModel.secretHelperBottom = canvas.height / 2
+        XCTAssertEqual(viewModel.origin(canvasSize: canvas).y, top, accuracy: 0.01)
+    }
+
+    func testWeaponsAndLocationsAreBrokenRatherThanKilled() {
+        let minion = ref(1, ActionHistoryPresentationTests.knownCardId)
+        let weapon = HistoryCardRef(entityId: 2, cardId: ActionHistoryPresentationTests.knownCardId, side: .opponent,
+                                    cardType: CardType.weapon.rawValue)
+        let effect = HistoryEffect(kind: .destroyed, targets: [minion, weapon])
+        XCTAssertEqual(ActionHistoryPresentation.lines([effect], idPrefix: "x").map { $0.label },
+                       [String.localizedString("ActionHistory_EffectDestroyed", comment: ""),
+                        String.localizedString("ActionHistory_EffectDestroyedObject", comment: "")])
+    }
+
     // MARK: - Localization
 
     func testEveryPanelStringHasEnglishAndChineseTranslations() throws {

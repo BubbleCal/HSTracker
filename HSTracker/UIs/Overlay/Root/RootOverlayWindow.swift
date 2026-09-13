@@ -41,6 +41,14 @@ class RootOverlayWindow: OverWindowController {
         installMouseMonitors()
     }
 
+    // OverWindowController.updateFrames sets ignoresMouseEvents from Settings.windowsLocked, which is
+    // right for the tracker windows but not for this canvas: every tracker refresh would make it
+    // click-through (or, unlocked, click-catching everywhere) until the next region check. Here the
+    // region tracking below owns that switch, so a refresh only re-runs it.
+    override func updateFrames() {
+        updateMouseThrough()
+    }
+
     deinit {
         if let monitor = globalMouseMonitor {
             NSEvent.removeMonitor(monitor)
@@ -85,6 +93,11 @@ class RootOverlayWindow: OverWindowController {
         let windowPoint = window.convertPoint(fromScreen: screenLocation)
         let viewPoint = hostingView.convert(windowPoint, from: nil)
 
+        // Where the opacity mask cuts the overlay away (the friends list, the game menu, a card the
+        // game blows up) the canvas is not drawn, so it must not take the clicks or open card
+        // tooltips there either - they belong to what Hearthstone shows through the cut-out.
+        let isMasked = isMaskedOut(viewPoint)
+
         updateFilterRegionHover(at: viewPoint)
         updateCounterHover()
         // Above the click-through guard, for the same reason as the counter
@@ -94,9 +107,9 @@ class RootOverlayWindow: OverWindowController {
         // the panel holding the hovered card closed and took the last
         // interactive region with it in the same pass - the sweep that would
         // have dismissed it lives at the end of updateCardHover().
-        updateCardHover()
+        updateCardHover(isMasked: isMasked)
 
-        guard !viewModel.interactiveRegions.isEmpty else {
+        guard !viewModel.interactiveRegions.isEmpty, !isMasked else {
             setIgnoresMouseEvents(true)
             return
         }
@@ -173,7 +186,7 @@ class RootOverlayWindow: OverWindowController {
     // The final comparison is in screen coordinates (Y-up, Cocoa convention)
     // using NSEvent.mouseLocation, avoiding any NSView/SwiftUI coordinate space
     // issues entirely.
-    private func updateCardHover() {
+    private func updateCardHover(isMasked: Bool) {
         guard let overlayWindow = window else { return }
         let screenLocation = NSEvent.mouseLocation
 
@@ -184,7 +197,7 @@ class RootOverlayWindow: OverWindowController {
         // the tiles do not overlap, so at most one entry ever matches and this
         // is the same as before.
         let match = CardHoverRegistry.shared.entries.last { entry in
-            guard let nsView = entry.view,
+            guard !isMasked, let nsView = entry.view,
                   nsView.window === overlayWindow else { return false }
             // NSView.convert(to: nil) → window base coordinates (Y-up from
             // window bottom, flips handled by AppKit automatically).
@@ -241,6 +254,16 @@ class RootOverlayWindow: OverWindowController {
                 CardTooltipPanel.shared.hide(from: .registry)
             }
         }
+    }
+
+    // Whether a point in the hosting view's coordinates lies in a region the opacity mask cuts out.
+    // The rects are normalized to the canvas, y down, like the view's own flipped coordinates.
+    private func isMaskedOut(_ viewPoint: NSPoint) -> Bool {
+        let size = hostingView.bounds.size
+        guard size.width > 0, size.height > 0 else { return false }
+        let normalized = CGPoint(x: viewPoint.x / size.width,
+                                 y: hostingView.isFlipped ? viewPoint.y / size.height : 1 - viewPoint.y / size.height)
+        return viewModel.opacityMask.maskedRects.contains { $0.contains(normalized) }
     }
 
     // The part of a hover view the player can actually see, in window coordinates, or nil when none

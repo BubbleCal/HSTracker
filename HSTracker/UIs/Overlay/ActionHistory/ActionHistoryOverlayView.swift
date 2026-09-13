@@ -106,7 +106,7 @@ struct ActionHistoryOverlayView: View {
         }
         .padding(.leading, 8)
         .padding(.trailing, 4)
-        .frame(height: 24)
+        .frame(height: ActionHistoryViewModel.titleBarHeight)
         .contentShape(Rectangle())
         // Only the title bar drags: the list below has rows to click and a scroller to grab. HDT
         // moves overlay elements only while the overlay is unlocked and saves on mouse up.
@@ -125,7 +125,8 @@ struct ActionHistoryOverlayView: View {
                 }
             }
             .padding(.bottom, 4)
-            .frame(width: ActionHistoryViewModel.panelWidth, alignment: .leading)
+            // Narrower by a legacy scroller's width, which is drawn over the content's right edge
+            .frame(width: ActionHistoryViewModel.panelWidth - viewModel.scrollerInset, alignment: .leading)
             .background(
                 GeometryReader { proxy in
                     Color.clear.preference(key: ActionHistoryListHeightPreferenceKey.self, value: proxy.size.height)
