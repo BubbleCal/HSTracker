@@ -560,9 +560,25 @@ class RecordStatsTests: HSTrackerTests {
         }
         XCTAssertEqual(try schemaVersionAtURL(fileURL), 8)
 
+        // initRealm copies the file before the upgrade so an older build's data survives.
+        let backupURL = try XCTUnwrap(RealmHelper.backupBeforeMigration(fileURL: fileURL))
+        XCTAssertEqual(backupURL.lastPathComponent, "hstracker.schema8.backup.realm")
+        XCTAssertEqual(try schemaVersionAtURL(backupURL), 8)
+
         let realm = try Realm(configuration: RealmHelper.configuration(fileURL: fileURL))
         XCTAssertEqual(try schemaVersionAtURL(fileURL), RealmHelper.schemaVersion)
         XCTAssertGreaterThanOrEqual(RealmHelper.schemaVersion, 9)
+        // The backup stays at the old schema, and an up-to-date file needs none.
+        XCTAssertEqual(try schemaVersionAtURL(backupURL), 8)
+        XCTAssertNil(RealmHelper.backupBeforeMigration(fileURL: fileURL))
+        XCTAssertNil(RealmHelper.backupBeforeMigration(fileURL: directory.appendingPathComponent("missing.realm")))
+        try autoreleasepool {
+            let v8Config = Realm.Configuration(fileURL: backupURL, readOnly: true, schemaVersion: 8,
+                                               objectTypes: [V8Deck.self, V8GameStats.self, V8RealmCard.self,
+                                                             V8ServerInfo.self, V8RealmSideboard.self])
+            let backup = try Realm(configuration: v8Config)
+            XCTAssertEqual(backup.object(ofType: V8Deck.self, forPrimaryKey: "legacy-deck")?.gameStats.count, 2)
+        }
 
         let deck = try XCTUnwrap(realm.object(ofType: Deck.self, forPrimaryKey: "legacy-deck"))
         XCTAssertEqual(deck.name, "Legacy")

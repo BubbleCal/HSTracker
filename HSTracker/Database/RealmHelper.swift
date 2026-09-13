@@ -22,7 +22,41 @@ struct RealmHelper {
 	Initializes the realm database. Calls migration if current database's version differs from the latest one
 	*/
 	static func initRealm(destination: URL) {
-		Realm.Configuration.defaultConfiguration = configuration(fileURL: destination.appendingPathComponent("hstracker.realm"))
+		let fileURL = destination.appendingPathComponent("hstracker.realm")
+		backupBeforeMigration(fileURL: fileURL)
+		Realm.Configuration.defaultConfiguration = configuration(fileURL: fileURL)
+	}
+
+	/// Copies the database before a schema upgrade opens it. A migrated file can no
+	/// longer be opened by an older HSTracker (Realm refuses a schema version lower
+	/// than the file's), and every build shares the same file, so going back to a
+	/// previous release would otherwise leave it without decks or statistics. The
+	/// copy, hstracker.schema<old>.backup.realm, can be put back by hand. An existing
+	/// backup for the same old version is kept, never overwritten.
+	///
+	/// - Returns: the backup's URL when the file needs migrating and a backup exists.
+	@discardableResult
+	static func backupBeforeMigration(fileURL: URL) -> URL? {
+		let fileManager = FileManager.default
+		guard fileManager.fileExists(atPath: fileURL.path),
+			  let oldVersion = try? schemaVersionAtURL(fileURL),
+			  oldVersion < schemaVersion else {
+			return nil
+		}
+		let name = fileURL.deletingPathExtension().lastPathComponent
+		let backupURL = fileURL.deletingLastPathComponent()
+			.appendingPathComponent("\(name).schema\(oldVersion).backup.realm")
+		if fileManager.fileExists(atPath: backupURL.path) {
+			return backupURL
+		}
+		do {
+			try fileManager.copyItem(at: fileURL, to: backupURL)
+			logger.info("Backed up the schema \(oldVersion) database to \(backupURL.path) before migrating")
+			return backupURL
+		} catch {
+			logger.error("Could not back up the database before migrating: \(error)")
+			return nil
+		}
 	}
 
 	static let schemaVersion: UInt64 = 9
