@@ -72,9 +72,14 @@ class RecordStatsTests: HSTrackerTests {
         XCTAssertTrue(StatsHelper.postGameRankLooksStale(result: .win, before: before, after: before))
         XCTAssertTrue(StatsHelper.postGameRankLooksStale(result: .win, before: before, after: nil))
         XCTAssertFalse(StatsHelper.postGameRankLooksStale(result: .win, before: before, after: moved))
-        // A loss on a floor or a draw legitimately leaves the position unchanged.
-        XCTAssertFalse(StatsHelper.postGameRankLooksStale(result: .loss, before: before, after: before))
+        // A loss normally moves the player down too, so an unchanged read is re-checked
+        // (the re-read keeps it when the player really sits on a floor).
+        XCTAssertTrue(StatsHelper.postGameRankLooksStale(result: .loss, before: before, after: before))
+        let dropped = RankSnapshot(leagueId: 5, starLevel: 29, stars: 3, legendRank: 0)
+        XCTAssertFalse(StatsHelper.postGameRankLooksStale(result: .loss, before: before, after: dropped))
+        // A draw never moves, and an unknown result says nothing.
         XCTAssertFalse(StatsHelper.postGameRankLooksStale(result: .draw, before: before, after: before))
+        XCTAssertFalse(StatsHelper.postGameRankLooksStale(result: .unknown, before: before, after: before))
         let legend = RankSnapshot(leagueId: 5, starLevel: 51, stars: 0, legendRank: 1000)
         XCTAssertFalse(StatsHelper.postGameRankLooksStale(result: .win, before: legend, after: legend))
         XCTAssertFalse(StatsHelper.postGameRankLooksStale(result: .win, before: nil, after: nil))
@@ -446,6 +451,45 @@ class RecordStatsTests: HSTrackerTests {
         let record = try XCTUnwrap(StatsHelper.matchupTrackerRecord(deck: deck, opponentClass: .priest))
         XCTAssertEqual(record.wins, 1)
         XCTAssertEqual(record.losses, 1)
+    }
+
+    func testGameStatsChangedObserversSeeABackgroundWrite() throws {
+        let realm = try Realm()
+        let deck = try makeDeck(.warlock, games: [], in: realm)
+        let deckId = deck.deckId
+        // Games are recorded on the log-reader thread. Pin the main thread's Realm so
+        // only an explicit refresh moves it, the way it lags until Realm's notifier
+        // reaches the run loop.
+        realm.autorefresh = false
+        defer { realm.autorefresh = true }
+
+        let stat = makeStat(.win, mode: .ranked, against: .priest)
+        let written = expectation(description: "recorded off the main thread")
+        DispatchQueue.global().async {
+            autoreleasepool {
+                if let backgroundDeck = try? Realm().object(ofType: Deck.self, forPrimaryKey: deckId) {
+                    RealmHelper.addStatistics(to: backgroundDeck, stats: stat)
+                }
+            }
+            written.fulfill()
+        }
+        wait(for: [written], timeout: 5)
+        XCTAssertEqual(deck.gameStats.count, 0, "the main thread's Realm has not caught up yet")
+
+        var seenGames = -1
+        let notified = expectation(description: "game_stats_changed")
+        let observer = NotificationCenter.default.addObserver(
+            forName: Notification.Name(rawValue: Events.game_stats_changed), object: nil,
+            queue: OperationQueue.main) { _ in
+            // What the tracker's W-L and VS lines read.
+            seenGames = (try? Realm())?.object(ofType: Deck.self, forPrimaryKey: deckId)?.gameStats.count ?? -1
+            notified.fulfill()
+        }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        RealmHelper.postGameStatsChanged()
+        wait(for: [notified], timeout: 5)
+        XCTAssertEqual(seenGames, 1)
     }
 
     func testMatchupTrackerLabelScore() {

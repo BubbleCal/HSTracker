@@ -85,6 +85,18 @@ struct RealmHelper {
 		})
 	}
 	
+	/// Posts game_stats_changed on the main thread after a write made on another
+	/// thread. The main thread's cached Realm only catches up once Realm's notifier
+	/// signals the run loop, which can come after this block, so observers reading
+	/// on main (trackers, Deck Manager, Statistics) would otherwise still see the
+	/// database from before the write.
+	static func postGameStatsChanged() {
+		DispatchQueue.main.async {
+			(try? Realm())?.refresh()
+			NotificationCenter.default.post(name: Notification.Name(rawValue: Events.game_stats_changed), object: nil)
+		}
+	}
+
 	// MARK: - Deck operations
 	
 	static func getDeck(with id: String) -> Deck? {

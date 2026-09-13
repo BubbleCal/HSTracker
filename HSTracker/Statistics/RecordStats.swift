@@ -58,10 +58,13 @@ extension StatsHelper {
         return nil
     }
 
-    /// Whether a post-game medal read probably still shows the pre-game position, so
-    /// it is worth reading again a bit later. Only a win below Legend is certain to
-    /// move the player (a loss can stay put on a floor, a draw never moves), so that
-    /// is the only case detected besides a failed read.
+    /// Whether a post-game medal read may still show the pre-game position, so it is
+    /// worth reading again a bit later. A won or lost ranked game below Legend
+    /// normally moves the player, so a read equal to the pre-game position is suspect
+    /// for both. A loss on a rank floor legitimately stays put; the re-read then just
+    /// keeps the unchanged value. A draw never moves, and a legend rank moves with
+    /// other players' games too, so neither is checked. A failed read is always
+    /// worth retrying.
     static func postGameRankLooksStale(result: GameResult, before: RankSnapshot?,
                                        after: RankSnapshot?) -> Bool {
         guard let before = before else {
@@ -70,7 +73,7 @@ extension StatsHelper {
         guard let after = after else {
             return true
         }
-        return result == .win && !before.isLegend
+        return (result == .win || result == .loss) && !before.isLegend
             && after.starLevel == before.starLevel && after.stars == before.stars
     }
 }

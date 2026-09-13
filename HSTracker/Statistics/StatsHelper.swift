@@ -238,6 +238,9 @@ class StatsHelper {
             logger.error("Error accessing Realm database")
             return [:]
         }
+        // Runs on a GCD thread, whose cached Realm does not auto-refresh and can
+        // predate a game recorded on the log-reader thread.
+        realm.refresh()
 
         var records = [String: StatsDeckRecord]()
         for deckId in deckIds {

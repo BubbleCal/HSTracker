@@ -375,7 +375,8 @@ class Game: NSObject, PowerEventHandler {
                         // HDT's LblWinRateAgainst. The opponent's class stays set
                         // until the next game resets it, so the line is still there
                         // on the end screen, already counting the game just played
-                        // (game_stats_changed refreshes this tracker).
+                        // (game_stats_changed refreshes this tracker after the main
+                        // thread's Realm has been refreshed to include it).
                         if Settings.showMatchupWinRate,
                            let opponentClass = self.opponent.originalClass,
                            let record = StatsHelper.matchupTrackerRecord(deck: deck,
@@ -2405,13 +2406,11 @@ class Game: NSObject, PowerEventHandler {
             logger.info("Not recording game (mode \(mode), Bob encounter \(skip), class \(stats.playerHero))")
             return
         }
-        DispatchQueue.main.async {
-            NotificationCenter.default.post(name: Notification.Name(rawValue: Events.game_stats_changed), object: nil)
-        }
+        RealmHelper.postGameStatsChanged()
 
         if StatsHelper.postGameRankLooksStale(result: stats.result, before: stats.rankBefore, after: stats.rankAfter) {
             recheckPostGameRank(statId: stats.statId, result: stats.result, format: gameStats.format,
-                                before: stats.rankBefore)
+                                before: stats.rankBefore, stored: stats.rankAfter)
         }
     }
 
@@ -2450,7 +2449,8 @@ class Game: NSObject, PowerEventHandler {
     /// update has arrived. Keep reading for a few seconds off the log-reader queue
     /// and fix the stored game once the position moves, instead of holding up the
     /// end of the game.
-    private func recheckPostGameRank(statId: String, result: GameResult, format: Format?, before: RankSnapshot?) {
+    private func recheckPostGameRank(statId: String, result: GameResult, format: Format?, before: RankSnapshot?,
+                                     stored: RankSnapshot?) {
         DispatchQueue.global(qos: .utility).async {
             var latest: RankSnapshot?
             for _ in 0 ..< 8 {
@@ -2462,14 +2462,13 @@ class Game: NSObject, PowerEventHandler {
                     }
                 }
             }
-            guard let after = latest else {
+            // Nothing to fix when the position never moved (a loss on a rank floor).
+            guard let after = latest, after != stored else {
                 return
             }
             logger.info("Post-game rank re-read: \(after)")
             RealmHelper.updateRankAfter(statId: statId, after: after)
-            DispatchQueue.main.async {
-                NotificationCenter.default.post(name: Notification.Name(rawValue: Events.game_stats_changed), object: nil)
-            }
+            RealmHelper.postGameStatsChanged()
         }
     }
 
