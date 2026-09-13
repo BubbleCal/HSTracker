@@ -19,7 +19,7 @@ class StatsTab: NSViewController {
     var statsTableItems = [StatsTableRow]()
     
     let modePickerItems: [GameMode] = [.all, .ranked, .casual, .brawl, .arena, .friendly, .practice]
-    var observer: NSObjectProtocol?
+    var observers: [NSObjectProtocol] = []
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -63,13 +63,15 @@ class StatsTab: NSViewController {
         
         // We need to update the display when the
         // stats change
-        self.observer = NotificationCenter.default.addObserver(forName: NSNotification.Name(rawValue: Events.reload_decks), object: nil, queue: OperationQueue.main) { _ in
-            self.update()
+        for event in [Events.reload_decks, Events.game_stats_changed] {
+            observers.append(NotificationCenter.default.addObserver(forName: NSNotification.Name(rawValue: event), object: nil, queue: OperationQueue.main) { [weak self] _ in
+                self?.update()
+            })
         }
     }
     
     deinit {
-        if let observer = self.observer {
+        for observer in observers {
             NotificationCenter.default.removeObserver(observer)
         }
     }

@@ -20,7 +20,7 @@ class Statistics: NSWindowController {
     var ladderTab: LadderTab?
     
     var tabSizes = [NSTabViewItem: CGSize]()
-    var observer: NSObjectProtocol?
+    var observers: [NSObjectProtocol] = []
 
     override func windowDidLoad() {
         super.windowDidLoad()
@@ -52,13 +52,15 @@ class Statistics: NSWindowController {
 
         // We need to update the display both when the
         // stats change
-        self.observer = NotificationCenter.default.addObserver(forName: NSNotification.Name(rawValue: Events.reload_decks), object: nil, queue: OperationQueue.main) { _ in
-            self.update()
+        for event in [Events.reload_decks, Events.game_stats_changed] {
+            observers.append(NotificationCenter.default.addObserver(forName: NSNotification.Name(rawValue: event), object: nil, queue: OperationQueue.main) { [weak self] _ in
+                self?.update()
+            })
         }
     }
     
     deinit {
-        if let observer = self.observer {
+        for observer in observers {
             NotificationCenter.default.removeObserver(observer)
         }
     }
@@ -105,10 +107,10 @@ class Statistics: NSWindowController {
                 + "statistics for the deck %@ ?", comment: ""), deck.name)
             NSAlert.show(style: .informational, message: msg, window: self.window!) {
                 RealmHelper.removeAllGameStats(from: deck)
-                
-                DispatchQueue.main.async {
-                    self.statsTab!.statsTable.reloadData()
-                }
+                // StatsTab, the deck manager and the Win/Loss Record all observe this;
+                // reloading the table alone showed the old rows.
+                NotificationCenter.default.post(name: Notification.Name(rawValue: Events.game_stats_changed),
+                                                object: nil)
             }
         }
     }

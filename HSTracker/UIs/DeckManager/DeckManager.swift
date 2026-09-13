@@ -119,6 +119,7 @@ class DeckManager: NSWindowController {
         if triggers.count == 0 {
             let events = [
                 Events.reload_decks: self.decksDidChange,
+                Events.game_stats_changed: self.decksDidChange,
                 Settings.theme_token: self.updateTheme
             ]
             for (event, trigger) in events {
@@ -543,18 +544,21 @@ class DeckManager: NSWindowController {
 
     private func deleteDeck(_ deck: Deck) {
         let message = String(format: String.localizedString("Are you sure you want to delete "
-            + "the deck %@ ?", comment: ""), deck.name)
+            + "the deck %@ ?", comment: ""), deck.name) + "\n" + deleteDeckStatsInfo()
         
         NSAlert.show(style: .informational, message: message, window: self.window!) {
             self._deleteDeck(deck)
             NotificationCenter.default.post(name: Notification.Name(rawValue: Events.reload_decks),
                                             object: deck)
+            NotificationCenter.default.post(name: Notification.Name(rawValue: Events.game_stats_changed),
+                                            object: nil)
         }
     }
 
     private func deleteDecks(_ decks: IndexSet) {
         let message = String(format: String.localizedString("Are you sure you want to delete "
                                                         + "the selected %d deck(s) ?", comment: ""), decks.count)
+            + "\n" + deleteDeckStatsInfo()
         
         NSAlert.show(style: .informational, message: message, window: self.window!) {
             var arr = [Deck]()
@@ -567,7 +571,17 @@ class DeckManager: NSWindowController {
             }
             NotificationCenter.default.post(name: Notification.Name(rawValue: Events.reload_decks),
                                             object: nil)
+            NotificationCenter.default.post(name: Notification.Name(rawValue: Events.game_stats_changed),
+                                            object: nil)
         }
+    }
+
+    /// Says what happens to the deleted games, like HDT's delete prompt does for
+    /// KeepStatsWhenDeletingDeck.
+    private func deleteDeckStatsInfo() -> String {
+        return String.localizedString(Settings.keepStatsWhenDeletingDeck
+                                      ? "Record_DeleteDeck_KeepStatsInfo" : "Record_DeleteDeck_DeleteStatsInfo",
+                                      comment: "")
     }
 
     @IBAction func archiveDeck(_ sender: AnyObject) {
