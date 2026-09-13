@@ -133,6 +133,29 @@ class InternalGameStats {
         self.sideboards = sideboards
     }
 
+    /// Game.syncStats uploads this object to HSReplay straight after the game,
+    /// while Game.recheckPostGameRank only corrects the recorded row seconds later.
+    /// When the post-game medal read may still be the pre-game position, leave the
+    /// "after" side out of the upload instead of reporting a won or lost game as no
+    /// rank change. Call it after toGameStats so the recorded game keeps the read.
+    func withholdStalePostGameRank() {
+        guard gameMode == .ranked, starLevel > 0 else {
+            return
+        }
+        let before = RankSnapshot(leagueId: leagueId, starLevel: starLevel,
+                                  stars: max(stars, 0), legendRank: max(legendRank, 0))
+        let after = starLevelAfter > 0
+            ? RankSnapshot(leagueId: leagueId, starLevel: starLevelAfter,
+                           stars: max(starsAfter, 0), legendRank: max(legendRankAfter, 0))
+            : nil
+        guard StatsHelper.postGameRankLooksStale(result: result, before: before, after: after) else {
+            return
+        }
+        starLevelAfter = 0
+        starsAfter = 0
+        legendRankAfter = 0
+    }
+
     func toGameStats() -> GameStats {
         let gameStats = GameStats()
         gameStats.statId = statId

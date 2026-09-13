@@ -168,6 +168,34 @@ class RecordStatsTests: HSTrackerTests {
         XCTAssertNil(rankedStats.rankAfter)
     }
 
+    func testUploadWithholdsAPostGameRankThatMayStillBeThePreGameOne() {
+        // A win read back at the pre-game position: record it, but do not upload it.
+        let stale = rankedInternalStats()
+        stale.starLevelAfter = 30
+        stale.starsAfter = 2
+        let recorded = stale.toGameStats()
+        stale.withholdStalePostGameRank()
+        XCTAssertEqual(recorded.starLevelAfter, 30)
+        XCTAssertEqual(stale.starLevelAfter, 0)
+        XCTAssertEqual(stale.starsAfter, 0)
+        XCTAssertEqual(stale.legendRankAfter, 0)
+
+        // A read that moved is uploaded as it is.
+        let moved = rankedInternalStats()
+        moved.withholdStalePostGameRank()
+        XCTAssertEqual(moved.starLevelAfter, 31)
+        XCTAssertEqual(moved.starsAfter, 0)
+
+        // A draw never moves, so the unchanged read is real.
+        let draw = rankedInternalStats()
+        draw.result = .draw
+        draw.starLevelAfter = 30
+        draw.starsAfter = 2
+        draw.withholdStalePostGameRank()
+        XCTAssertEqual(draw.starLevelAfter, 30)
+        XCTAssertEqual(draw.starsAfter, 2)
+    }
+
     func testRankFieldsRoundTrip() throws {
         let realm = try Realm()
         let deck = Deck()

@@ -2346,6 +2346,7 @@ class Game: NSObject, PowerEventHandler {
         }
         logger.verbose("End game: \(currentGameStats)")
         let stats = currentGameStats.toGameStats()
+        currentGameStats.withholdStalePostGameRank()
         invalidateMatchInfoCache()
         // reset the turn counter
         updateTurnCounter(turn: 1)
