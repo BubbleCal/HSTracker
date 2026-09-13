@@ -1753,6 +1753,47 @@ class SecretTests: HSTrackerTests {
         XCTAssertEqual(secret(secretRogue1)?.isExcluded(cardId: CardIds.Secrets.Rogue.Shenanigans), false)
     }
 
+    // MARK: - Secret helper panel
+
+    func testSecretPanel_UpdatesCountInPlaceAndMovesImpossibleRowDown() {
+        let panel = CardList(windowNibName: "CardList")
+        _ = panel.window
+        guard let table = panel.table else { return XCTFail("the secret panel has no table") }
+        func card(_ secret: MultiIdCard, _ count: Int) -> Card {
+            let card = Card(id: secret.ids[0])
+            card.count = count
+            return card
+        }
+        func rows() -> [CardBar] {
+            return (0..<panel.cardCount()).compactMap { panel.tableView(table, viewFor: nil, row: $0) as? CardBar }
+        }
+        let bear = CardIds.Secrets.Hunter.BearTrap, explosive = CardIds.Secrets.Hunter.ExplosiveTrap
+        let snake = CardIds.Secrets.Hunter.SnakeTrap, venomstrike = CardIds.Secrets.Hunter.VenomstrikeTrap
+
+        panel.set(cards: [card(bear, 1), card(explosive, 1), card(snake, 1)])
+        let before = rows()
+        XCTAssertEqual(before.map { $0.card?.id }, [bear.ids[0], explosive.ids[0], snake.ids[0]])
+
+        panel.set(cards: [card(bear, 1), card(snake, 1), card(explosive, 0)])
+        let after = rows()
+        XCTAssertEqual(after.map { $0.card?.id }, [bear.ids[0], snake.ids[0], explosive.ids[0]])
+        XCTAssertEqual(after.map { $0.card?.count }, [1, 1, 0])
+        XCTAssertTrue(after[2] === before[1], "the row was rebuilt instead of updated")
+        XCTAssertEqual(table.numberOfRows, 3)
+
+        // Removal, insertion and a move in one update
+        panel.set(cards: [card(venomstrike, 1), card(snake, 2), card(explosive, 0), card(bear, 0)])
+        let last = rows()
+        XCTAssertEqual(last.map { $0.card?.id }, [venomstrike.ids[0], snake.ids[0], explosive.ids[0], bear.ids[0]])
+        XCTAssertEqual(last.map { $0.card?.count }, [1, 2, 0, 0])
+        XCTAssertTrue(last[3] === before[0])
+        XCTAssertEqual(table.numberOfRows, 4)
+
+        panel.set(cards: [])
+        XCTAssertEqual(panel.cardCount(), 0)
+        XCTAssertEqual(table.numberOfRows, 0)
+    }
+
     func setPlayerAsCurrentPlayer() {
         heroPlayer[.current_player] = 1
     }

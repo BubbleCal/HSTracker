@@ -56,43 +56,64 @@ class CardList: OverWindowController {
         }
     }
 
+    // Brings the rows in line with `cards`, keeping the bars that stay listed: remove, update in
+    // place, reorder, insert. The secret helper keeps impossible candidates as count 0 rows and
+    // moves them below the possible ones, so a row can change its count and its position without
+    // leaving the list (the in-place half of AnimatedCardList.update).
     fileprivate func internalSet(cards: [Card]) {
         lock.around {
-            var newCards = [Card]()
-            cards.forEach({ (card: Card) in
-                let existing = animatedCards.first { bar in
-                    guard let barCard = bar.card else { return false }
-                    return areEqualForList(barCard, card)
-                }
-                if existing == nil {
-                    newCards.append(card)
-                }
-            })
-
-            var toRemove: [Int] = []
-            animatedCards.forEach({ (c: CardBar) in
+            var toRemove = IndexSet()
+            for (index, bar) in animatedCards.enumerated() {
                 // A bar with no card is stale by definition, so it goes too -
                 // this used to force-unwrap and take the app down with it.
-                let stillListed = c.card.map { barCard in cards.any({ areEqualForList($0, barCard) }) } ?? false
+                let stillListed = bar.card.map { barCard in cards.any({ areEqualForList($0, barCard) }) } ?? false
                 if !stillListed {
-                    if let index = animatedCards.firstIndex(of: c), index < table?.numberOfRows ?? 0 {
-                        toRemove.append(index)
-                    }
+                    toRemove.insert(index)
                 }
-            })
+            }
 
+            // NSTableView applies each call of the batch to the result of the previous one, so
+            // every index below is relative to the rows as they are at that point.
             table?.beginUpdates()
-            var indexSet = IndexSet(toRemove)
-            table?.removeRows(at: indexSet, withAnimation: [.effectFade, .slideRight])
-            for index in indexSet.reversed() {
+            table?.removeRows(at: toRemove, withAnimation: [.effectFade, .slideRight])
+            for index in toRemove.reversed() {
                 animatedCards.remove(at: index)
             }
-            indexSet.removeAll()
-            newCards.forEach({
-                guard let index = cards.firstIndex(of: $0) else { return }
+
+            for bar in animatedCards {
+                guard let barCard = bar.card, let newCard = cards.first(where: { areEqualForList($0, barCard) }) else { continue }
+                guard barCard.count != newCard.count || barCard.isCreated != newCard.isCreated
+                        || barCard.jousted != newCard.jousted else { continue }
+                // A fresh Card, not a mutation of the old one: CardBar.draw() skips the redraw
+                // while the card equals the one it replaced, and that comparison needs both.
+                bar.card = newCard
+                bar.needsDisplay = true
+                if bar.isHovered {
+                    // Deferred for the same reason CardBar defers its own re-hover: the handler
+                    // must not run inside this lock and table update. A row that just became
+                    // impossible gets its reason under the popup without the cursor moving.
+                    DispatchQueue.main.async { [weak self, weak bar] in
+                        guard let self, let bar, bar.isHovered, let current = bar.card else { return }
+                        self.hover(cell: bar, card: current)
+                    }
+                }
+            }
+
+            let listed = cards.compactMap { card in
+                animatedCards.first { bar in bar.card.map { areEqualForList($0, card) } ?? false }
+            }
+            for (target, bar) in listed.enumerated() {
+                guard let from = animatedCards.firstIndex(of: bar), from != target else { continue }
+                table?.moveRow(at: from, to: target)
+                animatedCards.remove(at: from)
+                animatedCards.insert(bar, at: target)
+            }
+
+            for (index, card) in cards.enumerated() {
+                guard !animatedCards.contains(where: { bar in bar.card.map { areEqualForList($0, card) } ?? false }) else { continue }
                 let newCard = CardBar.factory()
                 newCard.setDelegate(self)
-                newCard.card = $0
+                newCard.card = card
                 newCard.playerType = .secrets
                 // Clamped for both: telling the table about a row the array
                 // does not have leaves NSTableView's own count disagreeing with
@@ -100,9 +121,8 @@ class CardList: OverWindowController {
                 // endUpdates().
                 let insertAt = min(index, animatedCards.count)
                 animatedCards.insert(newCard, at: insertAt)
-                indexSet.insert(insertAt)
-            })
-            table?.insertRows(at: indexSet, withAnimation: .slideLeft)
+                table?.insertRows(at: IndexSet(integer: insertAt), withAnimation: .slideLeft)
+            }
         }
         // Deliberately outside the critical section: endUpdates() is where the
         // table actually applies the batch and asks back for its rows.
@@ -206,14 +226,21 @@ extension CardList: CardCellHover {
         }
 
         let frame = [x, y - hoverFrame.height / 2.0, hoverFrame.width, hoverFrame.height]
+        var userInfo: [String: Any] = [
+            "card": card,
+            "frame": frame,
+            "useFrame": true
+        ]
+        // A dimmed secret row says why it was ruled out, under the card image. Overlay panels are
+        // click-through or non-key, so an NSView tooltip would never show.
+        if isSecretPanel && card.count <= 0,
+           let summary = AppDelegate.instance().coreManager?.game.secretsManager?.exclusionSummary(cardId: card.id) {
+            userInfo["subtitle"] = summary
+        }
         NotificationCenter.default
             .post(name: Notification.Name(rawValue: Events.show_floating_card),
                                   object: nil,
-                                  userInfo: [
-                                    "card": card,
-                                    "frame": frame,
-                                    "useFrame": true
-                ])
+                                  userInfo: userInfo)
     }
 
     func out(card: Card) {

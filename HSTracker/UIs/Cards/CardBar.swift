@@ -34,7 +34,7 @@ class CardBar: NSView, CardBarTheme {
     /// Whether the cursor is currently inside this bar, as far as AppKit's
     /// tracking area has told us. Used to tell a real hover apart from the cases
     /// where the bar changes out from under a stationary cursor.
-    private var isHovered = false
+    private(set) var isHovered = false
 
     private var flashLayer: CALayer?
     private var cardLayer: CALayer?

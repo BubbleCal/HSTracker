@@ -285,7 +285,7 @@ class WindowManager {
                 self.closeRequestTimer = nil
             }
             
-            floatingCard.set(card: card)
+            floatingCard.set(card: card, subtitle: notification.userInfo?["subtitle"] as? String)
             
             if let fWindow = floatingCard.window {
                 if !useFrame {
@@ -305,7 +305,10 @@ class WindowManager {
                 fWindow.ignoresMouseEvents = true
                 
                 if useFrame {
-                    fWindow.setFrame(NSRect(x: arrayFrame[0], y: arrayFrame[1], width: arrayFrame[2], height: arrayFrame[3]), display: true)
+                    // The caller's frame fits the image alone; a subtitle hangs below it
+                    let extra = floatingCard.subtitleHeight(width: arrayFrame[2])
+                    fWindow.setFrame(NSRect(x: arrayFrame[0], y: arrayFrame[1] - extra, width: arrayFrame[2], height: arrayFrame[3] + extra), display: true)
+                    floatingCard.updateSubtitleLayout()
                 }
 
                 fWindow.orderFront(nil)
