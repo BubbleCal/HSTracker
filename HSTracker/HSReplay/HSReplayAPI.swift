@@ -138,29 +138,49 @@ class HSReplayAPI {
             case .success(let response):
                 completion(.success(response))
             case .failure(let error):
-                switch error {
-                case .tokenExpired:
-                    if let onTokenRenewal {
-                        oauthswift.renewAccessToken(withRefreshToken: HSReplayAPI.oauthswift.client.credential
-                            .oauthRefreshToken, completionHandler: { result in
-                                switch result {
-                                case .success(let (credential, _, _)):
-                                    onTokenRenewal(.success(credential))
-                                    startAuthorizedRequest(url, method: method, parameters: parameters, headers: headers, body: body, onTokenRenewal: nil, completionHandler: completion)
-                                case .failure(let error):
-                                    completion(.failure(.tokenExpired(error: error)))
-                                }
-                            })
+                switch failedRequestDisposition(error, hasRenewalHandler: onTokenRenewal != nil) {
+                case .renewAndRetry:
+                    oauthswift.renewAccessToken(withRefreshToken: HSReplayAPI.oauthswift.client.credential
+                        .oauthRefreshToken, completionHandler: { result in
+                            switch result {
+                            case .success(let (credential, _, _)):
+                                onTokenRenewal?(.success(credential))
+                                startAuthorizedRequest(url, method: method, parameters: parameters, headers: headers, body: body, onTokenRenewal: nil, completionHandler: completion)
+                            case .failure(let error):
+                                completion(.failure(.tokenExpired(error: error)))
+                            }
+                        })
+                case .fail(let failure):
+                    if case .tokenExpired = error {
+                        logger.error("HSReplay: token expired with no renewal handler for \(url)")
                     }
-                case .requestError:
-                    completion(.failure(error))
-                default:
-                    completion(.failure(.tokenExpired(error: nil)))
+                    completion(.failure(failure))
                 }
             }
         }
     }
     
+    enum FailedRequestDisposition {
+        case renewAndRetry
+        case fail(OAuthSwiftError)
+    }
+
+    // A .tokenExpired failure with no renewal handler used to fall through
+    // without calling the completion at all, so every async wrapper built on
+    // withCheckedContinuation (trial status, trial activation, the mulligan
+    // guide requests) would wait forever and freeze the mulligan handling.
+    // Every failure now either renews or completes.
+    static func failedRequestDisposition(_ error: OAuthSwiftError, hasRenewalHandler: Bool) -> FailedRequestDisposition {
+        switch error {
+        case .tokenExpired:
+            return hasRenewalHandler ? .renewAndRetry : .fail(error)
+        case .requestError:
+            return .fail(error)
+        default:
+            return .fail(.tokenExpired(error: nil))
+        }
+    }
+
     static func getUploadToken(handle: @escaping (String) -> Void) {
         if let token = Settings.hsReplayUploadToken {
             handle(token)
@@ -731,6 +751,12 @@ class HSReplayAPI {
             startAuthorizedRequest("\(HSReplay.playerTrial)\(name)/?account_hi=\(hi)&account_lo=\(lo)", method: .GET, parameters: [:], completionHandler: { result in
                 switch result {
                 case .success(let response):
+                    // Logged like activatePlayerTrial's response: the success
+                    // path was the one silent step between "guide requested"
+                    // and "guide skipped for want of trials".
+                    if let str = String(data: response.data, encoding: .utf8) {
+                        logger.debug("Trial status response for \(name): \(str)")
+                    }
                     let res: PlayerTrialStatus? = parseResponse(data: response.data, defaultValue: nil)
                     continuation.resume(returning: res)
                     return
@@ -798,6 +824,44 @@ class HSReplayAPI {
         }
     }
     
+    // Trial-token variant for the V1 guide, HDT's
+    // ApiWrapper.GetConstructedMulliganGuide(token, parameters): the same
+    // request made without the OAuth session, carrying the trial token.
+    @available(macOS 10.15.0, *)
+    static func getMulliganGuideData(token: String?, parameters: MulliganGuideParams) async -> MulliganGuideData? {
+        guard let token else {
+            return nil
+        }
+        return await withCheckedContinuation { continuation in
+            var body: Data?
+            do {
+                body = try JSONEncoder().encode(parameters)
+                if let body {
+                    logger.debug("Sending mulligan guide data request (trial): \(String(data: body, encoding: .utf8) ?? "ERROR")")
+                }
+            } catch {
+                logger.error(error)
+            }
+            guard let body else {
+                continuation.resume(returning: nil)
+                return
+            }
+            let http = Http(url: "\(HSReplay.constructedMulliganGuide)")
+            _ = http.uploadPromise(method: .post, headers: ["Content-Type": "application/json", "X-Trial-Token": token], data: body).done { response in
+                guard let data = response as? Data else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+                logger.debug("Response data (trial): \(String(data: data, encoding: .utf8) ?? "FAILED")")
+                let result: MulliganGuideData? = parseResponse(data: data, defaultValue: nil)
+                continuation.resume(returning: result)
+            }.catch { error in
+                logger.error(error)
+                continuation.resume(returning: nil)
+            }
+        }
+    }
+
     @available(macOS 10.15.0, *)
     static func getConstructedMulliganV2(parameters: MulliganV2Params) async -> MulliganV2Data? {
         return await withCheckedContinuation { continuation in

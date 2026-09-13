@@ -26,6 +26,7 @@ class ConstructedMulliganGuideV2ViewModel: ObservableObject {
     // (see ConstructedMulliganV2SingleCardHeaderViewModel.updateCard).
     func setMulliganData(_ data: MulliganV2Data?, isFirst: Bool) {
         guard let data else {
+            logger.debug("MulliganGuideV2: setMulliganData without data")
             cardStats = []
             statsVisibility = false
             return
@@ -33,6 +34,7 @@ class ConstructedMulliganGuideV2ViewModel: ObservableObject {
 
         let deckStatus = data.data.general_info.deck_status
         guard deckStatus == .supported || deckStatus == .partial else {
+            logger.info("MulliganGuideV2: deck_status=\(deckStatus), showing not available")
             error = String.localizedString("MulliganGV2_Error_NotAvailable", comment: "")
             cardStats = []
             statsVisibility = false
@@ -49,6 +51,21 @@ class ConstructedMulliganGuideV2ViewModel: ObservableObject {
         error = nil
         cardStats = built
         statsVisibility = true
+        logger.debug("MulliganGuideV2: setMulliganData deck_status=\(deckStatus) cards=\(built.count)")
+    }
+
+    // Shown over the mulligan cards in place of the stats when a player
+    // without Premium has no free trial left. HDT leaves the overlay empty,
+    // which is indistinguishable from the tracker not working.
+    func showTrialsExhausted(timeRemaining: String?) {
+        var text = String.localizedString("MulliganGV2_Error_TrialsExhausted", comment: "")
+        if let timeRemaining {
+            text += "\n" + String(format: String.localizedString("MulliganGV2_Error_TrialsResetIn", comment: ""), timeRemaining)
+        }
+        logger.info("MulliganGuideV2: showing trials exhausted (resets in \(timeRemaining ?? "unknown"))")
+        cardStats = []
+        statsVisibility = false
+        error = text
     }
 
     func updateMulliganDataAfterMulligan(_ data: MulliganV2Data?) {

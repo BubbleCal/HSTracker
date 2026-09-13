@@ -20687,6 +20687,52 @@
         }
       }
     },
+    "MulliganGV2_Error_TrialsExhausted" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Free Mulligan Guide trials used up for this week. HSReplay.net Premium gives unlimited access."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本周的留牌指南免费试用次数已用完。HSReplay.net 高级版可无限使用。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本週的留牌指南免費試用次數已用完。HSReplay.net 進階版可無限使用。"
+          }
+        }
+      }
+    },
+    "MulliganGV2_Error_TrialsResetIn" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Free trials reset in %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "免费次数将在 %@ 后重置"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "免費次數將在 %@ 後重置"
+          }
+        }
+      }
+    },
     "MulliganGV2_IconTooltip_KeptLess" : {
       "extractionState" : "manual",
       "localizations" : {

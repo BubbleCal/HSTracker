@@ -95,9 +95,16 @@ class Game: NSObject, PowerEventHandler {
     var _mulliganGuideParams: MulliganGuideParams?
     var _mulliganV2Params: MulliganV2Params?
 
-    // Mulligan G-V2 (HDT) is Standard Ranked/Friendly only.
+    // Mulligan G-V2 (HDT GameV2.IsMulliganGV2Match) is Standard Ranked/Friendly
+    // only. The format check had been left out, so Wild and Twist games took
+    // the V2 path too - spending a V2 trial on a Wild game type instead of
+    // getting HDT's V1 guide.
     var isV2Mulligan: Bool {
-        (currentGameType == .gt_ranked || currentGameType == .gt_vs_friend)
+        Game.isV2MulliganMatch(gameType: currentGameType, formatType: currentFormatType)
+    }
+
+    static func isV2MulliganMatch(gameType: GameType, formatType: FormatType) -> Bool {
+        (gameType == .gt_ranked || gameType == .gt_vs_friend) && formatType == .ft_standard
     }
 
     private var mulliganLivePollingActive = false
@@ -2419,6 +2426,14 @@ class Game: NSObject, PowerEventHandler {
                 DispatchQueue.main.async {
                     self.windowManager.rootOverlay?.viewModel.mulliganGuideV2.reset()
                 }
+                // HDT GameEventHandler.HandleGameEnd clears the trial status once a
+                // constructed or arena match is over. Without it the count read
+                // before the match (which activateOrContinue never decrements)
+                // was all the lobby had, so the "trials exhausted" alert checked
+                // a stale 1 and never showed.
+                if isConstructedMatch() || isArenaMatch {
+                    MulliganGuideTrial.clear()
+                }
             }
             opponent.isPlayingWhizbang = false
             Player.knownOpponentDeck = nil
@@ -4024,11 +4039,14 @@ class Game: NSObject, PowerEventHandler {
                 }
             }
         } else if isConstructedMatch() || isFriendlyMatch || isArenaMatch {
+            logger.info("Mulligan: BEGIN_MULLIGAN gameType=\(currentGameType) format=\(currentFormatType) spectator=\(spectator) v2=\(isV2Mulligan)")
             if #available(macOS 10.15, *) {
                 Task.detached {
                     await self.handleHearthstoneMulliganPhase()
                 }
             }
+        } else {
+            logger.info("Mulligan: BEGIN_MULLIGAN ignored for gameType=\(currentGameType)")
         }
     }
     
@@ -4051,10 +4069,24 @@ class Game: NSObject, PowerEventHandler {
             if isV2Mulligan {
                 if Settings.enableMulliganGV2 {
                     let numSwappedCards = self.getMulliganSwappedCards()?.count ?? 0
+                    let guideV2 = windowManager.rootOverlay?.viewModel.mulliganGuideV2
+                    // The reason shown in place of the stats only helps while
+                    // the player is choosing.
+                    guideV2?.error = nil
 
-                    let mulliganV2Data = await getMulliganV2Data(isMulliganDone: true)
-                    DispatchQueue.main.async {
-                        self.windowManager.rootOverlay?.viewModel.mulliganGuideV2.updateMulliganDataAfterMulligan(mulliganV2Data)
+                    // HDT GameEventHandler.HandlePlayerMulliganDone asks again
+                    // only when cards were swapped, and with the kept hand as
+                    // the offered cards. Asking regardless meant a match whose
+                    // first request had come back empty could activate a trial
+                    // here, after the mulligan, where nothing can be shown.
+                    if numSwappedCards > 0, let guideV2, !guideV2.cardStats.isEmpty {
+                        _mulliganV2Params?.offered_cards = openingHand.map { x in x.card.deckbuildingCard.dbfId }
+                        let result = await getMulliganV2Data(isMulliganDone: true)
+                        DispatchQueue.main.async {
+                            guideV2.updateMulliganDataAfterMulligan(result.data)
+                        }
+                    } else {
+                        logger.debug("MulliganV2: no post-mulligan request (swapped=\(numSwappedCards), stats shown=\(!(guideV2?.cardStats.isEmpty ?? true)))")
                     }
 
                     // Delay until the cards fly away
@@ -4639,35 +4671,51 @@ class Game: NSObject, PowerEventHandler {
             }
 
             var showToast = Settings.showMulliganToast && !isArenaMatch
-            if showToast || Settings.enableMulliganGuide || (isV2Mulligan && Settings.enableMulliganGV2) {
+            let isV2 = isV2Mulligan
+            logger.info("Mulligan: branch=\(isV2 ? "V2" : "V1") deck=\(currentDeck?.name ?? "nil") shortid=\(currentDeck?.shortid.prefix(24) ?? "nil") offered=\(dbfIds) showToast=\(showToast) enableGuide=\(Settings.enableMulliganGuide) enableGV2=\(Settings.enableMulliganGV2)")
+            // HDT only looks at the setting of the guide this match would use.
+            if showToast || (isV2 && Settings.enableMulliganGV2) || (!isV2 && Settings.enableMulliganGuide) {
                 if let currentDeck = currentDeck {
                     // Show Mulligan Guide Elements (Overlay and/or Toast)
                     let shortId = currentDeck.shortid
                     if !shortId.isEmpty {
-                        if isV2Mulligan {
-                            var mulliganV2Data: MulliganV2Data?
+                        if isV2 {
+                            // No toast on this branch: HDT's V2 guide replaces it.
+                            var result = MulliganGuideResult<MulliganV2Data>(unavailable: .disabledBySetting)
                             if Settings.enableMulliganGV2 {
-                                mulliganV2Data = await getMulliganV2Data()
+                                result = await getMulliganV2Data()
                             }
 
                             await waitForMulliganStart()
 
                             let opponentClass = opponent.playerEntities.first { x in x.isHero && x.isInPlay }?.card.playerClass ?? CardClass.invalid
                             let isFirst = playerEntity?[.first_player] == 1
+                            // HDT draws nothing when there is no data. When the
+                            // reason is a used-up weekly allowance, say so over
+                            // the cards instead: an empty overlay looks exactly
+                            // like a tracker that stopped working.
+                            let trialsExhausted = result.data == nil && (result.unavailable?.isTrialsExhausted ?? false)
+                            let timeRemaining = MulliganGuideTrial.timeRemaining
 
                             DispatchQueue.main.async {
-                                self.windowManager.rootOverlay?.viewModel.mulliganGuideV2.scopeMessage(opponentClass: opponentClass, isFirst: isFirst)
-                                self.windowManager.rootOverlay?.viewModel.mulliganGuideV2.setMulliganData(mulliganV2Data, isFirst: isFirst)
+                                let guideV2 = self.windowManager.rootOverlay?.viewModel.mulliganGuideV2
+                                guideV2?.scopeMessage(opponentClass: opponentClass, isFirst: isFirst)
+                                guideV2?.setMulliganData(result.data, isFirst: isFirst)
+                                if trialsExhausted {
+                                    guideV2?.showTrialsExhausted(timeRemaining: timeRemaining)
+                                }
                             }
-                            startMulliganLivePolling()
+                            if result.data != nil {
+                                startMulliganLivePolling()
+                            }
                         } else {
-                            var mulliganGuideData: MulliganGuideData?
+                            var result = MulliganGuideResult<MulliganGuideData>(unavailable: .disabledBySetting)
 
                             if Settings.enableMulliganGuide {
-                                mulliganGuideData = await getMulliganGuideData()
+                                result = await getMulliganGuideData()
                             }
 
-                            if let data = mulliganGuideData {
+                            if let data = result.data {
                                 // Show mulligan guide with parameters as selected by the API
                                 if showToast {
                                     showMulliganToast(shortId, dbfIds, data.toast?.parameters, true)
@@ -4695,29 +4743,28 @@ class Game: NSObject, PowerEventHandler {
                                 }
                                 // Something went wrong generating the card stats, continue to locally generated toast (if enabled)
                             }
-                        }
 
-                        if showToast {
-                            var parameters: [String: String]?
-                            if !shortId.isEmpty {
+                            if showToast {
                                 let opponentClass = opponent.playerEntities.first { x in x.isHero && x.isInPlay }?.card.playerClass ?? CardClass.invalid
                                 let isFirst = playerEntity?[.first_player] == 1
                                 // Show mulligan toast with locally sourced parameters
-                                parameters = [
+                                var parameters: [String: String] = [
                                     "opponentClasses": opponentClass.rawValue.uppercased(),
                                     "playerInitiative": isFirst ? "FIRST" : "COIN"
                                 ]
-                                
+
                                 let playerStarLevel = playerMedalInfo?.starLevel ?? 0
                                 if playerStarLevel > 0 {
-                                    parameters?["mulliganPlayerStarLevel"] = String(playerStarLevel)
+                                    parameters["mulliganPlayerStarLevel"] = String(playerStarLevel)
                                 }
                                 // Let the website do it's thing and fallback for non-Premium users
-                                parameters?["mulliganAutoFilter"] = "yes"
+                                parameters["mulliganAutoFilter"] = "yes"
+                                showMulliganToast(shortId, dbfIds, parameters)
                             }
-                            showMulliganToast(shortId, dbfIds, parameters)
                         }
                     }
+                } else {
+                    logger.info("Mulligan: no active deck, nothing to look up")
                 }
             }
             break
@@ -4764,29 +4811,88 @@ class Game: NSObject, PowerEventHandler {
         let starLevel = playerMedalInfo?.starLevel ?? 0
         let starsPerWin = playerMedalInfo?.starsPerWin ?? 0
 
-        _mulliganGuideParams = MulliganGuideParams(deckstring: activeDeck.shortid, game_type: BnetGameType.getBnetGameType(gameType: currentGameType, format: currentFormat).rawValue, format_type: currentFormatType.rawValue, opponent_class: opponentClass.rawValue.uppercased(), player_initiative: playerEntity?[.first_player] == 1 ? "FIRST" : "COIN", player_star_level: starLevel > 0 ? starLevel : nil, player_star_multiplier: starsPerWin > 0 ? starsPerWin : nil, player_region: Region.toBnetRegion(region: currentRegion))
+        _mulliganGuideParams = MulliganGuideParams(deckstring: activeDeck.shortid, game_type: BnetGameType.getBnetGameType(gameType: currentGameType, format: Format(formatType: currentFormatType)).rawValue, format_type: currentFormatType.rawValue, opponent_class: opponentClass.rawValue.uppercased(), player_initiative: playerEntity?[.first_player] == 1 ? "FIRST" : "COIN", player_star_level: starLevel > 0 ? starLevel : nil, player_star_multiplier: starsPerWin > 0 ? starsPerWin : nil, player_region: Region.toBnetRegion(region: currentRegion))
     }
     
     @available(macOS 10.15.0, *)
-    func getMulliganGuideData() async -> MulliganGuideData? {
-        if spectator {
-            return nil
+    func getMulliganGuideData() async -> MulliganGuideResult<MulliganGuideData> {
+        let result = await fetchMulliganGuideData()
+        if let reason = result.unavailable {
+            logger.info("MulliganV1: no data - \(reason)")
         }
-        //            if(Remote.Config.Data?.MulliganGuide?.Disabled ?? false)
-        //{
-        // return nil
-        //}
+        return result
+    }
+
+    // HDT GameEventHandler.GetMulliganGuideData. The port had the remote kill
+    // switch commented out and no trial support ("No trial support yet"), so a
+    // player without Premium never got a guide in Wild, Twist or Casual.
+    @available(macOS 10.15.0, *) @MainActor
+    private func fetchMulliganGuideData() async -> MulliganGuideResult<MulliganGuideData> {
+        if spectator {
+            return MulliganGuideResult(unavailable: .spectator)
+        }
+        guard Settings.enableMulliganGuide else {
+            return MulliganGuideResult(unavailable: .disabledBySetting)
+        }
+        guard !(RemoteConfig.data?.mulligan_guide?.disabled ?? false) else {
+            return MulliganGuideResult(unavailable: .disabledRemotely)
+        }
         let userOwnsPremium = HSReplayAPI.accountData?.is_premium ?? false
-        if !userOwnsPremium {
-            // No trial support yet
-            return nil
+        if let reason = await mulliganGuidePremiumOrTrialGate(isPremium: userOwnsPremium) {
+            return MulliganGuideResult(unavailable: reason)
         }
         // Assemble request
         guard let parameters = getMulliganGuideParams() else {
-            return nil
+            return MulliganGuideResult(unavailable: .noParams)
         }
-        
-        return await HSReplayAPI.getMulliganGuideData(parameters: parameters)
+
+        var token: String?
+        if !userOwnsPremium {
+            let deckCards = currentDeck?.cards.flatMap { card in Array(repeating: card.dbfId, count: max(card.count, 1)) } ?? []
+            let trial = await activateMulliganGuideTrial(gameType: parameters.game_type, deckstring: parameters.deckstring, deckCards: deckCards, starLevel: parameters.player_star_level, isMulliganDone: false)
+            if let reason = trial.unavailable {
+                return MulliganGuideResult(unavailable: reason)
+            }
+            token = trial.data
+        }
+
+        let data = token != nil
+            ? await HSReplayAPI.getMulliganGuideData(token: token, parameters: parameters)
+            : await HSReplayAPI.getMulliganGuideData(parameters: parameters)
+        guard let data else {
+            return MulliganGuideResult(unavailable: .requestFailed)
+        }
+        return MulliganGuideResult(data: data)
+    }
+
+    // The part of HDT's premium-or-trials check both guide versions share.
+    @available(macOS 10.15.0, *) @MainActor
+    private func mulliganGuidePremiumOrTrialGate(isPremium: Bool) async -> MulliganGuideUnavailableReason? {
+        let acc = isPremium ? nil : MirrorHelper.getAccountId()
+        return await MulliganGuideTrial.shared.premiumOrTrialGate(isPremium: isPremium, signedIn: HSReplayAPI.isFullyAuthenticated, hi: acc?.hi.int64Value, lo: acc?.lo.int64Value)
+    }
+
+    // HDT spends a trial only on a deck the pre-lobby status check found
+    // coverage for (IsDeckAvailableForMulliganGuide), then ActivateOrContinue.
+    @available(macOS 10.15.0, *) @MainActor
+    private func activateMulliganGuideTrial(gameType: Int, deckstring: String, deckCards: [Int], starLevel: Int?, isMulliganDone: Bool) async -> MulliganGuideResult<String> {
+        guard let bnetGameType = BnetGameType(rawValue: gameType) else {
+            return MulliganGuideResult(unavailable: .deckNotAvailable(gameType: gameType, state: "unknown game type"))
+        }
+        let preLobby = windowManager.constructedMulliganGuidePreLobby.viewModel
+        let state = await preLobby.deckStatusForMulliganGuide(gameType: bnetGameType, deckstring: deckstring, dbfIds: deckCards, starLevel: starLevel)
+        guard ConstructedMulliganGuidePreLobbyViewModel.isAvailableForMulliganGuide(state) else {
+            return MulliganGuideResult(unavailable: .deckNotAvailable(gameType: gameType, state: state.map { "\($0)" } ?? "nil"))
+        }
+        guard let acc = MirrorHelper.getAccountId() else {
+            return MulliganGuideResult(unavailable: .noAccountId)
+        }
+        let isPastMulligan = isMulliganDone || (gameEntity?[.step] ?? 0) > Step.begin_mulligan.rawValue
+        let activation = await MulliganGuideTrial.activateOrContinue(hi: acc.hi.int64Value, lo: acc.lo.int64Value, gameHandle: serverInfo?.gameHandle as? Int, isPastMulligan: isPastMulligan)
+        guard let token = activation.token else {
+            return MulliganGuideResult(unavailable: .trialNotActivated(activation))
+        }
+        return MulliganGuideResult(data: token)
     }
 
     func cacheMulliganV2Params(offeredDbfIds: [Int]) {
@@ -4803,7 +4909,11 @@ class Game: NSObject, PowerEventHandler {
         let starLevel = playerMedalInfo?.starLevel ?? 0
         let starsPerWin = playerMedalInfo?.starsPerWin ?? 0
 
-        _mulliganV2Params = MulliganV2Params(deckstring: activeDeck.shortid, player_class: activeDeck.playerClass.rawValue.uppercased(), deck_cards: deckCards, opponent_class: opponentClass.rawValue.uppercased(), player_initiative: playerEntity?[.first_player] == 1 ? "FIRST" : "COIN", player_region: Region.toBnetRegion(region: currentRegion), player_star_level: starLevel > 0 ? starLevel : nil, player_star_multiplier: starsPerWin > 0 ? starsPerWin : nil, game_type: BnetGameType.getBnetGameType(gameType: currentGameType, format: currentFormat).rawValue, format_type: currentFormatType.rawValue, offered_cards: offeredDbfIds, mulligan_state: Mulligan.input.rawValue)
+        _mulliganV2Params = MulliganV2Params(deckstring: activeDeck.shortid, player_class: activeDeck.playerClass.rawValue.uppercased(), deck_cards: deckCards, opponent_class: opponentClass.rawValue.uppercased(), player_initiative: playerEntity?[.first_player] == 1 ? "FIRST" : "COIN", player_region: Region.toBnetRegion(region: currentRegion), player_star_level: starLevel > 0 ? starLevel : nil, player_star_multiplier: starsPerWin > 0 ? starsPerWin : nil, game_type: BnetGameType.getBnetGameType(gameType: currentGameType, format: Format(formatType: currentFormatType)).rawValue, format_type: currentFormatType.rawValue, offered_cards: offeredDbfIds, mulligan_state: Mulligan.input.rawValue)
+        if let params = _mulliganV2Params {
+            // HDT CacheMulliganV2Params logs the same line.
+            logger.info("--- Caching Mulligan V2 Params --- game_type=\(params.game_type) format_type=\(params.format_type) star_level=\(params.player_star_level.map(String.init) ?? "nil") region=\(params.player_region ?? "nil") player_class=\(params.player_class) opponent_class=\(params.opponent_class) initiative=\(params.player_initiative) deckstring=\(params.deckstring) offered=\(params.offered_cards ?? [])")
+        }
     }
 
     func getMulliganV2Params() -> MulliganV2Params? {
@@ -4811,49 +4921,55 @@ class Game: NSObject, PowerEventHandler {
     }
 
     @available(macOS 10.15.0, *)
-    func getMulliganV2Data(isMulliganDone: Bool = false) async -> MulliganV2Data? {
+    func getMulliganV2Data(isMulliganDone: Bool = false) async -> MulliganGuideResult<MulliganV2Data> {
+        let result = await fetchMulliganV2Data(isMulliganDone: isMulliganDone)
+        if let reason = result.unavailable {
+            logger.info("MulliganV2: no data\(isMulliganDone ? " after mulligan" : "") - \(reason)")
+        }
+        return result
+    }
+
+    // Matches HDT's GameEventHandler.GetMulliganV2Data(): non-premium
+    // players spend a trial (reusing one already activated for this
+    // same match, via MulliganGuideTrial.activateOrContinue) instead of
+    // using the OAuth session, and only for a deck the pre-lobby status
+    // check already confirmed has coverage worth spending a trial on.
+    @available(macOS 10.15.0, *) @MainActor
+    private func fetchMulliganV2Data(isMulliganDone: Bool) async -> MulliganGuideResult<MulliganV2Data> {
         if spectator {
-            return nil
+            return MulliganGuideResult(unavailable: .spectator)
         }
         guard Settings.enableMulliganGV2 else {
-            return nil
+            return MulliganGuideResult(unavailable: .disabledBySetting)
         }
         guard !(RemoteConfig.data?.mulligan_guide?.disabled ?? false) else {
-            return nil
+            return MulliganGuideResult(unavailable: .disabledRemotely)
         }
         let userOwnsPremium = HSReplayAPI.accountData?.is_premium ?? false
-        if !userOwnsPremium && (MulliganGuideTrial.remainingTrials ?? 0) == 0 {
-            return nil
+        if let reason = await mulliganGuidePremiumOrTrialGate(isPremium: userOwnsPremium) {
+            return MulliganGuideResult(unavailable: reason)
         }
         guard let parameters = getMulliganV2Params() else {
-            return nil
+            return MulliganGuideResult(unavailable: .noParams)
         }
         parameters.mulligan_state = isMulliganDone ? Mulligan.done.rawValue : Mulligan.input.rawValue
 
-        // Matches HDT's GameEventHandler.GetMulliganV2Data(): non-premium
-        // players spend a trial (reusing one already activated for this
-        // same match, via MulliganGuideTrial.activateOrContinue) instead of
-        // using the OAuth session, and only for a deck the pre-lobby status
-        // check already confirmed has coverage worth spending a trial on.
         var token: String?
         if !userOwnsPremium {
-            guard let gameType = BnetGameType(rawValue: parameters.game_type),
-                  windowManager.constructedMulliganGuidePreLobby.viewModel.isDeckAvailableForMulliganGuide(gameType: gameType, deckstring: parameters.deckstring) else {
-                return nil
+            let trial = await activateMulliganGuideTrial(gameType: parameters.game_type, deckstring: parameters.deckstring, deckCards: parameters.deck_cards, starLevel: parameters.player_star_level, isMulliganDone: isMulliganDone)
+            if let reason = trial.unavailable {
+                return MulliganGuideResult(unavailable: reason)
             }
-            guard let acc = MirrorHelper.getAccountId() else {
-                return nil
-            }
-            token = await MulliganGuideTrial.activateOrContinue(hi: acc.hi.int64Value, lo: acc.lo.int64Value, gameHandle: serverInfo?.gameHandle as? Int)
-            guard token != nil else {
-                return nil
-            }
+            token = trial.data
         }
 
-        if let token {
-            return await HSReplayAPI.getConstructedMulliganV2(token: token, parameters: parameters)
+        let data = token != nil
+            ? await HSReplayAPI.getConstructedMulliganV2(token: token, parameters: parameters)
+            : await HSReplayAPI.getConstructedMulliganV2(parameters: parameters)
+        guard let data else {
+            return MulliganGuideResult(unavailable: .requestFailed)
         }
-        return await HSReplayAPI.getConstructedMulliganV2(parameters: parameters)
+        return MulliganGuideResult(data: data)
     }
     
     private func getMulliganGuideParams() -> MulliganGuideParams? {
@@ -4898,17 +5014,7 @@ class Game: NSObject, PowerEventHandler {
     @available(macOS 10.15, *)
     @MainActor
     private func updateMulliganGuideTrialsExhausted() {
-        guard !Settings.seenMulliganGuideTrialsExhausted else {
-            return
-        }
-        guard MulliganGuideTrial.consumePendingLastTrialAlert() else {
-            return
-        }
-        guard !(HSReplayAPI.accountData?.is_premium ?? false) else {
-            return
-        }
-        // Trials may have reset while the player was away from the lobby.
-        guard (MulliganGuideTrial.remainingTrials ?? 0) == 0 else {
+        guard MulliganGuideTrial.shared.shouldShowTrialsExhaustedAlert(seen: Settings.seenMulliganGuideTrialsExhausted, isPremium: HSReplayAPI.accountData?.is_premium ?? false) else {
             return
         }
 
@@ -4917,6 +5023,7 @@ class Game: NSObject, PowerEventHandler {
         guard let alert = windowManager.rootOverlay?.viewModel.mulliganGuideTrialsExhausted else {
             return
         }
+        logger.info("MulliganGuideTrial: showing the one-time trials exhausted alert")
         alert.trialTimeRemaining = MulliganGuideTrial.timeRemaining
         alert.isShown = true
     }
@@ -4929,22 +5036,26 @@ class Game: NSObject, PowerEventHandler {
 
     @MainActor
     func updateMulliganGuidePreLobby() {
-        let isPremium = HSReplayAPI.accountData?.is_premium ?? false
-        let inConstructedLobby = isInMenu && SceneHandler.scene == .tournament
+        applyMulliganGuidePreLobbyVisibility()
 
-        // Refreshing trial status here (rather than only from the widget's
-        // own update cycle) keeps it reasonably current for the exhausted
-        // check below without blocking this function on the network -
-        // HDT's own version awaits this synchronously before proceeding,
-        // which Swift's non-async updateMulliganGuidePreLobby (called from
-        // many synchronous sites) can't cheaply do; a slightly stale
-        // remainingTrials on the very first call back to the lobby is an
-        // acceptable tradeoff over a larger async refactor.
+        // HDT's UpdateMulliganGuidePreLobbyVisibility awaits
+        // MulliganGuideTrial.Update before deciding anything. The port started
+        // the refresh detached and decided at once, on the count from before
+        // the match. Visibility is applied right away with what is known (so
+        // leaving the lobby never waits on the network) and again once the
+        // refresh is in; the exhausted alert only fires on a known zero, so
+        // the first pass cannot use up its one-time flag.
         if #available(macOS 10.15, *), let acc = MirrorHelper.getAccountId() {
-            Task.detached {
+            Task { @MainActor in
                 await MulliganGuideTrial.update(hi: acc.hi.int64Value, lo: acc.lo.int64Value)
+                self.applyMulliganGuidePreLobbyVisibility()
             }
         }
+    }
+
+    @MainActor
+    private func applyMulliganGuidePreLobbyVisibility() {
+        let inConstructedLobby = isInMenu && SceneHandler.scene == .tournament
 
         var mulliganGuideTrialsExhaustedVisible = false
         if #available(macOS 10.15, *) {
@@ -4961,12 +5072,12 @@ class Game: NSObject, PowerEventHandler {
         // ShowMulliganGuidePreLobby toggle (not EnableMulliganGuide/
         // EnableMulliganGV2, which HDT doesn't check here at all), ANDed
         // with the trials-exhausted alert taking precedence while it's up.
+        // The badge grid used to also require Premium, which HDT does not:
+        // players on trials are the ones who need to see which decks have
+        // coverage before spending one.
         let show = inConstructedLobby && Settings.showMulliganGuidePreLobby && !mulliganGuideTrialsExhaustedVisible
 
-        // The badge grid keeps its own pre-existing isPremium requirement
-        // (predates this widget work, not something HDT's own gate has -
-        // left as-is rather than changed as a side effect here).
-        if show && isPremium {
+        if show {
             showMulliganGuidePreLobby()
             if #available(macOS 10.15.0, *) {
                 Task.detached { [self] in
@@ -4977,9 +5088,6 @@ class Game: NSObject, PowerEventHandler {
             hideMulliganGuidePreLobby()
         }
 
-        // The widget itself is meant to be visible to non-premium users too
-        // (it's what converts them to subscribers), matching HDT exactly -
-        // no isPremium check here.
         if show {
             showMulliganPreLobbyWidget()
         } else {

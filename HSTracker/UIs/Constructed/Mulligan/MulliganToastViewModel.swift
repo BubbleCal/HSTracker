@@ -41,7 +41,9 @@ class MulliganToastViewModel: ObservableObject {
             self.hasData = !shortId.isEmpty && parameters != nil
             self.showingMulliganStats = showingMulliganStats
 
-            if self.shouldShow() {
+            let allowed = self.shouldShow()
+            logger.debug("MulliganToast: requested (hasData=\(self.hasData), showingMulliganStats=\(showingMulliganStats)), shown=\(allowed)")
+            if allowed {
                 withAnimation(.easeInOut(duration: Self.slideDuration)) {
                     self.isShown = true
                 }

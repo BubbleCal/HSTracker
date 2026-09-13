@@ -547,15 +547,59 @@ class ConstructedMulliganGuidePreLobbyViewModel: ViewModel {
     // status check already confirmed have real (or partial) coverage are
     // worth burning a trial on.
     func isDeckAvailableForMulliganGuide(gameType: BnetGameType, deckstring: String) -> Bool {
-        guard let state = _lock.around({ _deckStatusByDeckstring[gameType]?[deckstring] }) else {
-            return false
-        }
+        return ConstructedMulliganGuidePreLobbyViewModel.isAvailableForMulliganGuide(_lock.around({ _deckStatusByDeckstring[gameType]?[deckstring] }))
+    }
+
+    static func isAvailableForMulliganGuide(_ state: SingleDeckState?) -> Bool {
         switch state {
         case .v1_ready, .v2_ready, .v2_partial:
             return true
         default:
             return false
         }
+    }
+
+    // The game types the deck picker itself asks about (see gameType(for:)).
+    private static let lobbyGameTypes: Set<BnetGameType> = [.bgt_ranked_standard, .bgt_ranked_wild, .bgt_ranked_twist, .bgt_casual_wild]
+
+    // The cached status for the deck being played, fetched for that one deck
+    // when the lobby never cached it. The lobby builds its keys from the
+    // mirror's deck list while the game builds them from the tracked deck, and
+    // the two deckstrings can differ (sideboards, a hero skin changed after
+    // the deck was imported); a miss used to mean a trial was never spent on a
+    // deck that has coverage, without a word in the log. HDT has no fallback.
+    @available(macOS 10.15.0, *)
+    func deckStatusForMulliganGuide(gameType: BnetGameType, deckstring: String, dbfIds: [Int], starLevel: Int?) async -> SingleDeckState? {
+        if deckstring.isEmpty {
+            return nil
+        }
+        // A lobby pass may be fetching this deck right now; give it a moment
+        // rather than asking twice.
+        for _ in 0 ..< 30 {
+            let cached = _lock.around { _deckStatusByDeckstring[gameType]?[deckstring] }
+            if let cached, cached != .loading {
+                return cached
+            }
+            if cached == nil {
+                break
+            }
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
+
+        let cachedCount = _lock.around { _deckStatusByDeckstring[gameType]?.count ?? 0 }
+        logger.info("MulliganGuide: deck status not cached for gameType=\(gameType) deckstring=\(deckstring) (\(cachedCount) decks cached for it)")
+        guard ConstructedMulliganGuidePreLobbyViewModel.lobbyGameTypes.contains(gameType) else {
+            return nil
+        }
+        let results = await ConstructedMulliganGuidePreLobbyViewModel.loadStatus(gameType: gameType, starLevel: starLevel, decks: [DeckData(deckstring: deckstring, hasRunes: false, dbfIds: dbfIds)])
+        guard let state = results[deckstring] else {
+            return nil
+        }
+        _lock.around {
+            _deckStatusByDeckstring[gameType, default: [String: SingleDeckState]()][deckstring] = state
+        }
+        logger.info("MulliganGuide: fetched deck status \(state) for the active deck")
+        return state
     }
 
     func reset() {

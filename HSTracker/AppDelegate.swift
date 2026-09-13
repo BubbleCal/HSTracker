@@ -177,8 +177,19 @@ class AppDelegate: NSObject, NSApplicationDelegate, SPUStandardUserDriverDelegat
         } else {
             refresh = true
         }
-        
-        if refresh {
+        let hasRefreshToken = !(Settings.hsReplayOAuthRefreshToken ?? "").isEmpty
+        let hasAccessToken = !(Settings.hsReplayOAuthToken ?? "").isEmpty
+
+        if !hasRefreshToken && !hasAccessToken {
+            // Signed out. Renewing with an empty refresh token only earned an
+            // invalid_grant error at every launch, and the account request
+            // behind it a 401, while nothing said the user was simply not
+            // signed in. Logged on the next main-queue turn because the file
+            // log destination is only added further down.
+            DispatchQueue.main.async {
+                logger.info("HSReplay: not signed in (no stored OAuth token); premium features and the Mulligan Guide rely on free trials")
+            }
+        } else if refresh && hasRefreshToken {
             logger.debug("OAuth token is expired, renewing")
             
             HSReplayAPI.oauthswift.renewAccessToken(withRefreshToken: credential.oauthRefreshToken, completionHandler: { result in
@@ -194,6 +205,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, SPUStandardUserDriverDelegat
                         switch result {
                         case .failed:
                             logger.error("Failed to retrieve account data")
+                            logger.info("HSReplay: signed in=false premium=false")
                         case .success(account: let data):
                             Settings.hsReplayUsername = data.username
 
@@ -201,6 +213,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, SPUStandardUserDriverDelegat
                                 HSReplayAPI.linkMixpanelAccount()
                             }
                             logger.info("Successfully retrieved account data: Username: \(data.username), battletag: \(data.battletag)")
+                            logger.info("HSReplay: signed in=true premium=\(data.is_premium)")
                         }
                     }.catch { error in
                         logger.error(error)
@@ -214,12 +227,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, SPUStandardUserDriverDelegat
                 switch result {
                 case .failed:
                     logger.error("Failed to retrieve account data")
+                    logger.info("HSReplay: signed in=false premium=false")
                 case .success(account: let data):
                     Settings.hsReplayUsername = data.username
                     if !MixpanelEvents.linkedMixpanelToken {
                         HSReplayAPI.linkMixpanelAccount()
                     }
                     logger.info("Successfully retrieved account data: Username: \(data.username), battletag: \(data.battletag)")
+                    logger.info("HSReplay: signed in=true premium=\(data.is_premium)")
                 }
             }
         }

@@ -17,6 +17,7 @@ struct ConstructedMulliganGuideV2View: View {
             if let error = viewModel.error {
                 Text(error)
                     .font(.system(size: 14, weight: .bold))
+                    .multilineTextAlignment(.center)
                     .foregroundColor(.white)
                     .padding(8)
                     .background(Color.black.opacity(0.6))
