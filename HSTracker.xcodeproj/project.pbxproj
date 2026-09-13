@@ -10,6 +10,9 @@
 		14029F20A64FB3E4BB7CD009 /* RecordStatsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C38F2226D77177A24038CA24 /* RecordStatsTests.swift */; };
 		D58D46CB44DCA34BF2293EB9 /* RecordStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3850E6EE079AE2B92940A82B /* RecordStats.swift */; };
 		8B3037838F49193872700E7D /* DefaultDeckStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BA72A1B9DC53C87BAA265D0 /* DefaultDeckStats.swift */; };
+		54F8C45E8D8DAD11FBB3796A /* ActionHistoryModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03B216C4DE3D95EEE70AA2A0 /* ActionHistoryModels.swift */; };
+		B455CADDFD89FB0BD792512E /* ActionHistoryLineParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = C41C8136755257495048D738 /* ActionHistoryLineParser.swift */; };
+		4142FD5EA176D4723926F589 /* ActionHistoryLineParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3204CFFAF449B0F253E1040F /* ActionHistoryLineParserTests.swift */; };
 		BB5E553A0000000000000064 /* BattlegroundsSessionOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB5E553A0000000000000001 /* BattlegroundsSessionOverlayView.swift */; };
 		BB5E551A0000000000000002 /* BattlegroundsSessionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB5E551A0000000000000001 /* BattlegroundsSessionViewModel.swift */; };
 		BB5E551A0000000000000005 /* BattlegroundsSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB5E551A0000000000000004 /* BattlegroundsSessionView.swift */; };
@@ -1861,6 +1864,9 @@
 		C38F2226D77177A24038CA24 /* RecordStatsTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = RecordStatsTests.swift; sourceTree = "<group>"; };
 		3850E6EE079AE2B92940A82B /* RecordStats.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = RecordStats.swift; path = Statistics/RecordStats.swift; sourceTree = "<group>"; };
 		8BA72A1B9DC53C87BAA265D0 /* DefaultDeckStats.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DefaultDeckStats.swift; sourceTree = "<group>"; };
+		03B216C4DE3D95EEE70AA2A0 /* ActionHistoryModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionHistoryModels.swift; sourceTree = "<group>"; };
+		C41C8136755257495048D738 /* ActionHistoryLineParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionHistoryLineParser.swift; sourceTree = "<group>"; };
+		3204CFFAF449B0F253E1040F /* ActionHistoryLineParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionHistoryLineParserTests.swift; sourceTree = "<group>"; };
 		BB5E553A0000000000000001 /* BattlegroundsSessionOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BattlegroundsSessionOverlayView.swift; sourceTree = "<group>"; };
 		BB5E551A0000000000000001 /* BattlegroundsSessionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BattlegroundsSessionViewModel.swift; sourceTree = "<group>"; };
 		BB5E551A0000000000000004 /* BattlegroundsSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BattlegroundsSessionView.swift; sourceTree = "<group>"; };
@@ -4056,6 +4062,7 @@
 		439C7E5F1C7772C100D29859 /* HSTrackerTests */ = {
 			isa = PBXGroup;
 			children = (
+				3204CFFAF449B0F253E1040F /* ActionHistoryLineParserTests.swift */,
 				1CF1B5891E81426D007DCBF2 /* AlgorithmTests.swift */,
 				439C7E601C7772C100D29859 /* HSTrackerTests.swift */,
 				1CF1B58B1E815810007DCBF2 /* LogReaderTests.swift */,
@@ -4293,6 +4300,7 @@
 		43B695551C90653A00F4D0AC /* Hearthstone */ = {
 			isa = PBXGroup;
 			children = (
+				4FABF10E177783F68B9A8D10 /* ActionHistory */,
 				B82238BB2BF948E600B405D4 /* BattlegroundsBoardState.swift */,
 				B82238BF2BF9891200B405D4 /* BattlegroundsHeroPickState.swift */,
 				B82238B92BF948B000B405D4 /* BoardSnapshot.swift */,
@@ -4312,6 +4320,15 @@
 				B8CDDCC02F3D67D2004C3E86 /* WhizbangDecks.swift */,
 			);
 			path = Hearthstone;
+			sourceTree = "<group>";
+		};
+		4FABF10E177783F68B9A8D10 /* ActionHistory */ = {
+			isa = PBXGroup;
+			children = (
+				03B216C4DE3D95EEE70AA2A0 /* ActionHistoryModels.swift */,
+				C41C8136755257495048D738 /* ActionHistoryLineParser.swift */,
+			);
+			path = ActionHistory;
 			sourceTree = "<group>";
 		};
 		43B695561C90655C00F4D0AC /* Secrets */ = {
@@ -6855,6 +6872,8 @@
 				DD60CC6B65871CAF65AFF0AB /* RecordWindow.swift in Sources */,
 				407F44E8A171B09C8C176839 /* RecordTableControllers.swift in Sources */,
 				8B3037838F49193872700E7D /* DefaultDeckStats.swift in Sources */,
+				54F8C45E8D8DAD11FBB3796A /* ActionHistoryModels.swift in Sources */,
+				B455CADDFD89FB0BD792512E /* ActionHistoryLineParser.swift in Sources */,
 				B8956CFD25509B3F0073D70C /* BattlegroundsMinionView.swift in Sources */,
 				B86D89E62D95EC4D00AB65A5 /* FerociousFelbat.swift in Sources */,
 				B85462142CDEB9FF0083BB31 /* CrewmateGenerator.swift in Sources */,
@@ -8598,6 +8617,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				14029F20A64FB3E4BB7CD009 /* RecordStatsTests.swift in Sources */,
+				4142FD5EA176D4723926F589 /* ActionHistoryLineParserTests.swift in Sources */,
 				439BD8C91EBCD40200959F69 /* EnumTests.swift in Sources */,
 				43C1C9F61E96CCDB008C20B1 /* SecretTests.swift in Sources */,
 				43C1C9FB1E96CCE9008C20B1 /* StatsTests.swift in Sources */,
