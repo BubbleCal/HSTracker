@@ -379,8 +379,11 @@ class Game: NSObject, PowerEventHandler {
                         // until the next game resets it, so the line is still there
                         // on the end screen, already counting the game just played
                         // (game_stats_changed refreshes this tracker after the main
-                        // thread's Realm has been refreshed to include it).
-                        if Settings.showMatchupWinRate,
+                        // thread's Realm has been refreshed to include it). HDT only
+                        // shows it on the in-game overlay, so it goes once the player
+                        // is back in the menu, where it would otherwise pair a newly
+                        // selected deck with the last game's opponent.
+                        if Settings.showMatchupWinRate, !self.isInMenu,
                            let opponentClass = self.opponent.originalClass,
                            let record = StatsHelper.matchupTrackerRecord(deck: deck,
                                                                          opponentClass: opponentClass) {
@@ -2145,6 +2148,8 @@ class Game: NSObject, PowerEventHandler {
 
         isInMenu = true
         updateActionHistory()
+        // Drops the tracker's matchup line, which belongs to the match just left
+        updateTrackers()
         
         DispatchQueue.main.async {
             self.updateMulliganGuidePreLobby()
