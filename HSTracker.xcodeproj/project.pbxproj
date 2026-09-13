@@ -12,7 +12,9 @@
 		8B3037838F49193872700E7D /* DefaultDeckStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BA72A1B9DC53C87BAA265D0 /* DefaultDeckStats.swift */; };
 		54F8C45E8D8DAD11FBB3796A /* ActionHistoryModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03B216C4DE3D95EEE70AA2A0 /* ActionHistoryModels.swift */; };
 		B455CADDFD89FB0BD792512E /* ActionHistoryLineParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = C41C8136755257495048D738 /* ActionHistoryLineParser.swift */; };
+		37484050B853DC35C7EBE1CE /* ActionHistoryVisibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0ABACE823F2CE9F42FE8C50B /* ActionHistoryVisibility.swift */; };
 		4142FD5EA176D4723926F589 /* ActionHistoryLineParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3204CFFAF449B0F253E1040F /* ActionHistoryLineParserTests.swift */; };
+		7F2C43A935A0A68DA5952807 /* ActionHistoryVisibilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37A3ED54ACAAD229494B4681 /* ActionHistoryVisibilityTests.swift */; };
 		BB5E553A0000000000000064 /* BattlegroundsSessionOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB5E553A0000000000000001 /* BattlegroundsSessionOverlayView.swift */; };
 		BB5E551A0000000000000002 /* BattlegroundsSessionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB5E551A0000000000000001 /* BattlegroundsSessionViewModel.swift */; };
 		BB5E551A0000000000000005 /* BattlegroundsSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB5E551A0000000000000004 /* BattlegroundsSessionView.swift */; };
@@ -1866,7 +1868,9 @@
 		8BA72A1B9DC53C87BAA265D0 /* DefaultDeckStats.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DefaultDeckStats.swift; sourceTree = "<group>"; };
 		03B216C4DE3D95EEE70AA2A0 /* ActionHistoryModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionHistoryModels.swift; sourceTree = "<group>"; };
 		C41C8136755257495048D738 /* ActionHistoryLineParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionHistoryLineParser.swift; sourceTree = "<group>"; };
+		0ABACE823F2CE9F42FE8C50B /* ActionHistoryVisibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionHistoryVisibility.swift; sourceTree = "<group>"; };
 		3204CFFAF449B0F253E1040F /* ActionHistoryLineParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionHistoryLineParserTests.swift; sourceTree = "<group>"; };
+		37A3ED54ACAAD229494B4681 /* ActionHistoryVisibilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionHistoryVisibilityTests.swift; sourceTree = "<group>"; };
 		BB5E553A0000000000000001 /* BattlegroundsSessionOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BattlegroundsSessionOverlayView.swift; sourceTree = "<group>"; };
 		BB5E551A0000000000000001 /* BattlegroundsSessionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BattlegroundsSessionViewModel.swift; sourceTree = "<group>"; };
 		BB5E551A0000000000000004 /* BattlegroundsSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BattlegroundsSessionView.swift; sourceTree = "<group>"; };
@@ -4063,6 +4067,7 @@
 			isa = PBXGroup;
 			children = (
 				3204CFFAF449B0F253E1040F /* ActionHistoryLineParserTests.swift */,
+				37A3ED54ACAAD229494B4681 /* ActionHistoryVisibilityTests.swift */,
 				1CF1B5891E81426D007DCBF2 /* AlgorithmTests.swift */,
 				439C7E601C7772C100D29859 /* HSTrackerTests.swift */,
 				1CF1B58B1E815810007DCBF2 /* LogReaderTests.swift */,
@@ -4327,6 +4332,7 @@
 			children = (
 				03B216C4DE3D95EEE70AA2A0 /* ActionHistoryModels.swift */,
 				C41C8136755257495048D738 /* ActionHistoryLineParser.swift */,
+				0ABACE823F2CE9F42FE8C50B /* ActionHistoryVisibility.swift */,
 			);
 			path = ActionHistory;
 			sourceTree = "<group>";
@@ -6874,6 +6880,7 @@
 				8B3037838F49193872700E7D /* DefaultDeckStats.swift in Sources */,
 				54F8C45E8D8DAD11FBB3796A /* ActionHistoryModels.swift in Sources */,
 				B455CADDFD89FB0BD792512E /* ActionHistoryLineParser.swift in Sources */,
+				37484050B853DC35C7EBE1CE /* ActionHistoryVisibility.swift in Sources */,
 				B8956CFD25509B3F0073D70C /* BattlegroundsMinionView.swift in Sources */,
 				B86D89E62D95EC4D00AB65A5 /* FerociousFelbat.swift in Sources */,
 				B85462142CDEB9FF0083BB31 /* CrewmateGenerator.swift in Sources */,
@@ -8618,6 +8625,7 @@
 			files = (
 				14029F20A64FB3E4BB7CD009 /* RecordStatsTests.swift in Sources */,
 				4142FD5EA176D4723926F589 /* ActionHistoryLineParserTests.swift in Sources */,
+				7F2C43A935A0A68DA5952807 /* ActionHistoryVisibilityTests.swift in Sources */,
 				439BD8C91EBCD40200959F69 /* EnumTests.swift in Sources */,
 				43C1C9F61E96CCDB008C20B1 /* SecretTests.swift in Sources */,
 				43C1C9FB1E96CCE9008C20B1 /* StatsTests.swift in Sources */,
