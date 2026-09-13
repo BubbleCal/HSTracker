@@ -10,13 +10,15 @@
 
 import AppKit
 
-final class RecordWindow: NSWindowController, NSMenuDelegate {
+final class RecordWindow: NSWindowController, NSMenuDelegate, NSWindowDelegate {
     private var filter = RecordFilter.fromSettings()
     private var data: RecordData?
     private var report: RecordReport?
     /// Bumped by every refresh so a slower, older computation is dropped.
     private var refreshToken = 0
     private var needsDataReload = true
+    /// A refresh started and not yet applied or dropped.
+    private var refreshInFlight = false
     private var observers: [NSObjectProtocol] = []
 
     private let modePopup = NSPopUpButton()
@@ -62,6 +64,7 @@ final class RecordWindow: NSWindowController, NSMenuDelegate {
         buildContent(in: window)
         window.center()
         window.setFrameAutosaveName("RecordWindow")
+        window.delegate = self
 
         let center = NotificationCenter.default
         // Games are recorded or deleted, decks renamed, archived or deleted.
@@ -71,6 +74,12 @@ final class RecordWindow: NSWindowController, NSMenuDelegate {
                 self?.databaseDidChange()
             })
         }
+        // Windows of a hidden app are not visible, so changes made meanwhile only
+        // marked the data dirty; unhiding does not go through showWindow.
+        observers.append(center.addObserver(forName: NSApplication.didUnhideNotification, object: nil,
+                                            queue: OperationQueue.main) { [weak self] _ in
+            self?.refreshIfNeeded()
+        })
     }
 
     deinit {
@@ -81,7 +90,19 @@ final class RecordWindow: NSWindowController, NSMenuDelegate {
 
     override func showWindow(_ sender: Any?) {
         super.showWindow(sender)
-        if needsDataReload {
+        refreshIfNeeded()
+    }
+
+    func windowDidDeminiaturize(_ notification: Notification) {
+        refreshIfNeeded()
+    }
+
+    func windowDidBecomeKey(_ notification: Notification) {
+        refreshIfNeeded()
+    }
+
+    private func refreshIfNeeded() {
+        if needsDataReload, !refreshInFlight, window?.isVisible == true {
             refresh()
         }
     }
@@ -216,11 +237,13 @@ final class RecordWindow: NSWindowController, NSMenuDelegate {
 
     private func databaseDidChange() {
         needsDataReload = true
-        if window?.isVisible == true {
+        // A miniaturized window is not visible but comes back without showWindow.
+        if window?.isVisible == true || window?.isMiniaturized == true {
             refresh()
         } else {
             // Drop a computation still running on the old data.
             refreshToken += 1
+            refreshInFlight = false
             progressIndicator.stopAnimation(nil)
         }
     }
@@ -233,6 +256,7 @@ final class RecordWindow: NSWindowController, NSMenuDelegate {
         let token = refreshToken
         let filter = self.filter
         let cached = needsDataReload ? nil : data
+        refreshInFlight = true
         progressIndicator.startAnimation(nil)
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -244,6 +268,7 @@ final class RecordWindow: NSWindowController, NSMenuDelegate {
                 }
                 self.data = data
                 self.needsDataReload = false
+                self.refreshInFlight = false
                 self.progressIndicator.stopAnimation(nil)
                 self.apply(report)
             }
@@ -252,6 +277,14 @@ final class RecordWindow: NSWindowController, NSMenuDelegate {
 
     private func apply(_ report: RecordReport) {
         assertMainThread()
+        // The picked deck was deleted: its games moved to a "No deck" bucket or are
+        // gone. Drop the selection instead of showing "All decks" over an empty
+        // report that still filters on the deleted deck.
+        if let owner = filter.owner, report.filter.owner == owner, report.owners[owner] == nil {
+            filter.owner = nil
+            refresh()
+            return
+        }
         self.report = report
 
         updateDeckPopup(report)
