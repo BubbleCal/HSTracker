@@ -1674,6 +1674,8 @@
 		C7F7608E636036048A1E5161 /* AlternateReality.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2855B8097C610F589205ACF6 /* AlternateReality.swift */; };
 		C826D8EC224CB2DDAEC08468 /* SchoolTeacher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A8DBA4B742FD30E5528981D /* SchoolTeacher.swift */; };
 		C92C680E1D1F225F009030DC /* StatsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = C92C680C1D1F225F009030DC /* StatsTab.swift */; };
+		DD60CC6B65871CAF65AFF0AB /* RecordWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 341665C1FED71718E8BC50AE /* RecordWindow.swift */; };
+		407F44E8A171B09C8C176839 /* RecordTableControllers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B42AAF8485E4F4B6D2570F7 /* RecordTableControllers.swift */; };
 		C92C68121D1F3FC4009030DC /* LadderTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = C92C68101D1F3FC4009030DC /* LadderTab.swift */; };
 		C92C68181D1F74CE009030DC /* LadderGrid.swift in Sources */ = {isa = PBXBuildFile; fileRef = C92C68171D1F74CE009030DC /* LadderGrid.swift */; };
 		C92C681A1D1F8E27009030DC /* Ranks.swift in Sources */ = {isa = PBXBuildFile; fileRef = C92C68191D1F8E27009030DC /* Ranks.swift */; };
@@ -3546,6 +3548,8 @@
 		C8D617118C7F8A3570A7D883 /* Anomalize.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Anomalize.swift; sourceTree = "<group>"; };
 		C8E9FB8542DD96AE639265A5 /* OasisOutlaws.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OasisOutlaws.swift; sourceTree = "<group>"; };
 		C92C680C1D1F225F009030DC /* StatsTab.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = StatsTab.swift; path = StatsManager/StatsTab.swift; sourceTree = "<group>"; };
+		341665C1FED71718E8BC50AE /* RecordWindow.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = RecordWindow.swift; path = StatsManager/RecordWindow.swift; sourceTree = "<group>"; };
+		0B42AAF8485E4F4B6D2570F7 /* RecordTableControllers.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = RecordTableControllers.swift; path = StatsManager/RecordTableControllers.swift; sourceTree = "<group>"; };
 		C92C68101D1F3FC4009030DC /* LadderTab.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = LadderTab.swift; path = StatsManager/LadderTab.swift; sourceTree = "<group>"; };
 		C92C68171D1F74CE009030DC /* LadderGrid.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = LadderGrid.swift; path = Statistics/LadderGrid.swift; sourceTree = "<group>"; };
 		C92C68191D1F8E27009030DC /* Ranks.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = Ranks.swift; path = Statistics/Ranks.swift; sourceTree = "<group>"; };
@@ -6354,6 +6358,8 @@
 				C9BDB3CA1D20BC4C00886A11 /* StatsTab.xib */,
 				C92C68101D1F3FC4009030DC /* LadderTab.swift */,
 				C9BDB3D91D20BE9500886A11 /* LadderTab.xib */,
+				341665C1FED71718E8BC50AE /* RecordWindow.swift */,
+				0B42AAF8485E4F4B6D2570F7 /* RecordTableControllers.swift */,
 			);
 			name = StatsManager;
 			sourceTree = "<group>";
@@ -6846,6 +6852,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				D58D46CB44DCA34BF2293EB9 /* RecordStats.swift in Sources */,
+				DD60CC6B65871CAF65AFF0AB /* RecordWindow.swift in Sources */,
+				407F44E8A171B09C8C176839 /* RecordTableControllers.swift in Sources */,
 				8B3037838F49193872700E7D /* DefaultDeckStats.swift in Sources */,
 				B8956CFD25509B3F0073D70C /* BattlegroundsMinionView.swift in Sources */,
 				B86D89E62D95EC4D00AB65A5 /* FerociousFelbat.swift in Sources */,

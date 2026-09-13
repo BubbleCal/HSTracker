@@ -32,6 +32,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, SPUStandardUserDriverDelegat
     var splashscreen: Splashscreen?
     var initalConfig: InitialConfiguration?
     var deckManager: DeckManager?
+    var recordWindow: RecordWindow?
     @IBOutlet var sparkleUpdater: SPUStandardUpdaterController!
     var operationQueue: OperationQueue!
     
@@ -529,6 +530,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, SPUStandardUserDriverDelegat
             deckMenu?.submenu?.addItem(withTitle: String.localizedString("Deck Manager", comment: ""),
                                        action: #selector(AppDelegate.openDeckManager(_:)),
                                        keyEquivalent: "d")
+            deckMenu?.submenu?.addItem(withTitle: String.localizedString("Record_MenuItem", comment: ""),
+                                       action: #selector(AppDelegate.openRecord(_:)),
+                                       keyEquivalent: "")
             let saveMenus = NSMenu()
             saveMenus.addItem(withTitle: String.localizedString("Save Current Deck", comment: ""),
                               action: #selector(AppDelegate.saveCurrentDeck(_:)),
@@ -561,6 +565,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, SPUStandardUserDriverDelegat
                                              action: #selector(AppDelegate.openDeckManager(_:)), keyEquivalent: "d")
                 deckmanager.tag = 2
                 self.dockMenu.addItem(deckmanager)
+            }
+
+            if self.dockMenu.item(withTag: 4) == nil {
+                let record = NSMenuItem(title: String.localizedString("Record_MenuItem", comment: ""),
+                                        action: #selector(AppDelegate.openRecord(_:)), keyEquivalent: "")
+                record.tag = 4
+                if let index = self.dockMenu.items.firstIndex(where: { $0.tag == 2 }) {
+                    self.dockMenu.insertItem(record, at: index + 1)
+                } else {
+                    self.dockMenu.addItem(record)
+                }
             }
             
             if self.dockMenu.item(withTag: 3) == nil {
@@ -674,6 +689,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, SPUStandardUserDriverDelegat
         deckManager?.showWindow(self)
     }
     
+    /// The Win/Loss Record window. It reads Realm on its own, so unlike the deck
+    /// manager it does not need the core manager.
+    @objc func openRecord(_ sender: AnyObject) {
+        if recordWindow == nil {
+            recordWindow = RecordWindow()
+        }
+        recordWindow?.showWindow(self)
+        recordWindow?.window?.makeKeyAndOrderFront(self)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
     @IBAction func clearTrackers(_ sender: AnyObject) {
         coreManager?.game.removeActiveDeck()
     }
