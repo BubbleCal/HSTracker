@@ -21,6 +21,8 @@ class PowerParserTests: HSTrackerTests {
     private static let playWithUnknownTargetLine = "D 15:08:16.5063320 PowerTaskList.DebugPrintPower() - BLOCK_START BlockType=PLAY Entity=[entityName=UNKNOWN ENTITY [cardType=INVALID] id=61 zone=HAND zonePos=1 cardId= player=2] EffectCardId=System.Collections.Generic.List`1[System.String] EffectIndex=0 Target=[entityName=UNKNOWN ENTITY [cardType=INVALID] id=108 zone=HAND zonePos=8 cardId= player=2] SubOption=-1 "
     private static let playWithoutTargetLine = "D 13:58:18.4149580 PowerTaskList.DebugPrintPower() - BLOCK_START BlockType=PLAY Entity=[entityName=寻求平衡 id=65 zone=HAND zonePos=1 cardId=TLC_817 player=2] EffectCardId=System.Collections.Generic.List`1[System.String] EffectIndex=0 Target=0 SubOption=-1 "
     private static let blockEndLine = "D 14:02:21.6735360 PowerTaskList.DebugPrintPower() - BLOCK_END"
+    // Death phases belong to the game entity, which BlockStartRegex does not match
+    private static let deathsLine = "D 13:59:29.5357620 PowerTaskList.DebugPrintPower() - BLOCK_START BlockType=DEATHS Entity=GameEntity EffectCardId=System.Collections.Generic.List`1[System.String] EffectIndex=0 Target=0 SubOption=-1 "
 
     private static var database: Database!
 
@@ -251,5 +253,65 @@ class PowerParserTests: HSTrackerTests {
         XCTAssertEqual(game.secretsManager?.secrets.count, 1)
         XCTAssertEqual(remaining?.isExcluded(cardId: CardIds.Secrets.Hunter.BargainBin), false)
         XCTAssertEqual(remaining?.isExcluded(cardId: CardIds.Secrets.Hunter.Snipe), true)
+    }
+
+    // MARK: - Secret checks resolved at action boundaries
+
+    private func createPlayerSpell() -> Entity {
+        let spell = createEntity(cardId: "CS2_025")
+        spell[.cardtype] = CardType.spell.rawValue
+        spell[.controller] = game.player.id
+        return spell
+    }
+
+    func testRootPlayBlock_ResolvesPendingSecretChecks() {
+        let secret = createOpponentSecret(id: 96, cardClass: .mage)
+        game.secretsManager?.handleCardPlayed(entity: createPlayerSpell(), parentCardId: "")
+        let tracked = game.secretsManager?.secrets.first { $0.entity.id == secret.id }
+        XCTAssertEqual(tracked?.isExcluded(cardId: CardIds.Secrets.Mage.Counterspell), true)
+        XCTAssertEqual(tracked?.isExcluded(cardId: CardIds.Secrets.Mage.ManaBind), false)
+
+        handle(PowerParserTests.playWithoutTargetLine)
+
+        XCTAssertEqual(tracked?.isExcluded(cardId: CardIds.Secrets.Mage.ManaBind), true)
+    }
+
+    func testNestedPlayBlock_LeavesPendingSecretChecks() {
+        let secret = createOpponentSecret(id: 96, cardClass: .mage)
+        handle(PowerParserTests.deathrattleTriggerLine)
+        game.secretsManager?.handleCardPlayed(entity: createPlayerSpell(), parentCardId: "")
+        let tracked = game.secretsManager?.secrets.first { $0.entity.id == secret.id }
+
+        handle(PowerParserTests.playWithTargetLine)
+        XCTAssertEqual(tracked?.isExcluded(cardId: CardIds.Secrets.Mage.ManaBind), false)
+
+        handle(PowerParserTests.blockEndLine)
+        handle(PowerParserTests.blockEndLine)
+        handle(PowerParserTests.playWithoutTargetLine)
+        XCTAssertEqual(tracked?.isExcluded(cardId: CardIds.Secrets.Mage.ManaBind), true)
+    }
+
+    func testDeathsBlockEnd_ResolvesAvengeBeforeDeathrattleSummons() {
+        let secret = createOpponentSecret(id: 96, cardClass: .paladin)
+        let dying = createEntity(cardId: "EX1_020")
+        dying[.cardtype] = CardType.minion.rawValue
+        dying[.controller] = game.opponent.id
+        dying[.zone] = Zone.graveyard.rawValue
+
+        handle(PowerParserTests.deathsLine)
+        XCTAssertEqual(parser.currentBlock?.type, "DEATHS")
+        game.secretsManager?.handleOpponentMinionDeath(entity: dying)
+        handle(PowerParserTests.blockEndLine)
+
+        // A later block summons a minion the deathrattle table does not know about
+        let summoned = createEntity(cardId: "skele21")
+        summoned[.cardtype] = CardType.minion.rawValue
+        summoned[.controller] = game.opponent.id
+        summoned[.zone] = Zone.play.rawValue
+        handle(PowerParserTests.playWithoutTargetLine)
+
+        let tracked = game.secretsManager?.secrets.first { $0.entity.id == secret.id }
+        XCTAssertEqual(tracked?.isExcluded(cardId: CardIds.Secrets.Paladin.Avenge), false)
+        XCTAssertEqual(tracked?.isExcluded(cardId: CardIds.Secrets.Paladin.Redemption), true)
     }
 }

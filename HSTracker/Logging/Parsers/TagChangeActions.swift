@@ -556,6 +556,8 @@ struct TagChangeActions {
     }
 
     private func stepChange(eventHandler: PowerEventHandler, value: Int) {
+        // A step change also closes the last action of a turn, which no later PLAY/ATTACK block follows
+        (eventHandler as? Game)?.secretsManager?.resolvePendingChecks()
         if value == Step.begin_mulligan.rawValue {
             eventHandler.handleBeginMulligan()
         }

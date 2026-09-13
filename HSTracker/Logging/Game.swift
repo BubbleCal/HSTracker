@@ -1399,8 +1399,9 @@ class Game: NSObject, PowerEventHandler {
             .filter { $0.isInHand && $0.isControlled(by: self.opponent.id) }.count }
     
     var opponentSecretCount: Int {
+        // Revealed secrets keep the SECRET tag in the graveyard, setaside and hand (HDT GameV2 checks IsInSecret)
         return entities.values
-            .filter { $0.isSecret && $0.isControlled(by: self.opponent.id) }.count
+            .filter { $0.isInSecret && $0.isSecret && $0.isControlled(by: self.opponent.id) }.count
     }
     
     var playerHandCount: Int {

@@ -66,6 +66,11 @@ class PowerGameStateParser: LogEventParser {
 
     // MARK: - blocks
     func blockStart(type: String?, cardId: String?, target: String?, targetEntityId: Int? = nil, trigger: String?) {
+        // A new player action starts only once the previous one has logged its triggers and deaths,
+        // so this is where the secret checks that waited for it can be resolved.
+        if currentBlock == nil && (type == "PLAY" || type == "ATTACK") {
+            (eventHandler as? Game)?.secretsManager?.resolvePendingChecks()
+        }
         maxBlockId += 1
         let blockId = maxBlockId
         currentBlock = currentBlock?.createChild(blockId: blockId, type: type, cardId: cardId, target: target, targetEntityId: targetEntityId, trigger: trigger) ?? Block(parent: nil, id: blockId, type: type, cardId: cardId, target: target, targetEntityId: targetEntityId, trigger: trigger)
@@ -74,6 +79,10 @@ class PowerGameStateParser: LogEventParser {
     }
 
     func blockEnd() {
+        // Deathrattle summons come in later blocks, so the board is exactly the survivors here
+        if currentBlock?.type == "DEATHS" {
+            (eventHandler as? Game)?.secretsManager?.resolvePendingAvenge()
+        }
         currentBlock = currentBlock?.parent
         if let entity = eventHandler.entities[currentEntityId] {
             entity.info.hasOutstandingTagChanges = false
@@ -666,6 +675,10 @@ class PowerGameStateParser: LogEventParser {
             var blockType: String?
             if matches.count > 0 {
                 blockType = matches[0].value
+            } else if logLine.line.contains("BlockType=DEATHS") {
+                // A death phase belongs to Entity=GameEntity, which BlockStartRegex cannot match, but
+                // the secret helper needs to know where it ends
+                blockType = "DEATHS"
             }
             var cardId: String?
             if matches.count > 3 {

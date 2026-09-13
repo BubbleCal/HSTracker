@@ -8,11 +8,34 @@
 
 import Foundation
 
+// Checks whose outcome is only known once the action finished resolving. PowerTaskList logs a
+// play's secret TRIGGER and DEATHS task lists after the play's BLOCK_END, so they are resolved at the
+// next action boundary instead of by sleeping on the log reader thread (HDT awaits game time):
+// the next root PLAY or ATTACK block, a STEP change, or the reset at game end.
+private struct SpellCastSnapshot {
+    let spellEntityId: Int
+    let secretIds: Set<Int>
+    let turn: Int
+    // Spell reactions whose preconditions held when the spell was cast
+    let candidates: [MultiIdCard]
+    let freeSpaceOnBoard: Bool
+    let targetEntityId: Int?
+}
+
+private enum PendingSecretCheck {
+    case spellCast(SpellCastSnapshot)
+    case reckoning(dealerId: Int, secretIds: Set<Int>, turn: Int)
+}
+
 class SecretsManager {
-    let avengeDelay: Double = 50.0 / 1000.0
-    let multipleSecretResolveDelay = 750.0 / 1000.0
+    // Avenge is checked once the death phase is over; the deathrattle summons that follow it
+    // must not count as survivors
     private var _avengeDeathRattleCount = 0
-    private var _awaitingAvenge = false
+    private var _avengePending: (secretIds: Set<Int>, turn: Int)?
+    private var pendingChecks = [PendingSecretCheck]()
+    // Secrets that triggered or left play since the last boundary, for the pending checks
+    private var triggeredSinceBoundary = [Entity]()
+    private let pendingLock = UnfairLock()
     private var _lastStartOfTurnCheck = 0
     private var _lastStartOfTurnDamageCheck = 0
     private var _lastStartOfTurnMinionCheck = 0
@@ -159,8 +182,15 @@ class SecretsManager {
     }
 
     func reset() {
-        _avengeDeathRattleCount = 0
-        _awaitingAvenge = false
+        pendingLock.around {
+            _avengeDeathRattleCount = 0
+            _avengePending = nil
+            pendingChecks.removeAll()
+            triggeredSinceBoundary.removeAll()
+        }
+        savedSecrets.removeAll()
+        _lastPlayedMinionId = 0
+        entityDamageDealtHistory.removeAll()
         _lastStartOfTurnCheck = 0
         _lastStartOfTurnDamageCheck = 0
         _lastStartOfTurnMinionCheck = 0
@@ -204,6 +234,8 @@ class SecretsManager {
         }
         
         handleFastCombat(entity: entity)
+        // A secret destroyed or stolen after a spell may be the Counterspell that countered it
+        recordTriggered(entity)
         secrets.remove(secret)
         if secret.entity.hasCardId {
             if let secretMultiIdCard = CardIds.Secrets.getSecretMultiIdCard(secret.entity.cardId) {
@@ -732,7 +764,7 @@ class SecretsManager {
             numDeathrattleMinions *= opponentEntity[.extra_deathrattles] + 1
         }
 
-        handleAvengeAsync(deathRattleCount: numDeathrattleMinions)
+        handleAvenge(deathRattleCount: numDeathrattleMinions)
 
         // redemption never triggers if a deathrattle effect fills up the board
         // effigy can trigger ahead of the deathrattle effect, but only if effigy was played before the deathrattle minion
@@ -764,24 +796,90 @@ class SecretsManager {
         onChanged?(getSecretList())
     }
 
-    func handleAvengeAsync(deathRattleCount: Int) {
+    // HDT HandleAvengeAsync waits 50 ms of game time; here the check waits for the end of the
+    // DEATHS block (or the next boundary), and every death adds its deathrattle summons first.
+    func handleAvenge(deathRattleCount: Int) {
         guard handleAction else { return }
-
-        if _awaitingAvenge {
-            return
+        let secretIds = activeSecretIds
+        let turn = game.turnNumber()
+        pendingLock.around {
+            _avengeDeathRattleCount += deathRattleCount
+            if _avengePending == nil {
+                _avengePending = (secretIds, turn)
+            }
         }
-        
-        DispatchQueue.global().async {
-            self._awaitingAvenge = true
-            self._avengeDeathRattleCount += deathRattleCount
-            if self.game.opponentMinionCount != 0 {
-                Thread.sleep(forTimeInterval: self.avengeDelay)
-                if self.game.opponentMinionCount - self._avengeDeathRattleCount > 0 {
-                    self.exclude(cardId: CardIds.Secrets.Paladin.Avenge, reason: .enemyMinionDied)
+    }
+
+    // Called when a DEATHS block ends, before any deathrattle has summoned
+    func resolvePendingAvenge() {
+        resolveAvenge(summonsResolved: false)
+    }
+
+    private func resolveAvenge(summonsResolved: Bool) {
+        let pending: (pending: (secretIds: Set<Int>, turn: Int)?, deathrattles: Int) = pendingLock.around {
+            let state = (_avengePending, _avengeDeathRattleCount)
+            _avengePending = nil
+            _avengeDeathRattleCount = 0
+            return state
+        }
+        guard let avenge = pending.pending else { return }
+        // Past the death phase the board also holds the deathrattle summons, which Avenge cannot see
+        let survivors = game.opponentMinionCount - (summonsResolved ? pending.deathrattles : 0)
+        if survivors > 0 {
+            applyExclusions([(CardIds.Secrets.Paladin.Avenge, .enemyMinionDied)], secretIds: avenge.secretIds, turn: avenge.turn, invokeCallback: true)
+        }
+    }
+
+    // Resolves every check that was waiting for the previous action to finish. Runs on the log
+    // reader thread at a root PLAY/ATTACK BLOCK_START and at every STEP change.
+    func resolvePendingChecks() {
+        resolveAvenge(summonsResolved: true)
+        let (checks, triggered) = pendingLock.around {
+            let state = (pendingChecks, triggeredSinceBoundary)
+            pendingChecks.removeAll()
+            triggeredSinceBoundary.removeAll()
+            return state
+        }
+        for check in checks {
+            switch check {
+            case .spellCast(let snapshot):
+                resolveSpellCast(snapshot, triggered: triggered)
+            case .reckoning(let dealerId, let secretIds, let turn):
+                // The dealer has to survive the hit for Reckoning to have had a target
+                if let dealer = game.entities[dealerId], dealer.health > 0 && dealer[.zone] != Zone.graveyard.rawValue {
+                    applyExclusions([(CardIds.Secrets.Paladin.Reckoning, .minionDealtThreeDamage)], secretIds: secretIds, turn: turn, invokeCallback: true)
                 }
             }
-            self._avengeDeathRattleCount = 0
-            self._awaitingAvenge = false
+        }
+    }
+
+    private func resolveSpellCast(_ snapshot: SpellCastSnapshot, triggered: [Entity]) {
+        // Counterspell/Ice trap order may matter in rare edge cases where both are in play.
+        // This is currently not handled.
+        if triggered.any({ x in CardIds.Secrets.Mage.Counterspell == x.cardId }) {
+            return
+        }
+        if triggered.any({ x in CardIds.Secrets.Hunter.IceTrap == x.cardId }) {
+            applyExclusions([(CardIds.Secrets.Hunter.IceTrap, .spellCast)], secretIds: snapshot.secretIds, turn: snapshot.turn, invokeCallback: true)
+            return
+        }
+        var candidates = snapshot.candidates
+        if snapshot.freeSpaceOnBoard {
+            // The PLAY block's Target is known at cast time; CARD_TARGET has been logged by now either way
+            let spell = game.entities[snapshot.spellEntityId]
+            let targetId = snapshot.targetEntityId ?? (spell?.has(tag: .card_target) == true ? spell?[.card_target] : nil)
+            if let targetId, let target = game.entities[targetId], target.isMinion {
+                candidates.append(CardIds.Secrets.Mage.Spellbender)
+            }
+        }
+        applyExclusions(candidates.map { ($0, .spellCast) }, secretIds: snapshot.secretIds, turn: snapshot.turn, invokeCallback: true)
+    }
+
+    private func recordTriggered(_ entity: Entity) {
+        pendingLock.around {
+            if !triggeredSinceBoundary.contains(where: { $0.id == entity.id }) {
+                triggeredSinceBoundary.append(entity)
+            }
         }
     }
 
@@ -870,6 +968,7 @@ class SecretsManager {
     
     func secretTriggered(entity: Entity) {
         _triggeredSecrets.append(entity)
+        recordTriggered(entity)
     }
 
     func handleCardPlayed(entity: Entity, parentCardId: String) {
@@ -901,55 +1000,35 @@ class SecretsManager {
             if parentCardId == CardIds.Collectible.Rogue.SparkjoyCheat {
                 return
             }
-            _triggeredSecrets.removeAll()
-            if game.opponentSecretCount > 1 {
-                usleep(useconds_t(1000 * multipleSecretResolveDelay))
-            }
-            // Counterspell/Ice trap order may matter in rare edge cases where both are in play.
-            // This is currently not handled.
-            var spellExclude: [MultiIdCard] = [CardIds.Secrets.Mage.Counterspell]
-            
-            if _triggeredSecrets.any({ x in CardIds.Secrets.Mage.Counterspell == x.cardId }) {
-                self.exclude(cardIds: [CardIds.Secrets.Mage.Counterspell], reason: .spellCast)
-                return
-            }
-            
-            spellExclude.append(CardIds.Secrets.Hunter.IceTrap)
-            if _triggeredSecrets.any({ x in CardIds.Secrets.Hunter.IceTrap == x.cardId }) {
-                self.exclude(cardIds: [CardIds.Secrets.Hunter.IceTrap], reason: .spellCast)
-                return
-            }
-            
-            spellExclude.append(CardIds.Secrets.Hunter.BargainBin)
+            // Two Counterspells cannot be active at once, so casting a spell rules it out now
+            exclude.append((CardIds.Secrets.Mage.Counterspell, .spellCast))
 
-            spellExclude.append(CardIds.Secrets.Paladin.OhMyYogg)
+            // The other reactions wait for the spell to resolve, in case Counterspell or Ice Trap
+            // stopped it
+            var candidates = [CardIds.Secrets.Hunter.IceTrap, CardIds.Secrets.Hunter.BargainBin, CardIds.Secrets.Paladin.OhMyYogg]
             
             if game.opponentMinionCount > 0 {
-                spellExclude.append(CardIds.Secrets.Paladin.NeverSurrender)
+                candidates.append(CardIds.Secrets.Paladin.NeverSurrender)
             }
 
             if game.opponentHandCount < 10 {
-                spellExclude.append(CardIds.Secrets.Rogue.DirtyTricks)
-                spellExclude.append(CardIds.Secrets.Mage.ManaBind)
+                candidates.append(CardIds.Secrets.Rogue.DirtyTricks)
+                candidates.append(CardIds.Secrets.Mage.ManaBind)
             }
 
             if freeSpaceOnBoard {
-                // CARD_TARGET is set after ZONE, wait for 50ms gametime before checking
-                Thread.sleep(forTimeInterval: 0.2)
-                if let target = game.entities[entity[.card_target]],
-                    entity.has(tag: .card_target),
-                    target.isMinion {
-                    spellExclude.append(CardIds.Secrets.Mage.Spellbender)
-                }
-                spellExclude.append(CardIds.Secrets.Hunter.CatTrick)
-                spellExclude.append(CardIds.Secrets.Mage.NetherwindPortal)
-                spellExclude.append(CardIds.Secrets.Rogue.StickySituation)
+                candidates.append(CardIds.Secrets.Hunter.CatTrick)
+                candidates.append(CardIds.Secrets.Mage.NetherwindPortal)
+                candidates.append(CardIds.Secrets.Rogue.StickySituation)
             }
 
             if game.playerMinionCount > 0 {
-                spellExclude.append(CardIds.Secrets.Hunter.PressurePlate)
+                candidates.append(CardIds.Secrets.Hunter.PressurePlate)
             }
-            exclude.append(contentsOf: spellExclude.map { ($0, .spellCast) })
+            let snapshot = SpellCastSnapshot(spellEntityId: entity.id, secretIds: activeSecretIds, turn: game.turnNumber(),
+                                             candidates: candidates, freeSpaceOnBoard: freeSpaceOnBoard,
+                                             targetEntityId: entity.has(tag: .card_target) ? entity[.card_target] : nil)
+            pendingLock.around { pendingChecks.append(.spellCast(snapshot)) }
         } else if entity.isMinion && game.playerMinionCount > 3 {
             exclude.append((CardIds.Secrets.Paladin.SacredTrial, .minionPlayed))
         }
@@ -993,30 +1072,36 @@ class SecretsManager {
     }
     
     func entityDamage(dealer: Entity, target: Entity, damage: Int) {
-        DispatchQueue.global().async { [self] in
-            if target.isHero && target.isControlled(by: game.opponent.id) {
-                if !target.has(tag: .immune) {
-                    exclude(cardIds: [CardIds.Secrets.Paladin.EyeForAnEye, CardIds.Secrets.Rogue.Evasion], reason: .enemyHeroDamaged)
-                    opponentTookDamageDuringTurns.append(game.turnNumber())
-                }
+        if target.isHero && target.isControlled(by: game.opponent.id) {
+            if !target.has(tag: .immune) {
+                exclude(cardIds: [CardIds.Secrets.Paladin.EyeForAnEye, CardIds.Secrets.Rogue.Evasion], reason: .enemyHeroDamaged)
+                opponentTookDamageDuringTurns.append(game.turnNumber())
             }
-            if dealer.isMinion && dealer.isControlled(by: game.player.id) {
-                if let dict = entityDamageDealtHistory[dealer.id] {
-                    if let hist = dict[target.id] {
-                        dict[target.id] = hist + damage
-                    } else {
-                        dict[target.id] = damage
-                    }
+        }
+        if dealer.isMinion && dealer.isControlled(by: game.player.id) {
+            if let dict = entityDamageDealtHistory[dealer.id] {
+                if let hist = dict[target.id] {
+                    dict[target.id] = hist + damage
                 } else {
-                    let dict = SynchronizedDictionary<Int, Int>()
-                    entityDamageDealtHistory[dealer.id] = dict
                     dict[target.id] = damage
                 }
-                let damageDealt = entityDamageDealtHistory[dealer.id]?[target.id] ?? 0
-                Thread.sleep(forTimeInterval: 0.1)
-                //We check both heaolth and zone because sometimes after the await the dealer's health will revert to that of the original card.
-                if damageDealt >= 3 && dealer.health > 0 && dealer[.zone] != Zone.graveyard.rawValue {
-                    exclude(cardId: CardIds.Secrets.Paladin.Reckoning, reason: .minionDealtThreeDamage)
+            } else {
+                let dict = SynchronizedDictionary<Int, Int>()
+                entityDamageDealtHistory[dealer.id] = dict
+                dict[target.id] = damage
+            }
+            let damageDealt = entityDamageDealtHistory[dealer.id]?[target.id] ?? 0
+            guard damageDealt >= 3 && handleAction else { return }
+            // Whether the dealer survived the exchange is only known once the attack resolved
+            let secretIds = activeSecretIds
+            let turn = game.turnNumber()
+            pendingLock.around {
+                let alreadyPending = pendingChecks.contains { check in
+                    if case .reckoning(let pendingDealerId, _, _) = check { return pendingDealerId == dealer.id }
+                    return false
+                }
+                if !alreadyPending {
+                    pendingChecks.append(.reckoning(dealerId: dealer.id, secretIds: secretIds, turn: turn))
                 }
             }
         }

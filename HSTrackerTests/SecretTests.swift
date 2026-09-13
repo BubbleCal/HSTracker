@@ -64,12 +64,13 @@ class SecretTests: HSTrackerTests {
         opponentEntity[.player_id] = heroOpponent.id
         opponentEntity[.mulligan_state] = Mulligan.done.rawValue
 
-        game.entities[0] = gameEntity
-        game.entities[1] = heroPlayer
+        // Entities live under their own ids, so id lookups (CARD_TARGET, damage dealers) find them
+        game.entities[gameEntity.id] = gameEntity
+        game.entities[heroPlayer.id] = heroPlayer
         game.player.id = heroPlayer.id
-        game.entities[2] = heroOpponent
+        game.entities[heroOpponent.id] = heroOpponent
         game.opponent.id = heroOpponent.id
-        game.entities[3] = opponentEntity
+        game.entities[opponentEntity.id] = opponentEntity
 
         playerMinion1 = createNewEntity(cardId: "EX1_010")
         playerMinion1[.cardtype] = CardType.minion.rawValue
@@ -95,10 +96,12 @@ class SecretTests: HSTrackerTests {
         playerSpell2[.cardtype] = CardType.spell.rawValue
         playerSpell2[.controller] = heroPlayer.id
 
-        game.entities[4] = playerMinion1
-        game.entities[5] = playerMinion2
-        game.entities[6] = opponentMinion1
-        game.entities[7] = opponentMinion2
+        game.entities[playerMinion1.id] = playerMinion1
+        game.entities[playerMinion2.id] = playerMinion2
+        game.entities[opponentMinion1.id] = opponentMinion1
+        game.entities[opponentMinion2.id] = opponentMinion2
+        game.entities[playerSpell1.id] = playerSpell1
+        game.entities[playerSpell2.id] = playerSpell2
         
         playerCardInHand1 = createNewEntity(cardId: "")
         playerCardInHand1[.controller] = heroPlayer.id
@@ -185,15 +188,9 @@ class SecretTests: HSTrackerTests {
         }
     }
 
-    private func wait(for duration: TimeInterval) {
-        let waitExpectation = expectation(description: "Waiting")
-
-        let when = DispatchTime.now() + duration
-        DispatchQueue.main.asyncAfter(deadline: when) {
-            waitExpectation.fulfill()
-        }
-
-        waitForExpectations(timeout: duration + 2)
+    // What the next root PLAY/ATTACK block or STEP change does in a game
+    private func resolve() {
+        game.secretsManager?.resolvePendingChecks()
     }
 
     func testSingleSecret_HeroToHero_PlayerAttack() {
@@ -489,11 +486,157 @@ class SecretTests: HSTrackerTests {
         XCTAssertEqual(game.secretsManager?.secrets[1].isExcluded(cardId: CardIds.Secrets.Mage.MirrorEntity), false)
     }
 
+    // MARK: - Checks resolved at the next action boundary
+
+    private func addOpponentSecret(_ secret: Entity) {
+        secret[.zone] = Zone.secret.rawValue
+        secret[.controller] = heroOpponent.id
+        game.entities[secret.id] = secret
+        game.opponentSecretPlayed(entity: secret, cardId: "", from: 0, turn: 0, fromZone: .hand, otherId: secret.id)
+    }
+
+    func testSpellCast_ExcludesAfterBoundary_NotBefore() {
+        game.secretsManager?.handleCardPlayed(entity: playerSpell2, parentCardId: "")
+
+        // Only Counterspell is known right away; everything else waits for the spell to resolve
+        verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All)
+        verifySecrets(secretIndex: 1, allSecrets: CardIds.Secrets.Mage.All, triggered: [CardIds.Secrets.Mage.Counterspell])
+        verifySecrets(secretIndex: 2, allSecrets: CardIds.Secrets.Paladin.All)
+        verifySecrets(secretIndex: 3, allSecrets: CardIds.Secrets.Rogue.All)
+
+        resolve()
+        verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All,
+                      triggered: [CardIds.Secrets.Hunter.BargainBin, CardIds.Secrets.Hunter.CatTrick, CardIds.Secrets.Hunter.IceTrap])
+        verifySecrets(secretIndex: 1, allSecrets: CardIds.Secrets.Mage.All,
+                      triggered: [CardIds.Secrets.Mage.Counterspell, CardIds.Secrets.Mage.ManaBind, CardIds.Secrets.Mage.NetherwindPortal])
+        verifySecrets(secretIndex: 2, allSecrets: CardIds.Secrets.Paladin.All, triggered: [CardIds.Secrets.Paladin.OhMyYogg])
+        verifySecrets(secretIndex: 3, allSecrets: CardIds.Secrets.Rogue.All,
+                      triggered: [CardIds.Secrets.Rogue.DirtyTricks, CardIds.Secrets.Rogue.StickySituation])
+    }
+
+    func testSpellCast_CounterspellTriggered_OnlyCounterspellExcluded() {
+        addOpponentSecret(secretMage2)
+        game.secretsManager?.handleCardPlayed(entity: playerSpell2, parentCardId: "")
+
+        // The TRIGGER block arrives after the spell's ZONE change, before the next action
+        secretMage2.cardId = CardIds.Secrets.Mage.Counterspell.ids[0]
+        game.opponentSecretTrigger(entity: secretMage2, cardId: secretMage2.cardId, turn: 1, otherId: secretMage2.id)
+        resolve()
+
+        XCTAssertEqual(game.secretsManager?.secrets.count, 4)
+        verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All)
+        verifySecrets(secretIndex: 1, allSecrets: CardIds.Secrets.Mage.All, triggered: [CardIds.Secrets.Mage.Counterspell])
+        verifySecrets(secretIndex: 2, allSecrets: CardIds.Secrets.Paladin.All)
+        verifySecrets(secretIndex: 3, allSecrets: CardIds.Secrets.Rogue.All)
+    }
+
+    func testSpellCast_IceTrapTriggered_NothingElseExcluded() {
+        addOpponentSecret(secretHunter2)
+        game.secretsManager?.handleCardPlayed(entity: playerSpell2, parentCardId: "")
+
+        secretHunter2.cardId = CardIds.Secrets.Hunter.IceTrap.ids[0]
+        game.opponentSecretTrigger(entity: secretHunter2, cardId: secretHunter2.cardId, turn: 1, otherId: secretHunter2.id)
+        resolve()
+
+        verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All, triggered: [CardIds.Secrets.Hunter.IceTrap])
+        verifySecrets(secretIndex: 1, allSecrets: CardIds.Secrets.Mage.All, triggered: [CardIds.Secrets.Mage.Counterspell])
+        verifySecrets(secretIndex: 2, allSecrets: CardIds.Secrets.Paladin.All)
+        verifySecrets(secretIndex: 3, allSecrets: CardIds.Secrets.Rogue.All)
+    }
+
+    func testSpellCast_SecretPlayedAfterCast_NotExcludedAtBoundary() {
+        game.secretsManager?.handleCardPlayed(entity: playerSpell2, parentCardId: "")
+        // A secret that entered play after the cast never saw the spell
+        addOpponentSecret(secretRogue2)
+        resolve()
+
+        verifySecrets(secretIndex: 3, allSecrets: CardIds.Secrets.Rogue.All,
+                      triggered: [CardIds.Secrets.Rogue.DirtyTricks, CardIds.Secrets.Rogue.StickySituation])
+        verifySecrets(secretIndex: 4, allSecrets: CardIds.Secrets.Rogue.All)
+    }
+
+    func testSpellCast_DoesNotBlockParserThread() {
+        secretHunter1[.controller] = heroOpponent.id
+        secretMage1[.controller] = heroOpponent.id
+        XCTAssertEqual(game.opponentSecretCount, 2)
+
+        // It used to sleep 750 ms with two opponent secrets plus 200 ms for CARD_TARGET
+        let start = Date()
+        game.secretsManager?.handleCardPlayed(entity: playerSpell1, parentCardId: "")
+        XCTAssertLessThan(Date().timeIntervalSince(start), 0.5)
+    }
+
+    func testOpponentSecretCount_IgnoresSecretsOutsideTheSecretZone() {
+        secretHunter1[.controller] = heroOpponent.id
+        secretMage2[.controller] = heroOpponent.id
+        secretMage2[.zone] = Zone.graveyard.rawValue
+        game.entities[secretMage2.id] = secretMage2
+        secretPaladin2[.controller] = heroOpponent.id
+        secretPaladin2[.zone] = Zone.hand.rawValue
+        game.entities[secretPaladin2.id] = secretPaladin2
+
+        XCTAssertEqual(game.opponentSecretCount, 1)
+    }
+
+    private func createOpponentMinion(cardId: String, zone: Zone) -> Entity {
+        let minion = createNewEntity(cardId: cardId)
+        minion[.cardtype] = CardType.minion.rawValue
+        minion[.controller] = heroOpponent.id
+        minion[.zone] = zone.rawValue
+        game.entities[minion.id] = minion
+        return minion
+    }
+
+    func testTwoDeathrattleMinionsDieTogether_OnlyTokensRemain_AvengeNotExcluded() {
+        let golem1 = createOpponentMinion(cardId: CardIds.Collectible.Neutral.HarvestGolem, zone: .graveyard)
+        golem1[.deathrattle] = 1
+        let golem2 = createOpponentMinion(cardId: CardIds.Collectible.Neutral.HarvestGolem, zone: .graveyard)
+        golem2[.deathrattle] = 1
+        game.opponentMinionDeath(entity: golem1, turn: 2)
+        game.opponentMinionDeath(entity: golem2, turn: 2)
+        _ = createOpponentMinion(cardId: "skele21", zone: .play)
+        _ = createOpponentMinion(cardId: "skele21", zone: .play)
+
+        resolve()
+        XCTAssertEqual(game.secretsManager?.secrets[2].isExcluded(cardId: CardIds.Secrets.Paladin.Avenge), false)
+    }
+
+    func testDeathsBlockEnd_UnlistedSummonAfterwards_AvengeNotExcluded() {
+        game.opponentMinionDeath(entity: opponentMinion1, turn: 2)
+        game.secretsManager?.resolvePendingAvenge()
+        // Summoned after the death phase by something DeathrattleSummonCardIds does not know
+        _ = createOpponentMinion(cardId: "skele21", zone: .play)
+
+        resolve()
+        XCTAssertEqual(game.secretsManager?.secrets[2].isExcluded(cardId: CardIds.Secrets.Paladin.Avenge), false)
+    }
+
+    func testReckoning_DealerDiedInTrade_NotExcluded() {
+        setPlayerAsCurrentPlayer()
+        playerMinion1[.health] = 3
+        playerMinion1[.zone] = Zone.play.rawValue
+        game.entityDamage(dealer: playerMinion1, entity: opponentMinion1, damage: 3)
+        XCTAssertEqual(game.secretsManager?.secrets[2].isExcluded(cardId: CardIds.Secrets.Paladin.Reckoning), false)
+
+        playerMinion1[.zone] = Zone.graveyard.rawValue
+        resolve()
+        XCTAssertEqual(game.secretsManager?.secrets[2].isExcluded(cardId: CardIds.Secrets.Paladin.Reckoning), false)
+    }
+
+    func testReset_DiscardsPendingChecks() {
+        game.secretsManager?.handleCardPlayed(entity: playerSpell2, parentCardId: "")
+        game.secretsManager?.reset()
+        // Same entity id as a secret the pending spell check was taken for
+        addOpponentSecret(secretRogue1)
+        resolve()
+
+        verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Rogue.All)
+    }
+
     func testSingleSecret_OneMinionDied() {
         opponentMinion2[.zone] = Zone.play.rawValue
         game.opponentMinionDeath(entity: opponentMinion1, turn: 2)
-        
-        wait(for: game.secretsManager?.avengeDelay ?? 0.050 + 2)
+        resolve()
 
         verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All, triggered: [CardIds.Secrets.Hunter.EmergencyManeuvers])
         verifySecrets(secretIndex: 1, allSecrets: CardIds.Secrets.Mage.All,
@@ -533,7 +676,6 @@ class SecretTests: HSTrackerTests {
     func testSingleSecret_OpponentDamage() {
         setPlayerAsCurrentPlayer()
         game.entityDamage(dealer: playerMinion1, entity: heroOpponent, damage: 1)
-        Thread.sleep(forTimeInterval: 0.5)
         verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All)
         verifySecrets(secretIndex: 1, allSecrets: CardIds.Secrets.Mage.All)
         verifySecrets(secretIndex: 2, allSecrets: CardIds.Secrets.Paladin.All,
@@ -554,7 +696,7 @@ class SecretTests: HSTrackerTests {
         setPlayerAsCurrentPlayer()
         playerMinion1[.health] = 1
         game.entityDamage(dealer: playerMinion1, entity: opponentMinion1, damage: 3)
-        Thread.sleep(forTimeInterval: 0.5)
+        resolve()
         verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All)
         verifySecrets(secretIndex: 1, allSecrets: CardIds.Secrets.Mage.All)
         verifySecrets(secretIndex: 2, allSecrets: CardIds.Secrets.Paladin.All,
@@ -564,6 +706,7 @@ class SecretTests: HSTrackerTests {
 
     func testSingleSecret_MinionTarget_SpellPlayed() {
         game.secretsManager?.handleCardPlayed(entity: playerSpell1, parentCardId: "")
+        resolve()
 
         verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All,
                       triggered: [CardIds.Secrets.Hunter.BargainBin, CardIds.Secrets.Hunter.CatTrick, CardIds.Secrets.Hunter.IceTrap])
@@ -578,6 +721,7 @@ class SecretTests: HSTrackerTests {
 
     func testSingleSecret_NoMinionTarget_SpellPlayed() {
         game.secretsManager?.handleCardPlayed(entity: playerSpell2, parentCardId: "")
+        resolve()
 
         verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All,
                       triggered: [CardIds.Secrets.Hunter.BargainBin, CardIds.Secrets.Hunter.CatTrick, CardIds.Secrets.Hunter.IceTrap])
@@ -592,6 +736,7 @@ class SecretTests: HSTrackerTests {
     func testSingleSecret_NoMinionTarget_SpellPlayed_ThirdThisTurn() {
         game.playerEntity?[.num_cards_played_this_turn] = 3
         game.secretsManager?.handleCardPlayed(entity: playerSpell2, parentCardId: "")
+        resolve()
 
         verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All, triggered: [CardIds.Secrets.Hunter.BargainBin, CardIds.Secrets.Hunter.CatTrick, CardIds.Secrets.Hunter.IceTrap, CardIds.Secrets.Hunter.MotionDenied, CardIds.Secrets.Hunter.RatTrap])
         verifySecrets(secretIndex: 1, allSecrets: CardIds.Secrets.Mage.All, triggered: [CardIds.Secrets.Mage.Counterspell, CardIds.Secrets.Mage.ManaBind, CardIds.Secrets.Mage.NetherwindPortal])
@@ -604,6 +749,7 @@ class SecretTests: HSTrackerTests {
     func testSingleSecret_MinionOnBoard_NoMinionTarget_SpellPlayed() {
         opponentMinion1[.zone] = Zone.play.rawValue
         game.secretsManager?.handleCardPlayed(entity: playerSpell2, parentCardId: "")
+        resolve()
         
         verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All,
                       triggered: [CardIds.Secrets.Hunter.BargainBin, CardIds.Secrets.Hunter.CatTrick, CardIds.Secrets.Hunter.IceTrap])
@@ -808,7 +954,6 @@ class SecretTests: HSTrackerTests {
 //    func testMultipleSecrets_MinionPlayed_MinionDiedNextTurn() {
 //        game.playerMinionPlayed(entity: playerMinion1)
 //        game.turnStart(player: PlayerType.player, turn: 2)
-//        wait(for: 2)
 //        game.playerMinionDeath(entity: playerMinion1)
 //        
 //        verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All,
