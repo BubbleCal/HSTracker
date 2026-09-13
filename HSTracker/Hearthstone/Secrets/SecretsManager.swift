@@ -33,9 +33,33 @@ private struct CardPlaySnapshot {
     let freeSpaceInHandAtPlay: Bool
 }
 
+// A minion played from hand. HDT keeps one list of saved exclusions and re-includes it on every
+// secret; this keeps, per secret, only the candidates the play itself ruled out, so taking them
+// back cannot re-list a candidate another event excluded.
+private final class MinionPlaySnapshot {
+    let minionId: Int
+    let secretIds: Set<Int>
+    let turn: Int
+    // Secret entity id -> candidates this play ruled out. Guarded by SecretsManager.pendingLock.
+    var saved = [Int: [MultiIdCard]]()
+
+    init(minionId: Int, secretIds: Set<Int>, turn: Int) {
+        self.minionId = minionId
+        self.secretIds = secretIds
+        self.turn = turn
+    }
+
+    func save(_ transitions: [(secretId: Int, card: MultiIdCard)]) {
+        for transition in transitions {
+            saved[transition.secretId, default: []].append(transition.card)
+        }
+    }
+}
+
 private enum PendingSecretCheck {
     case spellCast(SpellCastSnapshot)
     case threeCards(CardPlaySnapshot)
+    case minionPlayed(MinionPlaySnapshot)
     case reckoning(dealerId: Int, secretIds: Set<Int>, turn: Int)
 }
 
@@ -63,7 +87,9 @@ class SecretsManager {
     private var entityDamageDealtHistory = SynchronizedDictionary<Int, SynchronizedDictionary<Int, Int>>()
     
     private var _lastPlayedMinionId: Int = 0
-    private var savedSecrets = SynchronizedArray<MultiIdCard>()
+    // The latest minion play, pending or resolved, until the next card is played or the player's
+    // next turn starts (HDT clears its saved secrets at the same points)
+    private var lastMinionPlay: MinionPlaySnapshot?
     
     var onChanged: (([Card]) -> Void)?
     // Fired on the parser thread for every candidate that becomes impossible or possible again
@@ -85,14 +111,6 @@ class SecretsManager {
         return secrets.count > 0
     }
     
-    private func saveSecret(secret: MultiIdCard) {
-        if !secrets.any({ (s) -> Bool in
-            s.isExcluded(cardId: secret)
-        }) {
-            savedSecrets.append(secret)
-        }
-    }
-    
     // Excludes the candidates on every active secret, or only on the secrets in `secretIds` (the ones
     // that were active when the event happened), and records why for the hover text and the history.
     func exclude(cardIds: [MultiIdCard], reason: SecretExclusionReason, secretIds: Set<Int>? = nil) {
@@ -112,10 +130,14 @@ class SecretsManager {
         applyExclusions(cardIds.map { ($0, nil) }, secretIds: nil, turn: nil, invokeCallback: true)
     }
 
-    private func applyExclusions(_ entries: [(card: MultiIdCard, reason: SecretExclusionReason?)], secretIds: Set<Int>?, turn: Int?, invokeCallback: Bool) {
-        guard !entries.isEmpty else { return }
+    // Returns the candidates that became impossible, per secret
+    @discardableResult
+    private func applyExclusions(_ entries: [(card: MultiIdCard, reason: SecretExclusionReason?)], secretIds: Set<Int>?, turn: Int?,
+                                 invokeCallback: Bool) -> [(secretId: Int, card: MultiIdCard)] {
+        guard !entries.isEmpty else { return [] }
         let turn = turn ?? game.turnNumber()
         var events = [SecretExclusionEvent]()
+        var transitions = [(secretId: Int, card: MultiIdCard)]()
         for secret in secrets.array() {
             if let secretIds, !secretIds.contains(secret.entity.id) {
                 continue
@@ -123,6 +145,7 @@ class SecretsManager {
             var changed = false
             for entry in entries where secret.exclude(cardId: entry.card, reason: entry.reason, turn: turn) {
                 changed = true
+                transitions.append((secret.entity.id, entry.card))
                 events.append(SecretExclusionEvent(secretEntityId: secret.entity.id, cardId: entry.card.ids[0],
                                                    exclusion: SecretExclusion(reason: entry.reason, turn: turn), included: false))
             }
@@ -136,6 +159,7 @@ class SecretsManager {
         if invokeCallback && !events.isEmpty {
             onChanged?(getSecretList())
         }
+        return transitions
     }
 
     private func include(cardIds: [MultiIdCard], on targets: [Secret]) {
@@ -199,8 +223,8 @@ class SecretsManager {
             _avengePending = nil
             pendingChecks.removeAll()
             triggeredSinceBoundary.removeAll()
+            lastMinionPlay = nil
         }
-        savedSecrets.removeAll()
         _lastPlayedMinionId = 0
         entityDamageDealtHistory.removeAll()
         _lastStartOfTurnCheck = 0
@@ -252,7 +276,8 @@ class SecretsManager {
         if secret.entity.hasCardId {
             if let secretMultiIdCard = CardIds.Secrets.getSecretMultiIdCard(secret.entity.cardId) {
                 exclude(cardId: secretMultiIdCard, reason: .copyRevealed, invokeCallback: false)
-                savedSecrets.remove(secretMultiIdCard)
+                // A revealed copy keeps the card excluded on the others, whatever happens to the play
+                forgetSaved(card: secretMultiIdCard)
             }
         }
         onChanged?(getSecretList())
@@ -691,33 +716,24 @@ class SecretsManager {
         _triggeredSecrets.removeAll()
 
         if !entity.has(tag: .dormant) {
-            saveSecret(secret: CardIds.Secrets.Hunter.BargainBin)
             exclude.append(CardIds.Secrets.Hunter.BargainBin)
-            saveSecret(secret: CardIds.Secrets.Hunter.Snipe)
             exclude.append(CardIds.Secrets.Hunter.Snipe)
-            saveSecret(secret: CardIds.Secrets.Mage.ExplosiveRunes)
             exclude.append(CardIds.Secrets.Mage.ExplosiveRunes)
-            saveSecret(secret: CardIds.Secrets.Mage.Objection)
             exclude.append(CardIds.Secrets.Mage.Objection)
-            saveSecret(secret: CardIds.Secrets.Mage.PotionOfPolymorph)
             exclude.append(CardIds.Secrets.Mage.PotionOfPolymorph)
-            saveSecret(secret: CardIds.Secrets.Paladin.Repentance)
             exclude.append(CardIds.Secrets.Paladin.Repentance)
         }
 
         if freeSpaceOnBoard {
-            saveSecret(secret: CardIds.Secrets.Mage.MirrorEntity)
             exclude.append(CardIds.Secrets.Mage.MirrorEntity)
-            saveSecret(secret: CardIds.Secrets.Rogue.Ambush)
-            exclude.append(CardIds.Secrets.Rogue.Ambush)
-            saveSecret(secret: CardIds.Secrets.Hunter.Zombeeees)
             exclude.append(CardIds.Secrets.Hunter.Zombeeees)
         }
 
         if freeSpaceInHand {
             exclude.append(CardIds.Secrets.Mage.FrozenClone)
         }
-        exclude.append(CardIds.Secrets.Rogue.Kidnap)
+        // Ambush and Kidnap are decided once the battlecry and the older secrets resolved (see
+        // resolveMinionPlayed): Kidnap's Sack or a battlecry summon can fill the board first.
 
         //Hidden cache will only trigger if the opponent has a minion in hand.
         //We might not know this for certain - requires additional tracking logic.
@@ -732,7 +748,68 @@ class SecretsManager {
             exclude.append(CardIds.Secrets.Hunter.HiddenCache)
         }
 
-        self.exclude(cardIds: exclude, reason: .minionPlayed)
+        let snapshot = MinionPlaySnapshot(minionId: entity.id, secretIds: activeSecretIds, turn: game.turnNumber())
+        let transitions = applyExclusions(exclude.map { ($0, .minionPlayed) }, secretIds: snapshot.secretIds, turn: snapshot.turn, invokeCallback: true)
+        pendingLock.around {
+            snapshot.save(transitions)
+            pendingChecks.append(.minionPlayed(snapshot))
+            lastMinionPlay = snapshot
+        }
+    }
+
+    // At the boundary after a minion play
+    private func resolveMinionPlayed(_ snapshot: MinionPlaySnapshot) {
+        // After-play secrets do not trigger on a minion that was countered, removed, returned or is
+        // about to die by then (Mirror Entity's wiki notes), so anything that took the minion out of
+        // play before the boundary means they never had their chance: Explosive Runes or Snipe
+        // killing it, Objection! countering it, its own battlecry. Only Objection! reacts before that.
+        guard let minion = game.entities[snapshot.minionId], minion.isInPlay, minion.isControlled(by: game.player.id),
+              !minion.has(tag: .to_be_destroyed), !(minion.has(tag: .health) && minion.health <= 0) else {
+            restoreSaved(snapshot)
+            return
+        }
+        // The board counts Kidnapper's Sacks, Ambushers and copies the older secrets summoned
+        guard freeSpaceOnBoard else { return }
+        let transitions = applyExclusions([(CardIds.Secrets.Rogue.Ambush, .minionPlayed), (CardIds.Secrets.Rogue.Kidnap, .minionPlayed)],
+                                          secretIds: snapshot.secretIds, turn: snapshot.turn, invokeCallback: true)
+        pendingLock.around { snapshot.save(transitions) }
+    }
+
+    // Takes back what the play ruled out on each secret, except Objection!, which reacts to the
+    // play itself before anything can remove the minion
+    private func restoreSaved(_ snapshot: MinionPlaySnapshot) {
+        let saved: [Int: [MultiIdCard]] = pendingLock.around {
+            let saved = snapshot.saved
+            snapshot.saved.removeAll()
+            return saved
+        }
+        var restored = false
+        for secret in secrets.array() {
+            guard let cards = saved[secret.entity.id] else { continue }
+            let restore = cards.filter { $0 != CardIds.Secrets.Mage.Objection }
+            restored = restored || restore.any { secret.isExcluded(cardId: $0) }
+            include(cardIds: restore, on: [secret])
+        }
+        if restored {
+            onChanged?(getSecretList())
+        }
+    }
+
+    private func forgetSaved(card: MultiIdCard) {
+        pendingLock.around {
+            var plays = pendingChecks.compactMap { check -> MinionPlaySnapshot? in
+                if case .minionPlayed(let snapshot) = check { return snapshot }
+                return nil
+            }
+            if let lastMinionPlay {
+                plays.append(lastMinionPlay)
+            }
+            for play in plays {
+                for (secretId, cards) in play.saved {
+                    play.saved[secretId] = cards.filter { $0 != card }
+                }
+            }
+        }
     }
 
     func handleOpponentMinionDeath(entity: Entity) {
@@ -797,15 +874,13 @@ class SecretsManager {
     }
     
     func handlePlayerMinionDeath(entity: Entity) {
-        guard entity.id == _lastPlayedMinionId && savedSecrets.count > 0 else { return }
-        // Only one secret triggers per event, so the exclusions made when the minion was played
-        // are only invalid if one of those secrets actually triggered on it. Anything else
-        // killing the minion later in the turn (combat, board clears, end of turn effects)
-        // leaves them valid.
+        guard entity.id == _lastPlayedMinionId,
+              let play = pendingLock.around({ lastMinionPlay }), play.minionId == entity.id else { return }
+        // HDT's rule: only one secret triggers per event, so when a minion-played secret triggered
+        // on the minion, the others were ruled out wrongly, even if the minion survived it and died
+        // later in the turn. The boundary already restores when the minion left play before it.
         guard _triggeredSecrets.any({ x in CardIds.Secrets.minionPlayed.any({ s in s == x.cardId }) }) else { return }
-        include(cardIds: savedSecrets.array(), on: secrets.array())
-
-        onChanged?(getSecretList())
+        restoreSaved(play)
     }
 
     // HDT HandleAvengeAsync waits 50 ms of game time; here the check waits for the end of the
@@ -858,6 +933,8 @@ class SecretsManager {
                 resolveSpellCast(snapshot, triggered: triggered)
             case .threeCards(let snapshot):
                 resolveThreeCards(snapshot, triggered: triggered)
+            case .minionPlayed(let snapshot):
+                resolveMinionPlayed(snapshot)
             case .reckoning(let dealerId, let secretIds, let turn):
                 // The dealer has to survive the hit for Reckoning to have had a target
                 if let dealer = game.entities[dealerId], dealer.health > 0 && dealer[.zone] != Zone.graveyard.rawValue {
@@ -1017,7 +1094,7 @@ class SecretsManager {
     }
     
     func handlePlayerTurnStart() {
-        savedSecrets.removeAll()
+        pendingLock.around { lastMinionPlay = nil }
     }
     
     func handleOpponentTurnStart() {
@@ -1051,7 +1128,7 @@ class SecretsManager {
             return
         }
 
-        savedSecrets.removeAll()
+        pendingLock.around { lastMinionPlay = nil }
 
         var exclude = playedFromHandExclusions(entity: entity)
 
@@ -1129,7 +1206,18 @@ class SecretsManager {
     
     func onEntityRevealedAsMinion(entity: Entity) {
         if entititesInHandOnMinionsPlayed.contains(entity) && entity.isMinion {
-            exclude(cardId: CardIds.Secrets.Hunter.HiddenCache, reason: .minionPlayed)
+            let transitions = applyExclusions([(CardIds.Secrets.Hunter.HiddenCache, .minionPlayed)], secretIds: nil, turn: nil, invokeCallback: true)
+            // Revealed while a minion play is still resolving: save it with that play, so it is
+            // taken back like the others if the minion leaves play first
+            pendingLock.around {
+                let play = pendingChecks.last { check in
+                    if case .minionPlayed = check { return true }
+                    return false
+                }
+                if case .minionPlayed(let snapshot) = play {
+                    snapshot.save(transitions)
+                }
+            }
         }
     }
     

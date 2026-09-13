@@ -1505,7 +1505,7 @@ struct TagChangeActions {
     
     private func minionRevealed(eventHandler: PowerEventHandler, id: Int) {
         if let entity = eventHandler.entities[id] {
-            AppDelegate.instance().coreManager.game.secretsManager?.onEntityRevealedAsMinion(entity: entity)
+            (eventHandler as? Game)?.secretsManager?.onEntityRevealedAsMinion(entity: entity)
         }
     }
     

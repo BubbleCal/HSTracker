@@ -862,7 +862,12 @@ class SecretTests: HSTrackerTests {
     }
 
     func testSingleSecret_MinionPlayed() {
+        playerMinion1[.zone] = Zone.play.rawValue
         game.playerMinionPlayed(entity: playerMinion1)
+        // Ambush and Kidnap wait for the battlecry and the older secrets
+        verifySecrets(secretIndex: 3, allSecrets: CardIds.Secrets.Rogue.All)
+
+        resolve()
         verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All,
                       triggered: [CardIds.Secrets.Hunter.BargainBin, CardIds.Secrets.Hunter.Snipe, CardIds.Secrets.Hunter.Zombeeees])
         verifySecrets(secretIndex: 1, allSecrets: CardIds.Secrets.Mage.All,
@@ -878,11 +883,174 @@ class SecretTests: HSTrackerTests {
     
     func testSingleSecret_DormantMinionPlayed() {
         playerMinion1[.dormant] = 1
+        playerMinion1[.zone] = Zone.play.rawValue
         game.playerMinionPlayed(entity: playerMinion1)
+        resolve()
         verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All, triggered: [CardIds.Secrets.Hunter.Zombeeees])
         verifySecrets(secretIndex: 1, allSecrets: CardIds.Secrets.Mage.All, triggered: [CardIds.Secrets.Mage.MirrorEntity, CardIds.Secrets.Mage.FrozenClone])
         verifySecrets(secretIndex: 2, allSecrets: CardIds.Secrets.Paladin.All)
         verifySecrets(secretIndex: 3, allSecrets: CardIds.Secrets.Rogue.All, triggered: [CardIds.Secrets.Rogue.Ambush, CardIds.Secrets.Rogue.Kidnap])
+    }
+
+    // MARK: - Minion played
+
+    private func triggerOpponentSecret(_ secret: Entity, as card: MultiIdCard) {
+        secret.cardId = card.ids[0]
+        game.opponentSecretTrigger(entity: secret, cardId: secret.cardId, turn: 1, otherId: secret.id)
+    }
+
+    func testMinionPlayed_ObjectionCounters_MinionToSetaside_RestoresMirrorEntityFrozenCloneExplosiveRunes() {
+        addOpponentSecret(secretMage2)
+        playerMinion1[.zone] = Zone.play.rawValue
+        game.playerMinionPlayed(entity: playerMinion1)
+
+        triggerOpponentSecret(secretMage2, as: CardIds.Secrets.Mage.Objection)
+        playerMinion1[.zone] = Zone.setaside.rawValue
+        resolve()
+
+        verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All)
+        verifySecrets(secretIndex: 1, allSecrets: CardIds.Secrets.Mage.All, triggered: [CardIds.Secrets.Mage.Objection])
+        verifySecrets(secretIndex: 2, allSecrets: CardIds.Secrets.Paladin.All)
+        verifySecrets(secretIndex: 3, allSecrets: CardIds.Secrets.Rogue.All)
+    }
+
+    func testMinionPlayed_ExplosiveRunesKillsMinion_FrozenCloneRestored() {
+        addOpponentSecret(secretMage2)
+        playerMinion1[.zone] = Zone.play.rawValue
+        game.playerMinionPlayed(entity: playerMinion1)
+
+        triggerOpponentSecret(secretMage2, as: CardIds.Secrets.Mage.ExplosiveRunes)
+        playerMinion1[.zone] = Zone.graveyard.rawValue
+        game.playerMinionDeath(entity: playerMinion1)
+        resolve()
+
+        // The revealed Explosive Runes stays ruled out on the other Mage secret
+        verifySecrets(secretIndex: 1, allSecrets: CardIds.Secrets.Mage.All,
+                      triggered: [CardIds.Secrets.Mage.ExplosiveRunes, CardIds.Secrets.Mage.Objection])
+        verifySecrets(secretIndex: 3, allSecrets: CardIds.Secrets.Rogue.All)
+    }
+
+    func testMinionPlayed_MortallyWoundedAtNextAction_Restored() {
+        playerMinion1[.zone] = Zone.play.rawValue
+        playerMinion1[.health] = 2
+        game.playerMinionPlayed(entity: playerMinion1)
+        playerMinion1[.damage] = 2
+        resolve()
+
+        XCTAssertEqual(game.secretsManager?.secrets[1].isExcluded(cardId: CardIds.Secrets.Mage.FrozenClone), false)
+        XCTAssertEqual(game.secretsManager?.secrets[3].isExcluded(cardId: CardIds.Secrets.Rogue.Kidnap), false)
+    }
+
+    func testMinionPlayed_OpponentBoardFull_KidnapNotExcluded() {
+        _ = fillOpponentBoard(upTo: 7)
+        playerMinion1[.zone] = Zone.play.rawValue
+        game.playerMinionPlayed(entity: playerMinion1)
+        resolve()
+
+        XCTAssertEqual(game.secretsManager?.secrets[3].isExcluded(cardId: CardIds.Secrets.Rogue.Kidnap), false)
+        XCTAssertEqual(game.secretsManager?.secrets[3].isExcluded(cardId: CardIds.Secrets.Rogue.Ambush), false)
+        XCTAssertEqual(game.secretsManager?.secrets[1].isExcluded(cardId: CardIds.Secrets.Mage.FrozenClone), true)
+    }
+
+    func testMinionPlayed_OpponentBoardFilledBeforeNextAction_AmbushAndKidnapNotExcluded() {
+        _ = fillOpponentBoard(upTo: 6)
+        playerMinion1[.zone] = Zone.play.rawValue
+        game.playerMinionPlayed(entity: playerMinion1)
+        // A battlecry or an older secret summoned for the opponent
+        _ = fillOpponentBoard(upTo: 7)
+        resolve()
+
+        XCTAssertEqual(game.secretsManager?.secrets[3].isExcluded(cardId: CardIds.Secrets.Rogue.Ambush), false)
+        XCTAssertEqual(game.secretsManager?.secrets[3].isExcluded(cardId: CardIds.Secrets.Rogue.Kidnap), false)
+    }
+
+    func testMinionPlayed_BattlecryFreesOpponentBoard_AmbushAndKidnapExcluded() {
+        let board = fillOpponentBoard(upTo: 7)
+        playerMinion1[.zone] = Zone.play.rawValue
+        game.playerMinionPlayed(entity: playerMinion1)
+        board[0][.zone] = Zone.graveyard.rawValue
+        resolve()
+
+        XCTAssertEqual(game.secretsManager?.secrets[3].isExcluded(cardId: CardIds.Secrets.Rogue.Ambush), true)
+        XCTAssertEqual(game.secretsManager?.secrets[3].isExcluded(cardId: CardIds.Secrets.Rogue.Kidnap), true)
+    }
+
+    func testMinionPlayed_KidnapSackFillsBoard_AmbushNotExcluded() {
+        _ = fillOpponentBoard(upTo: 6)
+        addOpponentSecret(secretRogue2)
+        playerMinion1[.zone] = Zone.play.rawValue
+        game.playerMinionPlayed(entity: playerMinion1)
+
+        triggerOpponentSecret(secretRogue2, as: CardIds.Secrets.Rogue.Kidnap)
+        playerMinion1[.zone] = Zone.setaside.rawValue
+        _ = fillOpponentBoard(upTo: 7)
+        resolve()
+
+        XCTAssertEqual(game.secretsManager?.secrets.count, 4)
+        XCTAssertEqual(game.secretsManager?.secrets[3].isExcluded(cardId: CardIds.Secrets.Rogue.Ambush), false)
+    }
+
+    func testMinionPlayed_HiddenCacheSavedAndRestoredWhenMinionPlayedSecretTriggered() {
+        opponentCardInHand1[.cardtype] = CardType.minion.rawValue
+        addOpponentSecret(secretHunter2)
+        playerMinion1[.zone] = Zone.play.rawValue
+        game.playerMinionPlayed(entity: playerMinion1)
+        XCTAssertEqual(game.secretsManager?.secrets[0].isExcluded(cardId: CardIds.Secrets.Hunter.HiddenCache), true)
+
+        triggerOpponentSecret(secretHunter2, as: CardIds.Secrets.Hunter.Snipe)
+        playerMinion1[.zone] = Zone.graveyard.rawValue
+        game.playerMinionDeath(entity: playerMinion1)
+        resolve()
+
+        verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All, triggered: [CardIds.Secrets.Hunter.Snipe])
+    }
+
+    func testMinionPlayed_HandCardRevealedAsMinionBeforeNextAction_HiddenCacheRestoredWithThePlay() {
+        playerMinion1[.zone] = Zone.play.rawValue
+        game.playerMinionPlayed(entity: playerMinion1)
+        XCTAssertEqual(game.secretsManager?.secrets[0].isExcluded(cardId: CardIds.Secrets.Hunter.HiddenCache), false)
+
+        opponentCardInHand1[.cardtype] = CardType.minion.rawValue
+        game.secretsManager?.onEntityRevealedAsMinion(entity: opponentCardInHand1)
+        XCTAssertEqual(game.secretsManager?.secrets[0].isExcluded(cardId: CardIds.Secrets.Hunter.HiddenCache), true)
+
+        playerMinion1[.zone] = Zone.hand.rawValue
+        resolve()
+        XCTAssertEqual(game.secretsManager?.secrets[0].isExcluded(cardId: CardIds.Secrets.Hunter.HiddenCache), false)
+    }
+
+    func testMinionPlayed_MinionPlayedSecretTriggered_MinionDiesLaterInTurn_Restored() {
+        addOpponentSecret(secretPaladin2)
+        playerMinion1[.zone] = Zone.play.rawValue
+        game.playerMinionPlayed(entity: playerMinion1)
+        triggerOpponentSecret(secretPaladin2, as: CardIds.Secrets.Paladin.Repentance)
+        resolve()
+        XCTAssertEqual(game.secretsManager?.secrets[3].isExcluded(cardId: CardIds.Secrets.Rogue.Kidnap), true)
+
+        // HDT's one-secret-per-event rule takes the play's exclusions back when the minion dies
+        playerMinion1[.zone] = Zone.graveyard.rawValue
+        game.playerMinionDeath(entity: playerMinion1)
+
+        verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All)
+        verifySecrets(secretIndex: 1, allSecrets: CardIds.Secrets.Mage.All, triggered: [CardIds.Secrets.Mage.Objection])
+        verifySecrets(secretIndex: 3, allSecrets: CardIds.Secrets.Rogue.All)
+    }
+
+    func testMinionPlayed_ExclusionsTakenBackOnlyOnTheSecretsThePlayRuledOut() {
+        playerMinion1[.zone] = Zone.play.rawValue
+        playerMinion1[.health] = 1
+        // Mirror Entity was already ruled out on the Mage secret before the play
+        game.secretsManager?.exclude(cardId: CardIds.Secrets.Mage.MirrorEntity, reason: .minionPlayed)
+        game.playerMinionPlayed(entity: playerMinion1)
+        addOpponentSecret(secretMage2)
+        game.secretsManager?.exclude(cardId: CardIds.Secrets.Mage.FrozenClone, reason: .minionPlayed, secretIds: [secretMage2.id])
+
+        playerMinion1[.zone] = Zone.graveyard.rawValue
+        resolve()
+
+        XCTAssertEqual(game.secretsManager?.secrets[1].isExcluded(cardId: CardIds.Secrets.Mage.MirrorEntity), true)
+        XCTAssertEqual(game.secretsManager?.secrets[1].isExcluded(cardId: CardIds.Secrets.Mage.FrozenClone), false)
+        XCTAssertEqual(game.secretsManager?.secrets[4].isExcluded(cardId: CardIds.Secrets.Mage.FrozenClone), true)
     }
 
     func testSingleSecret_OpponentDamage() {
@@ -1112,9 +1280,27 @@ class SecretTests: HSTrackerTests {
         verifySecrets(secretIndex: 3, allSecrets: CardIds.Secrets.Rogue.All)
     }
     
-    func testMultipleSecrets_MinionPlayed_NoSecretTriggered_MinionDied() {
+    func testMultipleSecrets_MinionPlayed_MinionDiedBeforeNextAction_RestoredExceptObjection() {
+        playerMinion1[.zone] = Zone.play.rawValue
         game.playerMinionPlayed(entity: playerMinion1)
+        // Its own battlecry or an untracked effect removed it before the after-play secrets
+        playerMinion1[.zone] = Zone.graveyard.rawValue
         game.playerMinionDeath(entity: playerMinion1)
+        resolve()
+
+        verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All)
+        verifySecrets(secretIndex: 1, allSecrets: CardIds.Secrets.Mage.All, triggered: [CardIds.Secrets.Mage.Objection])
+        verifySecrets(secretIndex: 2, allSecrets: CardIds.Secrets.Paladin.All)
+        verifySecrets(secretIndex: 3, allSecrets: CardIds.Secrets.Rogue.All)
+    }
+
+    func testMultipleSecrets_MinionPlayed_NoSecretTriggered_MinionDiedAfterNextAction() {
+        playerMinion1[.zone] = Zone.play.rawValue
+        game.playerMinionPlayed(entity: playerMinion1)
+        resolve()
+        playerMinion1[.zone] = Zone.graveyard.rawValue
+        game.playerMinionDeath(entity: playerMinion1)
+        resolve()
 
         // Nothing triggered on the play, so dying later leaves its exclusions valid
         verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All,
@@ -1182,8 +1368,11 @@ class SecretTests: HSTrackerTests {
 //    }
     
     func testMultipleSecrets_MinionPlayed_AnotherMinionDied() {
+        playerMinion1[.zone] = Zone.play.rawValue
         game.playerMinionPlayed(entity: playerMinion1)
+        playerMinion2[.zone] = Zone.graveyard.rawValue
         game.playerMinionDeath(entity: playerMinion2)
+        resolve()
         
         verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All,
                       triggered: [CardIds.Secrets.Hunter.BargainBin, CardIds.Secrets.Hunter.Snipe, CardIds.Secrets.Hunter.Zombeeees])
