@@ -1033,6 +1033,9 @@ class SecretsManager {
             fullestSinceBoundary = nil
             return state
         }
+        // Both callers run for every action and step in every game mode, and the window below
+        // scans every entity twice, so skip it when nothing is waiting (the common case).
+        guard !checks.isEmpty else { return }
         let window = AfterPlayWindow(fullestBoard: max(fullest?.board ?? 0, game.opponentBoardCount),
                                      fullestHand: max(fullest?.hand ?? 0, game.opponentHandCount))
         for check in checks {
