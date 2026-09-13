@@ -10,7 +10,7 @@
 import XCTest
 @testable import HSTracker
 
-class BoardDamageTests: XCTestCase {
+class BoardDamageTests: HSTrackerTests {
     private var nextId = 100
 
     private func entity(_ type: CardType, cardId: String = "", _ tags: [GameTag: Int] = [:]) -> Entity {

@@ -17,6 +17,146 @@ extension Optional: AnyOptional {
     var isNil: Bool { self == nil }
 }
 
+/// The defaults every setting is kept in.
+///
+/// The unit tests are hosted in HSTracker.app under its bundle id, so `.standard` there is the
+/// player's own HSTracker preferences: a test would see whatever they had turned on (Remove
+/// impossible secrets, the show and hide options) and anything it changed would be written back
+/// into their real settings. In the test host every setting lives in memory instead and starts
+/// at its default.
+let settingsDefaults: UserDefaults = AppDelegate.isRunningUnitTests ? VolatileUserDefaults() : .standard
+
+/// A `UserDefaults` kept in memory only, for the unit test host. Nothing is read from or written to
+/// any preferences domain; `removeAll()` puts every setting back to its default.
+final class VolatileUserDefaults: UserDefaults {
+    private let lock = NSLock()
+    private var values: [String: Any] = [:]
+    private var registered: [String: Any] = [:]
+
+    init() {
+        // Never stored to: every accessor goes through `values`. A suite of its own all the same, so
+        // an accessor Foundation adds later could not reach the player's settings.
+        super.init(suiteName: "net.hearthsim.hstracker.unit-tests")!
+    }
+
+    private func locked<T>(_ body: () -> T) -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return body()
+    }
+
+    func removeAll() {
+        locked { values.removeAll() }
+    }
+
+    override func object(forKey defaultName: String) -> Any? {
+        return locked { values[defaultName] ?? registered[defaultName] }
+    }
+
+    override func value(forKey key: String) -> Any? {
+        return object(forKey: key)
+    }
+
+    override func set(_ value: Any?, forKey defaultName: String) {
+        locked {
+            if let value, !((value as? AnyOptional)?.isNil ?? false) {
+                // Bridged as the real defaults would hand it back, so `as? Double` reads a stored Int
+                values[defaultName] = value as AnyObject
+            } else {
+                values.removeValue(forKey: defaultName)
+            }
+        }
+    }
+
+    override func setValue(_ value: Any?, forKey key: String) {
+        set(value, forKey: key)
+    }
+
+    override func set(_ value: Bool, forKey defaultName: String) {
+        set(value as Any?, forKey: defaultName)
+    }
+
+    override func set(_ value: Int, forKey defaultName: String) {
+        set(value as Any?, forKey: defaultName)
+    }
+
+    override func set(_ value: Float, forKey defaultName: String) {
+        set(value as Any?, forKey: defaultName)
+    }
+
+    override func set(_ value: Double, forKey defaultName: String) {
+        set(value as Any?, forKey: defaultName)
+    }
+
+    override func set(_ url: URL?, forKey defaultName: String) {
+        set(url as Any?, forKey: defaultName)
+    }
+
+    override func removeObject(forKey defaultName: String) {
+        set(nil as Any?, forKey: defaultName)
+    }
+
+    override func string(forKey defaultName: String) -> String? {
+        let object = object(forKey: defaultName)
+        return object as? String ?? (object as? NSNumber)?.stringValue
+    }
+
+    override func array(forKey defaultName: String) -> [Any]? {
+        return object(forKey: defaultName) as? [Any]
+    }
+
+    override func dictionary(forKey defaultName: String) -> [String: Any]? {
+        return object(forKey: defaultName) as? [String: Any]
+    }
+
+    override func data(forKey defaultName: String) -> Data? {
+        return object(forKey: defaultName) as? Data
+    }
+
+    override func stringArray(forKey defaultName: String) -> [String]? {
+        return object(forKey: defaultName) as? [String]
+    }
+
+    override func integer(forKey defaultName: String) -> Int {
+        let object = object(forKey: defaultName)
+        return (object as? NSNumber)?.intValue ?? (object as? NSString)?.integerValue ?? 0
+    }
+
+    override func float(forKey defaultName: String) -> Float {
+        let object = object(forKey: defaultName)
+        return (object as? NSNumber)?.floatValue ?? (object as? NSString)?.floatValue ?? 0
+    }
+
+    override func double(forKey defaultName: String) -> Double {
+        let object = object(forKey: defaultName)
+        return (object as? NSNumber)?.doubleValue ?? (object as? NSString)?.doubleValue ?? 0
+    }
+
+    override func bool(forKey defaultName: String) -> Bool {
+        let object = object(forKey: defaultName)
+        return (object as? NSNumber)?.boolValue ?? (object as? NSString)?.boolValue ?? false
+    }
+
+    override func url(forKey defaultName: String) -> URL? {
+        let object = object(forKey: defaultName)
+        return object as? URL ?? (object as? String).map { URL(fileURLWithPath: NSString(string: $0).expandingTildeInPath) }
+    }
+
+    override func register(defaults registrationDictionary: [String: Any]) {
+        locked {
+            registered.merge(registrationDictionary.mapValues { $0 as AnyObject }) { _, new in new }
+        }
+    }
+
+    override func dictionaryRepresentation() -> [String: Any] {
+        return locked { registered.merging(values) { _, value in value } }
+    }
+
+    override func synchronize() -> Bool {
+        return true
+    }
+}
+
 protocol UserDefaultConvertible {
     associatedtype ConvertedType
     
@@ -29,7 +169,7 @@ protocol UserDefaultConvertible {
 struct UserDefault<Value> {
     let key: String
     let defaultValue: Value
-    var container: UserDefaults = .standard
+    var container: UserDefaults = settingsDefaults
 
     var wrappedValue: Value {
         get {
@@ -52,7 +192,7 @@ struct UserDefault<Value> {
 struct UserDefaultRawRepresentable<Value: RawRepresentable> {
     let key: String
     let defaultValue: Value
-    let container: UserDefaults = .standard
+    let container: UserDefaults = settingsDefaults
     
     var wrappedValue: Value {
         get {
@@ -75,7 +215,7 @@ struct UserDefaultRawRepresentable<Value: RawRepresentable> {
 struct UserDefaultCustom<Value: UserDefaultConvertible> {
     let key: String
     let defaultValue: Value?
-    var container: UserDefaults = .standard
+    var container: UserDefaults = settingsDefaults
 
     var wrappedValue: Value? {
         get {
@@ -161,9 +301,7 @@ final class Settings {
         return missing
     }
 
-    private static let defaults: UserDefaults = {
-        return UserDefaults.standard
-    }()
+    private static let defaults: UserDefaults = settingsDefaults
 
     private static func set(name: String, value: Any?) {
         defaults.set(value, forKey: name)

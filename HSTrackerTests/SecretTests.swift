@@ -50,7 +50,10 @@ class SecretTests: HSTrackerTests {
         super.setUp()
 
         game = Game(hearthstoneRunState: HearthstoneRunState(isRunning: false, isActive: false))
-        // The defaults the settings live in are the user's own HSTracker defaults in this hosted bundle
+        // The secret pools depend on both: Bear Trap, Snipe and the other older secrets are Wild only.
+        // Left unknown, Game would ask HearthMirror, which the test host never queries.
+        game.setGameType(.gt_ranked, formatType: .ft_wild)
+        // Explicit rather than the settings' defaults, as these are what the tests are about
         game.secretsManager?.autoGrayoutSecrets = { true }
         game.secretsManager?.removeSecretsFromList = { false }
         gameEntity = createNewEntity(cardId: "")

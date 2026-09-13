@@ -20,7 +20,13 @@ struct MirrorHelper {
     private static let accessQueue = DispatchQueue(label: "net.hearthsim.hstracker.mirrorQueue", attributes: [])
     
     private static var mirror: HearthMirror? {
-        
+        // Every getter below reads Hearthstone's memory through this. The unit tests are hosted in
+        // HSTracker.app, so without this a test that reaches e.g. Game.currentFormatType would
+        // attach to a Hearthstone client running on the same machine and get its live format,
+        // game type or account instead of nothing, and pass or fail depending on that.
+        guard !AppDelegate.isRunningUnitTests else {
+            return nil
+        }
         if MirrorHelper._mirror == nil {
             // disable until we can fix memory reading
             if let hsApp = CoreManager.hearthstoneApp {

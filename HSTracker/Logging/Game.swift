@@ -919,6 +919,13 @@ class Game: NSObject, PowerEventHandler {
     }
 	
     func updateBoardOverlay() {
+        // WindowManager.show never orders a window in the unit test host, but the frames handed to it
+        // are worked out first, and SizeHelper reads them through the CoreManager the host never
+        // creates. Any Game a test makes gets here through updateAllTrackers, and with Show flavor text
+        // at its default (on) that crashed the test host.
+        guard !AppDelegate.isRunningUnitTests else {
+            return
+        }
         DispatchQueue.main.async {
             let oppTracker = self.windowManager.opponentBoardOverlay
             let playerTracker = self.windowManager.playerBoardOverlay
@@ -1484,6 +1491,14 @@ class Game: NSObject, PowerEventHandler {
     }
     var currentFormat: Format {
         return Format(formatType: _currentFormatType) 
+    }
+
+    /// Sets the game type and format HearthMirror reports for a live game, for a game played without
+    /// Hearthstone to read them from: the unit tests, where the mirror is never queried.
+    func setGameType(_ gameType: GameType, formatType: FormatType) {
+        _currentGameType = gameType
+        _currentFormatType = formatType
+        _currentGameMode = .none
     }
     
     var lastPlagueDrawn = Stack<String>()

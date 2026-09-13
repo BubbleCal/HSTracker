@@ -5,9 +5,8 @@
 //  The action history panel's wording and grouping (ActionHistoryPresentation), its view model's
 //  folding and dragging, and the ActionHistory_* entries in Localizable.xcstrings.
 //
-//  Nothing here writes Settings: the test host is HSTracker.app, whose defaults domain is the
-//  player's own, so toggleCollapsed is not called and the view models save their position into
-//  savedPositions instead.
+//  Nothing here writes Settings: toggleCollapsed is not called, and the view models save their
+//  position into savedPositions instead, where the tests can read it back.
 //
 
 import XCTest
