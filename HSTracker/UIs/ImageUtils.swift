@@ -13,6 +13,101 @@ import Foundation
 import HearthMirror
 import ImageIO
 
+/// The memory cache for decoded card renders.
+///
+/// Each render is held fully decoded (about 0.4 MB for a 256x388 card) so a hover can draw it
+/// straight away, and the trackers read in every card they list ahead of any hover. Kept without a
+/// bound, that grew with every opponent deck of a long ladder session. So a render stays for as
+/// long as some tracker still lists it, and beyond those only the most recently used
+/// `recentLimit` are kept - the cards just hovered in a tooltip, a grid or the Battlegrounds shop.
+final class CardArtCache {
+    private let lock = UnfairLock()
+    private var images = [String: NSImage]()
+    private var lastUse = [String: UInt64]()
+    private var useCounter: UInt64 = 0
+    private var listed = [ObjectIdentifier: Set<String>]()
+    let recentLimit: Int
+
+    init(recentLimit: Int) {
+        self.recentLimit = recentLimit
+    }
+
+    subscript(key: String) -> NSImage? {
+        get {
+            return lock.around {
+                guard let image = images[key] else { return nil }
+                touch(key)
+                return image
+            }
+        }
+        set {
+            lock.around {
+                if let newValue {
+                    images[key] = newValue
+                    touch(key)
+                    trim()
+                } else {
+                    images.removeValue(forKey: key)
+                    lastUse.removeValue(forKey: key)
+                }
+            }
+        }
+    }
+
+    // Whether a render is held, without counting as a use of it
+    func contains(_ key: String) -> Bool {
+        return lock.around { images[key] != nil }
+    }
+
+    var count: Int {
+        return lock.around { images.count }
+    }
+
+    /// Replaces the keys `owner` lists. Those renders are kept however many there are; one the
+    /// owner stops listing falls back to the recently used ones, and may be evicted from there.
+    func setListed(_ keys: Set<String>, for owner: AnyObject) {
+        let id = ObjectIdentifier(owner)
+        lock.around {
+            // The trackers pass the same list on nearly every refresh
+            guard listed[id] != keys else { return }
+            if keys.isEmpty {
+                listed.removeValue(forKey: id)
+            } else {
+                listed[id] = keys
+            }
+            trim()
+        }
+    }
+
+    func removeAll() {
+        lock.around {
+            images.removeAll()
+            lastUse.removeAll()
+        }
+    }
+
+    // Called with the lock held
+    private func touch(_ key: String) {
+        useCounter += 1
+        lastUse[key] = useCounter
+    }
+
+    // Called with the lock held
+    private func trim() {
+        var retained = Set<String>()
+        for keys in listed.values {
+            retained.formUnion(keys)
+        }
+        let unlisted = images.keys.filter { !retained.contains($0) }
+        guard unlisted.count > recentLimit else { return }
+        let oldestFirst = unlisted.sorted { (lastUse[$0] ?? 0) < (lastUse[$1] ?? 0) }
+        for key in oldestFirst.prefix(unlisted.count - recentLimit) {
+            images.removeValue(forKey: key)
+            lastUse.removeValue(forKey: key)
+        }
+    }
+}
+
 struct ImageUtils {
     enum ImageType: Int {
         case tile, art, cardArt, cardArtBG, hero
@@ -41,8 +136,9 @@ struct ImageUtils {
 
     private static var cache =  SynchronizedDictionary<String, NSImage>()
     private static var cacheArt =  SynchronizedDictionary<String, NSImage>()
-    private static var cacheCardArt =  SynchronizedDictionary<String, NSImage>()
-    private static var cacheCardArtBG =  SynchronizedDictionary<String, NSImage>()
+    // About 25 MB of renders beyond the ones the trackers list
+    private static let cacheCardArt = CardArtCache(recentLimit: 64)
+    private static let cacheCardArtBG = CardArtCache(recentLimit: 64)
     private static var cacheHero = SynchronizedDictionary<String, NSImage>()
     
     static func clearCache() {
@@ -52,7 +148,7 @@ struct ImageUtils {
         cacheCardArtBG.removeAll()
         cacheHero.removeAll()
         pendingLock.around {
-            preloadRequested.removeAll()
+            failedAt.removeAll()
         }
         
         clearDirectory(path: Paths.cards)
@@ -127,29 +223,64 @@ struct ImageUtils {
         return "\(cardId)\(baconTriple ? "_triple" : "")"
     }
 
-    // Keys already handed to preloadCardArt, so a render that cannot be had (a download error,
-    // or a card with no render) is asked for once rather than on every tracker refresh - the
-    // trackers refresh twice a second during a match. A hover still retries it the normal way.
-    private static var preloadRequested = Set<String>()
+    // When a load last came back empty, by type+card: a download error, the art server being
+    // unreachable (offline at launch, or just after waking from sleep) or a card with no render.
+    // The pre-load leaves such a card alone for a while rather than asking again on every tracker
+    // refresh - twice a second during a match - and then tries it again, so a card listed while
+    // offline is still ready by the time it is hovered. A hover always retries straight away.
+    private static var failedAt = [String: TimeInterval]()
+    static let preloadRetryInterval: TimeInterval = 30
 
-    /// Reads the renders of the listed cards into memory ahead of any hover, from disk or else
-    /// from the art server, so the first hover over a row finds its image already decoded.
-    static func preloadCardArt(cardIds: [String]) {
+    /// Reads the renders of the cards `owner` lists into memory ahead of any hover, from disk or
+    /// else from the art server, so the first hover over a row finds its image already decoded.
+    /// The renders are kept while they stay listed; pass every card the owner lists each time.
+    static func preloadCardArt(cardIds: [String], for owner: AnyObject) {
+        cacheCardArt.setListed(Set(cardIds.filter { !$0.isEmpty }), for: owner)
         // The unit tests fill the trackers from a bare Game; they must not download art into the
         // user's own card cache on the way.
         guard !AppDelegate.isRunningUnitTests else { return }
-        let wanted = pendingLock.around { () -> [String] in
-            var wanted = [String]()
-            for cardId in cardIds where !cardId.isEmpty {
-                let key = "\(ImageType.cardArt.rawValue):\(cardId)"
-                guard !preloadRequested.contains(key) else { continue }
-                preloadRequested.insert(key)
-                wanted.append(cardId)
-            }
-            return wanted
-        }
-        for cardId in wanted where cacheCardArt[cardId] == nil {
+        for cardId in preloadCandidates(cardIds: cardIds, now: ProcessInfo.processInfo.systemUptime) {
             loadImage(type: .cardArt, cardId: cardId, completion: { _ in })
+        }
+    }
+
+    // The listed cards a pre-load should start a load for: not in memory, not already loading,
+    // and not failed within the retry interval
+    static func preloadCandidates(cardIds: [String], now: TimeInterval) -> [String] {
+        var seen = Set<String>()
+        let missing = cardIds.filter { !$0.isEmpty && seen.insert($0).inserted && !cacheCardArt.contains($0) }
+        guard !missing.isEmpty else { return [] }
+        return pendingLock.around {
+            missing.filter { cardId in
+                let key = loadKey(type: .cardArt, cardId: cardId)
+                guard pending[key] == nil else { return false }
+                if let failed = failedAt[key], now - failed < preloadRetryInterval {
+                    return false
+                }
+                return true
+            }
+        }
+    }
+
+    // Internal rather than private so tests can drive the retry interval with their own clock
+    static func noteLoadResult(type: ImageType, cardId: String, succeeded: Bool, now: TimeInterval) {
+        let key = loadKey(type: type, cardId: cardId)
+        pendingLock.around {
+            if succeeded {
+                failedAt.removeValue(forKey: key)
+            } else {
+                failedAt[key] = now
+            }
+        }
+    }
+
+    /// The placeholder the hover popups draw while a card's render is still loading
+    static func loadingImageName(for type: CardType) -> String {
+        switch type {
+        case .hero: return "loading_hero"
+        case .minion: return "loading_minion"
+        case .weapon: return "loading_weapon"
+        default: return "loading_spell"
         }
     }
 
@@ -277,10 +408,15 @@ struct ImageUtils {
         }
     }
 
+    private static func loadKey(type: ImageType, cardId: String) -> String {
+        return "\(type.rawValue):\(cardId)"
+    }
+
     private static func finish(key: String, type: ImageType, cardId: String, image: NSImage?) {
         if let image {
             store(image, type: type, cardId: cardId)
         }
+        noteLoadResult(type: type, cardId: cardId, succeeded: image != nil, now: ProcessInfo.processInfo.systemUptime)
         let waiting = pendingLock.around { () -> [(NSImage?) -> Void] in
             let handlers = pending[key] ?? []
             pending.removeValue(forKey: key)
@@ -298,7 +434,7 @@ struct ImageUtils {
     }
 
     private static func loadImage(type: ImageType, cardId: String, completion: @escaping ((NSImage?) -> Void)) {
-        let key = "\(type.rawValue):\(cardId)"
+        let key = loadKey(type: type, cardId: cardId)
         let isFirst = pendingLock.around { () -> Bool in
             if pending[key] != nil {
                 pending[key]?.append(completion)

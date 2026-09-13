@@ -116,12 +116,7 @@ private struct RelatedCardImageView: View {
     private var insetY: CGFloat { 13 * (height / RelatedCardsGridLayout.baseCardHeight) }
 
     private var loadingImageName: String {
-        switch card.type {
-        case .hero: return "loading_hero"
-        case .minion: return "loading_minion"
-        case .weapon: return "loading_weapon"
-        default: return "loading_spell"
-        }
+        ImageUtils.loadingImageName(for: card.type)
     }
 
     // A render already in memory is drawn on the first pass. Waiting for .onAppear to hand it

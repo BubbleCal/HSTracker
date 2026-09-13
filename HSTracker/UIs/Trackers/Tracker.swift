@@ -128,11 +128,7 @@ class Tracker: OverWindowController, CardCellHover {
 
     // MARK: - Game
     func update(cards: [Card], top: [Card], bottom: [Card], sideboards: [Sideboard], relatedCards: [Card], reset: Bool = false) {
-        // Every row can be hovered the moment it is listed, so its render is read in ahead of
-        // time: a first hover that had to load it showed an empty popup until it arrived.
-        if Settings.showFloatingCard {
-            ImageUtils.preloadCardArt(cardIds: (cards + top + bottom + sideboards.flatMap { $0.cards } + relatedCards).map { $0.id })
-        }
+        preloadHoverArt(rows: cards + top + bottom + sideboards.flatMap { $0.cards } + relatedCards, reset: reset)
         cardsView.update(cards: cards, reset: reset)
         playerBottom.update(cards: bottom, reset: reset)
         playerTop.update(cards: top, reset: reset)
@@ -140,6 +136,60 @@ class Tracker: OverWindowController, CardCellHover {
         opponentRelatedCards.update(cards: relatedCards, reset: reset)
     }
     
+    // The related cards pools last read in, and what they were worked out for
+    private var relatedPoolKey: String?
+    private var relatedPoolCardIds = [String]()
+
+    // Every row can be hovered the moment it is listed, so what its hover shows is read in ahead
+    // of time: the row's own render, and the renders in its related cards grid. A first hover
+    // that had to load them showed an empty popup, and a grid of placeholders, until they arrived.
+    private func preloadHoverArt(rows: [Card], reset: Bool) {
+        let rowIds = rows.map { $0.id }
+        var cardIds = Settings.showFloatingCard ? rowIds : []
+        cardIds.append(contentsOf: relatedPoolCardIds(rowIds: rowIds, reset: reset))
+        ImageUtils.preloadCardArt(cardIds: cardIds, for: self)
+    }
+
+    // The cards each listed row's related cards grid would show, as setRelatedCardsTooltip works
+    // them out. Working out a pool can mean filtering the whole card database, so it is done again
+    // only when the listed cards, the player's class or the game mode change rather than on every
+    // refresh; a pool that shifts with the board in between still loads on the hover itself.
+    private func relatedPoolCardIds(rowIds: [String], reset: Bool) -> [String] {
+        guard #available(macOS 10.15, *), let playerType, let game = AppDelegate.instance().coreManager?.game else {
+            return []
+        }
+        let isPlayer = playerType == .player
+        guard isPlayer ? Settings.showPlayerRelatedCards : Settings.showOpponentRelatedCards else {
+            relatedPoolKey = nil
+            relatedPoolCardIds = []
+            return []
+        }
+        let player: Player = isPlayer ? game.player : game.opponent
+        let uniqueIds = Array(Set(rowIds)).sorted()
+        // currentFormat rather than currentFormatType: the latter asks the game's memory for the
+        // format while it is still unknown, which is not worth doing twice a second for a key
+        let key = "\(game.currentGameType.rawValue)|\(game.currentFormat)|"
+            + "\(player.currentClass?.rawValue ?? "")|\(Settings.outfinderEnabled)|\(Settings.outfinderInDeck)|"
+            + uniqueIds.joined(separator: ",")
+        guard reset || key != relatedPoolKey else { return relatedPoolCardIds }
+
+        var poolIds = [String]()
+        for cardId in uniqueIds {
+            guard !game.relatedCardsManager.isOutfinderSuppressed(cardId: cardId, surfaceEnabled: Settings.outfinderInDeck) else {
+                continue
+            }
+            let pool = game.getRelatedCards(player: player, cardId: cardId).compactMap { $0 }
+            // A larger pool of a discover card is not drawn as a grid at all (its summary and the
+            // right-click browser take the grid's place), and any larger pool is more renders than
+            // are worth holding in memory for one row
+            guard pool.count <= RelatedCardsManager.largePoolThreshold else { continue }
+            poolIds.append(contentsOf: pool.map { $0.id })
+        }
+        relatedPoolKey = key
+        relatedPoolCardIds = poolIds
+        return poolIds
+    }
+
     override func updateFrames() {
         super.updateFrames()
         guard let windowFrame = self.window?.contentView?.frame else { return }

@@ -131,9 +131,7 @@ class CardList: OverWindowController {
     
     func set(cards: [Card]) {
         // Read the renders in before any hover, as the deck trackers do
-        if Settings.showFloatingCard {
-            ImageUtils.preloadCardArt(cardIds: cards.map { $0.id })
-        }
+        ImageUtils.preloadCardArt(cardIds: Settings.showFloatingCard ? cards.map { $0.id } : [], for: self)
         if Thread.isMainThread {
             internalSet(cards: cards)
         } else {

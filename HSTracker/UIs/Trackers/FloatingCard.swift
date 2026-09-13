@@ -134,11 +134,14 @@ class FloatingCard: OverWindowController {
             if let cached {
                 imageView.image = cached
             } else {
-                // Blank until it loads, rather than the last card's render under the new card
-                imageView.image = nil
-                // ImageUtils delivers a load on the main queue, and this runs on it
+                // The loading placeholder until it arrives, as the related cards grid does. Never
+                // the last card's render under the new card, and not nothing either: the window is
+                // clear, so a popup without an image did not appear to open at all.
+                imageView.image = NSImage(named: ImageUtils.loadingImageName(for: card.type))
+                // ImageUtils delivers a load on the main queue, and this runs on it. A card with no
+                // render keeps the placeholder, again like the grid.
                 let apply: (NSImage?) -> Void = { [weak self] image in
-                    guard let self, self.imageKey == key else { return }
+                    guard let self, self.imageKey == key, let image else { return }
                     self.imageView.image = image
                 }
                 if isBattlegrounds {

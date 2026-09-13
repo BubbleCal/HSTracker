@@ -100,6 +100,70 @@ class HoverPopupTests: HSTrackerTests {
         XCTAssertNil(ImageUtils.cachedCardArtBG(cardId: bgId, baconTriple: false))
     }
 
+    func testCardArtCacheKeepsListedRendersAndOnlyTheMostRecentOthers() {
+        let cache = CardArtCache(recentLimit: 2)
+        let tracker = NSObject()
+        cache.setListed(["a", "b", "c"], for: tracker)
+        for key in ["a", "b", "c", "d", "e", "f"] {
+            cache[key] = makeImage(width: 1, height: 1)
+        }
+        // Everything listed, plus the two most recently used of the rest
+        XCTAssertEqual(cache.count, 5)
+        XCTAssertFalse(cache.contains("d"))
+
+        // Reading a render counts as using it
+        XCTAssertNotNil(cache["e"])
+        cache["g"] = makeImage(width: 1, height: 1)
+        XCTAssertTrue(cache.contains("e"))
+        XCTAssertFalse(cache.contains("f"))
+
+        // A second list keeps its renders too, however many the two list together
+        let secrets = NSObject()
+        cache.setListed(["e", "g"], for: secrets)
+        cache["h"] = makeImage(width: 1, height: 1)
+        cache["i"] = makeImage(width: 1, height: 1)
+        cache["j"] = makeImage(width: 1, height: 1)
+        XCTAssertEqual(cache.count, 7)
+        XCTAssertFalse(cache.contains("h"))
+
+        // Once nothing lists them, a finished game's cards are let go down to the recent limit
+        cache.setListed([], for: tracker)
+        cache.setListed([], for: secrets)
+        XCTAssertEqual(cache.count, 2)
+        XCTAssertTrue(cache.contains("i"))
+        XCTAssertTrue(cache.contains("j"))
+
+        cache.removeAll()
+        XCTAssertEqual(cache.count, 0)
+    }
+
+    func testPreloadRetriesARenderThatFailedToLoadOnceTheRetryIntervalPasses() {
+        let cardId = "HOVER_TEST_RETRY_\(UUID().uuidString)"
+        let now: TimeInterval = 1000
+        XCTAssertEqual(ImageUtils.preloadCandidates(cardIds: [cardId, "", cardId], now: now), [cardId])
+
+        // Offline, say: the pre-load stops asking on every refresh...
+        ImageUtils.noteLoadResult(type: .cardArt, cardId: cardId, succeeded: false, now: now)
+        XCTAssertEqual(ImageUtils.preloadCandidates(cardIds: [cardId], now: now + 1), [])
+        // ...but not for the rest of the session
+        XCTAssertEqual(ImageUtils.preloadCandidates(cardIds: [cardId], now: now + ImageUtils.preloadRetryInterval),
+                       [cardId])
+
+        ImageUtils.noteLoadResult(type: .cardArt, cardId: cardId, succeeded: true, now: now + 1)
+        XCTAssertEqual(ImageUtils.preloadCandidates(cardIds: [cardId], now: now + 2), [cardId])
+        // A render already in memory is not loaded again
+        ImageUtils.store(makeImage(width: 1, height: 1), type: .cardArt, cardId: cardId)
+        XCTAssertEqual(ImageUtils.preloadCandidates(cardIds: [cardId], now: now + 2), [])
+    }
+
+    func testEveryCardTypeHasALoadingPlaceholder() {
+        XCTAssertEqual(ImageUtils.loadingImageName(for: .minion), "loading_minion")
+        XCTAssertEqual(ImageUtils.loadingImageName(for: .spell), "loading_spell")
+        for type in CardType.allCases {
+            XCTAssertNotNil(NSImage(named: ImageUtils.loadingImageName(for: type)), "\(type)")
+        }
+    }
+
     func testFloatingCardShowsACachedRenderBeforeItReturns() {
         let first = Card(id: "HOVER_TEST_FIRST_\(UUID().uuidString)")
         let second = Card(id: "HOVER_TEST_SECOND_\(UUID().uuidString)")
