@@ -348,6 +348,42 @@ class ActionHistoryPresentationTests: HSTrackerTests {
         XCTAssertEqual(viewModel.origin(canvasSize: canvas).y, dropped.y + 10, accuracy: 0.01)
     }
 
+    func testADragCutShortByThePanelGoingAwayIsStillSaved() {
+        guard #available(macOS 10.15, *) else { return }
+        let canvas = CGSize(width: 2000, height: 1000)
+        let turns = [HistoryTurn(rawTurn: 3, turn: 2, side: .player)]
+
+        // The game ends mid-drag: Game.updateActionHistory hides the panel, and SwiftUI drops the
+        // gesture without onEnded
+        let hidden = makeViewModel()
+        hidden.panelSize = CGSize(width: ActionHistoryViewModel.panelWidth, height: 300)
+        hidden.isShown = true
+        hidden.apply(ActionHistorySnapshot(turns: turns, version: 1))
+        XCTAssertTrue(savedPositions.isEmpty, "showing the panel with no drag going on saves nothing")
+        hidden.drag(translation: CGSize(width: 300, height: 200), startLocation: CGPoint(x: 400, y: 300), canvasSize: canvas)
+        hidden.isShown = false
+        XCTAssertEqual(savedPositions.count, 1)
+        XCTAssertEqual(savedPositions.last?.top, hidden.top)
+        XCTAssertEqual(savedPositions.last?.left, hidden.left)
+        // The mouse up that follows, if it does reach the gesture, saves nothing more
+        hidden.endDrag()
+        hidden.isShown = false
+        XCTAssertEqual(savedPositions.count, 1)
+
+        // A new game clears the turns while the panel is still meant to be shown, which removes it too
+        let cleared = makeViewModel()
+        cleared.panelSize = hidden.panelSize
+        cleared.isShown = true
+        cleared.apply(ActionHistorySnapshot(turns: turns, version: 1))
+        cleared.drag(translation: CGSize(width: 100, height: 50), startLocation: CGPoint(x: 400, y: 300), canvasSize: canvas)
+        cleared.apply(ActionHistorySnapshot(turns: turns + [HistoryTurn(rawTurn: 4, turn: 2, side: .opponent)], version: 2))
+        XCTAssertEqual(savedPositions.count, 1, "a new turn while dragging leaves the panel up and the drag going")
+        cleared.apply(ActionHistorySnapshot(turns: [], version: 3))
+        XCTAssertEqual(savedPositions.count, 2)
+        XCTAssertEqual(savedPositions.last?.top, cleared.top)
+        XCTAssertEqual(savedPositions.last?.left, cleared.left)
+    }
+
     func testAPlacedPanelKeepsItsPlaceWhenTheGameWindowIsResized() {
         guard #available(macOS 10.15, *) else { return }
         let viewModel = makeViewModel()

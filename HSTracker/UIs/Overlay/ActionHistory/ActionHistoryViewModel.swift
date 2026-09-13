@@ -29,10 +29,18 @@ class ActionHistoryViewModel: ObservableObject {
     static let dragThreshold: CGFloat = 4
 
     // Driven by Game.updateActionHistory, the way Game.updateCounters drives the counters.
-    @Published var isShown = false
+    @Published var isShown = false {
+        didSet {
+            endDragIfHidden()
+        }
+    }
 
     // Oldest turn first, as the recorder keeps them
-    @Published private(set) var turns: [HistoryTurn] = []
+    @Published private(set) var turns: [HistoryTurn] = [] {
+        didSet {
+            endDragIfHidden()
+        }
+    }
 
     @Published private(set) var collapsed: Bool
 
@@ -207,8 +215,8 @@ class ActionHistoryViewModel: ObservableObject {
     // Hearthstone window is resized; origin(canvasSize:) clamps again if the window got smaller.
     //
     // - Parameter startLocation: where the gesture's mouse went down. A different one is a new
-    //   gesture even if the last one never ended - SwiftUI cancels a drag without calling onEnded
-    //   when the panel is removed under it, for instance at the end of a game.
+    //   gesture even if the last one never ended, should SwiftUI cancel a drag without calling
+    //   onEnded in some way endDragIfHidden does not catch.
     func drag(translation: CGSize, startLocation: CGPoint? = nil, canvasSize: CGSize) {
         guard canvasSize.width > 0, canvasSize.height > 0 else { return }
         if let startLocation, startLocation != dragStartLocation {
@@ -228,6 +236,16 @@ class ActionHistoryViewModel: ObservableObject {
         dragOrigin = nil
         dragStartLocation = nil
         savePosition(top, left)
+    }
+
+    // The panel going away under the mouse - the game ending, or the action history being turned
+    // off - makes SwiftUI cancel the title bar's drag without calling onEnded, so the mouse up that
+    // would have saved where it was pulled to never comes. Saved here instead, or the next game would
+    // show the panel there while the next launch put it back where it was before.
+    private func endDragIfHidden() {
+        if !(isShown && hasTurns) {
+            endDrag()
+        }
     }
 
     // Back to the automatic position below the secret helper, for a panel dragged somewhere it is

@@ -88,21 +88,17 @@ class RootOverlayWindow: OverWindowController {
         // back to click-through there would end the drag halfway.
         localPressMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp]) { [weak self] event in
             guard let self else { return event }
-            switch event.type {
-            case .leftMouseDown:
-                self.pressCaptured = event.window != nil && event.window === self.window
-            case .leftMouseUp:
-                self.pressCaptured = false
+            self.pressCaptured = OverlayClickThrough.pressCaptured(self.pressCaptured, after: event.type,
+                                                                   in: event.window, overlayWindow: self.window)
+            if event.type == .leftMouseUp {
                 // After the release has been handled: it was routed here already, but the gesture
                 // it ends has not seen it yet
                 DispatchQueue.main.async { [weak self] in
                     self?.updateMouseThrough()
                 }
-                return event
-            default:
-                break
+            } else {
+                self.updateMouseThrough()
             }
-            self.updateMouseThrough()
             return event
         }
         regionSubscription = viewModel.$interactiveRegions.sink { [weak self] _ in
@@ -139,21 +135,13 @@ class RootOverlayWindow: OverWindowController {
         // have dismissed it lives at the end of updateCardHover().
         updateCardHover(isMasked: isMasked)
 
-        if pressCaptured {
-            // pressedMouseButtons as well, in case the release went somewhere this never saw
-            if NSEvent.pressedMouseButtons & 1 != 0 {
-                setIgnoresMouseEvents(false)
-                return
-            }
-            pressCaptured = false
-        }
-
-        guard !viewModel.interactiveRegions.isEmpty, !isMasked else {
-            setIgnoresMouseEvents(true)
-            return
-        }
-        let inside = viewModel.interactiveRegions.contains { $0.contains(viewPoint) }
-        setIgnoresMouseEvents(!inside)
+        let decision = OverlayClickThrough.decide(pressCaptured: pressCaptured,
+                                                  primaryButtonDown: NSEvent.pressedMouseButtons & 1 != 0,
+                                                  isMasked: isMasked,
+                                                  regions: viewModel.interactiveRegions,
+                                                  point: viewPoint)
+        pressCaptured = decision.pressCaptured
+        setIgnoresMouseEvents(decision.ignoresMouseEvents)
     }
 
     // HDT's BgsTopBarMask MouseEnter/MouseLeave handlers, which flip
@@ -325,5 +313,46 @@ class RootOverlayWindow: OverWindowController {
             ancestor = current.superview
         }
         return rect
+    }
+}
+
+// Whether the whole-screen RootOverlay canvas takes the mouse, kept apart from the window so the rule
+// that has to hand every other click to Hearthstone can be tested without events or a screen.
+enum OverlayClickThrough {
+    /// Whether a left press is held on the canvas after a mouse event. A press belongs to the canvas
+    /// only if it went down there - the window only receives one over an interactive region - and
+    /// lets go on the release. Drags change nothing, and neither does anything else.
+    static func pressCaptured(_ captured: Bool, after eventType: NSEvent.EventType,
+                              in eventWindow: NSWindow?, overlayWindow: NSWindow?) -> Bool {
+        switch eventType {
+        case .leftMouseDown:
+            return eventWindow != nil && eventWindow === overlayWindow
+        case .leftMouseUp:
+            return false
+        default:
+            return captured
+        }
+    }
+
+    /// Whether the canvas should ignore the mouse with the cursor at `point` (the hosting view's
+    /// coordinates), and whether a press is still held on it.
+    ///
+    /// A held press keeps the canvas taking the mouse wherever the cursor is, so a dragged panel that
+    /// lags behind it or stops at an edge does not lose the drag. Otherwise the canvas takes the mouse
+    /// only over an interactive region that the opacity mask has not cut away.
+    ///
+    /// - Parameter primaryButtonDown: the left button's live state, which ends a held press whose
+    ///   release went somewhere the event monitor never saw - otherwise the canvas would go on
+    ///   swallowing Hearthstone's clicks.
+    static func decide(pressCaptured: Bool, primaryButtonDown: Bool, isMasked: Bool,
+                       regions: [CGRect], point: CGPoint) -> (ignoresMouseEvents: Bool, pressCaptured: Bool) {
+        if pressCaptured && primaryButtonDown {
+            return (false, true)
+        }
+        guard !isMasked else {
+            return (true, false)
+        }
+        let inside = regions.contains { $0.contains(point) }
+        return (!inside, false)
     }
 }
