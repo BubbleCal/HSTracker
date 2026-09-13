@@ -19,10 +19,12 @@ class BoardCard: IBoardEntity {
     let attack: Int
     let hasInfiniteAttack: Bool
     let attacksPerTurn: Int
+    /// Attacks this turn that used up the minion's own attacks, leaving out forced ones
     let attacksThisTurn: Int
     let exhausted: Bool
     let frozen: Bool
     let charge: Bool
+    let rush: Bool
     let turnsInPlay: Int
     /// Excluded from both numbers whatever the turn: can't attack (heroes), dormant, a titan with
     /// abilities left, or no Attack
@@ -40,10 +42,11 @@ class BoardCard: IBoardEntity {
         cardId = entity.cardId
         (attack, hasInfiniteAttack) = BoardCard.attack(of: entity)
         attacksPerTurn = BoardCard.attacksPerTurn(of: entity)
-        attacksThisTurn = entity[.num_attacks_this_turn]
+        attacksThisTurn = BoardCard.attacksUsed(by: entity)
         exhausted = entity[.exhausted] == 1
         frozen = entity[.frozen] == 1
         charge = entity[.charge] == 1
+        rush = entity[.rush] == 1
         turnsInPlay = entity[.num_turns_in_play]
         neverAttacksFace = BoardCard.cantAttackHeroes(entity)
             || entity[.dormant] == 1
@@ -55,13 +58,15 @@ class BoardCard: IBoardEntity {
         }
 
         let remaining = max(attacksPerTurn - attacksThisTurn, 0)
-        // A minion that arrived this turn is summoning sick unless it has Charge. Rush minions are
-        // left out too: Rush can't hit heroes, and they come in with EXHAUSTED=0, so the turns in play
-        // are what catches them. EXHAUSTED=1 is set after the last attack, or on arrival, where
-        // Charge given later (without attacking) still lets it go.
-        let summoningSick = turnsInPlay == 0 && !charge
+        // A Rush minion that arrived this turn comes in with EXHAUSTED=0 but can't hit heroes, so its
+        // turns in play are what leave it out. That check is for Rush only: a minion transformed on its
+        // controller's turn also restarts at NUM_TURNS_IN_PLAY=0, yet keeps the old minion's
+        // EXHAUSTED=0 and can still attack. Real summoning sickness is EXHAUSTED=1 on arrival, which
+        // Charge given later (without attacking) lifts; EXHAUSTED=1 is also set after the last attack.
+        // HDT's Exhausted rule treats every NUM_TURNS_IN_PLAY=0 minion as summoning sick.
+        let rushArrival = turnsInPlay == 0 && rush && !charge
         let outOfAttacks = exhausted && !(charge && attacksThisTurn == 0)
-        if isActing && !frozen && remaining > 0 && !summoningSick && !outOfAttacks {
+        if isActing && !frozen && remaining > 0 && !rushArrival && !outOfAttacks {
             if hasInfiniteAttack {
                 hasInfiniteDamageNow = true
             } else {
@@ -87,6 +92,13 @@ class BoardCard: IBoardEntity {
             return (0, true)
         }
         return (atk, false)
+    }
+
+    /// NUM_ATTACKS_THIS_TURN less the attacks an effect forced, which the game counts in both
+    /// NUM_ATTACKS_THIS_TURN and EXTRA_ATTACKS_THIS_TURN and which leave the minion's own attacks
+    /// available (HDT ignores EXTRA_ATTACKS_THIS_TURN).
+    static func attacksUsed(by entity: Entity) -> Int {
+        return max(entity[.num_attacks_this_turn] - entity[.extra_attacks_this_turn], 0)
     }
 
     /// Mega-Windfury is 4 attacks unless silenced, which leaves the plain WINDFURY behind.
@@ -122,7 +134,7 @@ class BoardCard: IBoardEntity {
         if !isCurrent {
             return true
         }
-        let canStillAttack = entity[.exhausted] == 0 && entity[.num_attacks_this_turn] < attacksPerTurn
+        let canStillAttack = entity[.exhausted] == 0 && attacksUsed(by: entity) < attacksPerTurn
         return !canStillAttack
     }
 }

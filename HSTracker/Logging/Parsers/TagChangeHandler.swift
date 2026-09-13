@@ -94,6 +94,11 @@ class TagChangeHandler {
 
             if creationTagActionQueue.all({ $0.id != action.id }), let entity = eventHandler.entities[action.id] {
                 entity.info.hasOutstandingTagChanges = false
+                // Player.board leaves out entities with outstanding tag changes, so a minion created in
+                // play joins the board damage only now, whenever the refresh its ZONE tag asked for ran
+                if entity.isInPlay {
+                    (eventHandler as? Game)?.updateBoardDamage()
+                }
             }
         }
     }

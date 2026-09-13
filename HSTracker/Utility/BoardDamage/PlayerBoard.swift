@@ -75,7 +75,7 @@ class PlayerBoard {
     }
 
     /// The hero power's damage keeps what HSTracker always added on top of the board (HDT counts
-    /// none), now gated by whether it can still be used this turn.
+    /// none), now gated by whether it can still be used this turn and whether its damage can land.
     private func computeHeroPowerDamage(heroPower: HeroPower, playerEntity: Entity?) {
         let entity = heroPower._entity
         let damage = heroPower.damage
@@ -84,11 +84,32 @@ class PlayerBoard {
         }
         // Garrison Commander allows a second use each turn
         let usesPerTurn = cards.any { $0.cardId == CardIds.Collectible.Neutral.GarrisonCommander } ? 2 : 1
+        var needsHeroAttack = false
+        // A limit on the uses besides the activations
+        var maxUses = Int.max
+        switch heroPower.kind {
+        case .direct:
+            break
+        case .heroAttack:
+            needsHeroAttack = true
+        case .weapon:
+            // A second dagger only replaces the first, and replacing a weapon already equipped (which
+            // the hero term counts) adds nothing
+            if hero?.hasWeapon != false {
+                return
+            }
+            needsHeroAttack = true
+            maxUses = 1
+        case .chargeMinion:
+            // Each use needs a free board slot, and dormant minions take one as well
+            let minions = cards.filter { $0 is BoardCard }.count
+            maxUses = max(PlayerBoard.maxMinions - minions, 0)
+        }
 
-        if isActing && (!heroPower.isHeroAttack || hero?.canAttackNow == true) {
+        if isActing && (!needsHeroAttack || hero?.canAttackNow == true) {
             // The game sets EXHAUSTED once no activation is left this turn
             var uses = entity[.exhausted] == 1 ? 0
-                : max(usesPerTurn - entity[.heropower_activations_this_turn], 0)
+                : min(max(usesPerTurn - entity[.heropower_activations_this_turn], 0), maxUses)
             if heroPower.cost > 0 {
                 let mana = playerEntity.map {
                     $0[.resources] + $0[.temp_resources] - $0[.resources_used]
@@ -99,8 +120,10 @@ class PlayerBoard {
         }
 
         // Next turn's mana is assumed to be enough
-        if !heroPower.isHeroAttack || hero?.canAttackNextTurn == true {
-            heroPowerDamageNextTurn = usesPerTurn * damage
+        if !needsHeroAttack || hero?.canAttackNextTurn == true {
+            heroPowerDamageNextTurn = min(usesPerTurn, maxUses) * damage
         }
     }
+
+    static let maxMinions = 7
 }

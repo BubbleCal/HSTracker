@@ -9,38 +9,61 @@
 import Foundation
 
 class HeroPower {
+    /// How a hero power's damage reaches the enemy hero, which decides when it can be counted
+    enum Kind {
+        /// Deals the damage itself
+        case direct
+        /// Gives the hero Attack this turn (Shapeshift, Demon Claws), so it needs the hero to attack
+        case heroAttack
+        /// Equips a weapon (Dagger Mastery), so it needs the hero to attack, and gains nothing over a
+        /// weapon already equipped
+        case weapon
+        /// Summons a minion with Charge (Ghoul Charge), so it needs a free board slot
+        case chargeMinion
+    }
+
     var _entity: Entity
     var id: String
     var cost: Int
     var name: String?
 
-    /// Hero powers that give the hero Attack for the turn instead of dealing damage directly, so they
-    /// only add damage while the hero can still attack.
-    var isHeroAttack: Bool {
-        return id == CardIds.NonCollectible.Druid.Shapeshift || HeroPower.heroAttackNames.contains(englishName ?? "")
+    var kind: Kind {
+        if let englishName = englishName, let kind = HeroPower.byName[englishName]?.kind {
+            return kind
+        }
+        switch id {
+        case CardIds.NonCollectible.Druid.Shapeshift, CardIds.NonCollectible.Druid.JusticarTrueheart_DireClaws:
+            return .heroAttack
+        default:
+            return .direct
+        }
     }
 
     var damage: Int {
-        if let damage = tableDamage {
+        if let englishName = englishName, let damage = HeroPower.byName[englishName]?.damage {
             return damage
         }
-        if let englishName = englishName, let damage = HeroPower.damageByName[englishName] {
-            return damage
-        }
-        return 0
+        return tableDamage ?? 0
     }
 
     /// Current basic hero powers and their skins have their own ids (HERO_05bp, HERO_08dbp, ...) that
-    /// the id table below never learned, so the plain ones are matched by English name as well.
-    private static let damageByName: [String: Int] = [
-        "Fireblast": 1,
-        "Shapeshift": 1,
-        "Steady Shot": 2,
-        "Fireblast Rank 2": 2,
-        "Dire Shapeshift": 2,
-        "Ballista Shot": 3
+    /// the id table below never learned, so they are matched by English name, which every skin shares.
+    /// Powers that don't add damage this turn (armor, healing, cards, totems, 1/1 Recruits without
+    /// Charge) count as 0.
+    private static let byName: [String: (damage: Int, kind: Kind)] = [
+        "Fireblast": (1, .direct),
+        "Fireblast Rank 2": (2, .direct),
+        "Steady Shot": (2, .direct),
+        "Ballista Shot": (3, .direct),
+        "Shapeshift": (1, .heroAttack),
+        "Dire Shapeshift": (2, .heroAttack),
+        "Demon Claws": (1, .heroAttack),
+        "Demon's Bite": (2, .heroAttack),
+        "Dagger Mastery": (1, .weapon),
+        "Poisoned Daggers": (2, .weapon),
+        "Ghoul Charge": (1, .chargeMinion),
+        "Ghoul Frenzy": (2, .chargeMinion)
     ]
-    private static let heroAttackNames: Set<String> = ["Shapeshift", "Dire Shapeshift"]
 
     private var englishName: String? {
         // Cards.by(cardId:) leaves hero powers out

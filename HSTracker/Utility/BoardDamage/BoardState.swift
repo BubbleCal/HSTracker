@@ -20,10 +20,10 @@ class BoardState {
 
     /// Tags whose change on an entity in play can change a board damage number
     private static let inPlayTags: Set<GameTag> = [
-        .num_attacks_this_turn, .exhausted, .frozen, .atk, .damage, .health, .charge, .windfury,
-        .mega_windfury, .cant_attack, .cannot_attack_heroes, .dormant, .titan, .titan_ability_used_1,
-        .titan_ability_used_2, .titan_ability_used_3, .heropower_activations_this_turn, .hero_power_disabled,
-        .silenced, .hide_stats, .just_played, .controller, .cost, .armor
+        .num_attacks_this_turn, .extra_attacks_this_turn, .exhausted, .frozen, .atk, .damage, .health,
+        .charge, .rush, .windfury, .mega_windfury, .cant_attack, .cannot_attack_heroes, .dormant, .titan,
+        .titan_ability_used_1, .titan_ability_used_2, .titan_ability_used_3, .heropower_activations_this_turn,
+        .hero_power_disabled, .silenced, .hide_stats, .just_played, .controller, .cost, .armor
     ]
     /// Turn and mana tags, which live on the game and player entities
     private static let turnTags: Set<GameTag> = [.step, .current_player, .resources, .resources_used, .temp_resources]
@@ -72,7 +72,8 @@ class BoardState {
     }
 
     /// "Threat" semantics: whether the other side's board could kill this hero on its next turn if
-    /// nothing changes. Nothing uses these yet (HDT has the same unused helpers).
+    /// nothing changes. Nothing uses these yet (HDT has the same unused helpers). Like the counters,
+    /// they ignore Taunt minions in the way; a caller that means lethal must check those first.
     func isPlayerDeadToBoard() -> Bool {
         guard let hero = player.hero else {
             return true

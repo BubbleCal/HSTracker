@@ -89,7 +89,12 @@ class PowerGameStateParser: LogEventParser {
             (eventHandler as? Game)?.secretsManager?.sampleAfterRootBlock()
         }
         if let entity = eventHandler.entities[currentEntityId] {
+            let hadOutstandingTagChanges = entity.info.hasOutstandingTagChanges
             entity.info.hasOutstandingTagChanges = false
+            // As in TagChangeHandler.invokeQueuedActions: the entity only now joins Player.board
+            if hadOutstandingTagChanges && entity.isInPlay {
+                (eventHandler as? Game)?.updateBoardDamage()
+            }
         }
     }
 

@@ -37,7 +37,7 @@ class BoardHero: IBoardEntity {
         let heroOwnPerTurn = BoardCard.attacksPerTurn(of: hero)
         let weaponPerTurn = weapon.map { BoardCard.attacksPerTurn(of: $0) } ?? 1
         let heroPerTurn = max(heroOwnPerTurn, weaponPerTurn >= 2 ? 2 : 1)
-        let attacksThisTurn = hero[.num_attacks_this_turn]
+        let attacksThisTurn = BoardCard.attacksUsed(by: hero)
         let remaining = max(heroPerTurn - attacksThisTurn, 0)
         let cantAttack = BoardCard.cantAttackHeroes(hero)
         // NUM_TURNS_IN_PLAY does not matter for heroes; EXHAUSTED is set after their last attack.
@@ -49,14 +49,16 @@ class BoardHero: IBoardEntity {
             if heroInfinite {
                 hasInfiniteDamageNow = true
             } else if let weapon = weapon {
-                // Hero ATK includes the weapon plus any temporary buffs. Swings beyond the weapon's
-                // durability lose the weapon's Attack, and are only there if the hero itself has the
-                // extra attacks: a windfury weapon takes its Windfury with it when it breaks.
-                // This reproduces HDT's BoardHero.AttackWithWeapon expectations.
+                // Hero ATK includes the weapon plus any temporary buffs, and swings beyond the weapon's
+                // durability lose the weapon's Attack. A windfury weapon copies WINDFURY onto the hero
+                // and takes it away again when it breaks, so the hero's own Windfury can't be told
+                // apart then and there are no swings after the break. With a plain weapon, the extra
+                // swings come from the hero's own Windfury. This reproduces HDT's
+                // BoardHero.AttackWithWeapon expectations.
                 let durability = max(weapon[.health] - weapon[.damage], 0)
                 let weaponAttack = BoardCard.attack(of: weapon).attack
                 let withWeapon = min(remaining, durability)
-                let withoutWeapon = max(heroOwnPerTurn - attacksThisTurn - withWeapon, 0)
+                let withoutWeapon = weaponPerTurn >= 2 ? 0 : remaining - withWeapon
                 damageNow = withWeapon * heroAttack + withoutWeapon * max(heroAttack - weaponAttack, 0)
             } else {
                 damageNow = remaining * heroAttack

@@ -128,6 +128,13 @@ class BoardDamageTests: XCTestCase {
         assertDamage(acting([rusher]), now: 5, next: 5)
     }
 
+    func testTransformedMinionKeepsItsAttack() {
+        // Power.log: TIME_049 turning into DINO_435 in its controller's MAIN_START_TRIGGERS restarts at
+        // NUM_TURNS_IN_PLAY=0 but keeps EXHAUSTED=0, and can still attack
+        let transformed = minion(atk: 3, [.num_turns_in_play: 0, .exhausted: 0, .num_attacks_this_turn: 0])
+        assertDamage(acting([transformed]), now: 3, next: 3)
+    }
+
     func testSummoningSickMinionGivenCharge() {
         let given = minion(atk: 3, [.num_turns_in_play: 0, .exhausted: 1, .charge: 1, .num_attacks_this_turn: 0])
         assertDamage(acting([given]), now: 3, next: 3)
@@ -155,6 +162,26 @@ class BoardDamageTests: XCTestCase {
         assertDamage(acting([minion(atk: 2, [.windfury: 3])]), now: 8, next: 8)
         // HDT Include_MegaWindfury_V07TR0N: silencing leaves plain Windfury behind
         assertDamage(acting([minion(atk: 2, [.mega_windfury: 1, .windfury: 1, .silenced: 1])]), now: 4, next: 4)
+    }
+
+    func testForcedAttackLeavesTheMinionsOwnAttack() {
+        // Power.log: an effect-forced attack raises NUM_ATTACKS_THIS_TURN and EXTRA_ATTACKS_THIS_TURN together
+        let forced = minion(atk: 4, [.num_attacks_this_turn: 1, .extra_attacks_this_turn: 1, .exhausted: 0])
+        assertDamage(acting([forced]), now: 4, next: 4)
+
+        forced[.num_attacks_this_turn] = 2
+        forced[.exhausted] = 1
+        assertDamage(acting([forced]), now: 0, next: 4)
+
+        // A freshly summoned minion forced to attack is still summoning sick
+        let sick = minion(atk: 4, [.num_turns_in_play: 0, .exhausted: 1, .num_attacks_this_turn: 1,
+                                   .extra_attacks_this_turn: 1])
+        assertDamage(acting([sick]), now: 0, next: 4)
+
+        // Frozen after a forced attack only, it still had its own attack and thaws tonight
+        let frozen = minion(atk: 4, [.frozen: 1, .num_attacks_this_turn: 1, .extra_attacks_this_turn: 1,
+                                     .exhausted: 0])
+        assertDamage(acting([frozen]), now: 0, next: 4)
     }
 
     func testChargeWindfuryMinionAfterOneAttack() {
@@ -267,6 +294,17 @@ class BoardDamageTests: XCTestCase {
         XCTAssertEqual(acting([attackedOnce, weapon(atk: 6, health: 3, [.windfury: 1])]).damageNow, 6)
     }
 
+    func testWindfuryWeaponCopiesWindfuryOntoTheHero() {
+        // Power.log: equipping TIME_209t (WINDFURY=1) sets WINDFURY=1 on the hero in the same block. The
+        // Windfury leaves with the weapon, so there is no swing after its last durability.
+        let hero = self.hero(atk: 5, [.windfury: 1])
+        let weapon = self.weapon(atk: 3, health: 4, [.windfury: 1, .damage: 3])
+        assertDamage(acting([hero, weapon]), now: 5, next: 3)
+
+        weapon[.damage] = 2
+        assertDamage(acting([hero, weapon]), now: 10, next: 6)
+    }
+
     func testHeroWindfuryWithWeapon() {
         // HDT HeroHasWindfuryWithWeapon
         XCTAssertEqual(acting([hero(atk: 2, [.windfury: 1]), weapon(atk: 2, health: 2)]).damageNow, 4)
@@ -359,18 +397,57 @@ class BoardDamageTests: XCTestCase {
         assertDamage(acting([cantAttack, shapeshift], playerEntity: mana(3)), now: 0, next: 0)
     }
 
-    func testCurrentHeroPowersMatchedByName() {
-        let cardId = "HERO_05dbp"
+    /// A hero power with a current id only the card database knows by its English name
+    private func heroPower(named name: String, cardId: String, cost: Int = 2) -> Entity {
         let previous = Cards.cardsById[cardId]
-        defer { Cards.cardsById[cardId] = previous }
+        addTeardownBlock { Cards.cardsById[cardId] = previous }
         let card = Card()
         card.id = cardId
-        card.enName = "Steady Shot"
+        card.enName = name
         Cards.cardsById[cardId] = card
+        return entity(.hero_power, cardId: cardId, [.cost: cost])
+    }
 
-        let power = entity(.hero_power, cardId: cardId, [.cost: 2])
-        XCTAssertEqual(HeroPower(entity: power).damage, 2)
-        XCTAssertFalse(HeroPower(entity: power).isHeroAttack)
+    func testCurrentHeroPowersMatchedByName() {
+        let steadyShot = HeroPower(entity: heroPower(named: "Steady Shot", cardId: "HERO_05dbp"))
+        XCTAssertEqual(steadyShot.damage, 2)
+        XCTAssertEqual(steadyShot.kind, .direct)
+        let demonsBite = HeroPower(entity: heroPower(named: "Demon's Bite", cardId: "HERO_10bp2", cost: 1))
+        XCTAssertEqual(demonsBite.damage, 2)
+        XCTAssertEqual(demonsBite.kind, .heroAttack)
+        let lifeTap = HeroPower(entity: heroPower(named: "Life Tap", cardId: "HERO_07bp"))
+        XCTAssertEqual(lifeTap.damage, 0)
+    }
+
+    func testDemonClawsNeedsTheHeroToAttack() {
+        let claws = heroPower(named: "Demon Claws", cardId: "HERO_10bp", cost: 1)
+        assertDamage(acting([hero(), claws, minion(atk: 4)], playerEntity: mana(3)), now: 5, next: 5)
+        let attacked = hero(atk: 0, [.num_attacks_this_turn: 1, .exhausted: 1])
+        assertDamage(acting([attacked, claws, minion(atk: 4)], playerEntity: mana(3)), now: 4, next: 5)
+    }
+
+    func testDaggerMasteryOnlyWithoutAWeapon() {
+        let dagger = heroPower(named: "Dagger Mastery", cardId: "HERO_03bp")
+        assertDamage(acting([hero(), dagger], playerEntity: mana(2)), now: 1, next: 1)
+        assertDamage(notCurrent([hero(), dagger], playerEntity: mana(2)), now: 0, next: 1)
+        // Replacing the weapon adds nothing, and Garrison Commander's second use only re-equips it
+        assertDamage(acting([hero(atk: 3), weapon(atk: 3, health: 2), dagger], playerEntity: mana(2)), now: 3, next: 3)
+        let commander = minion(atk: 0)
+        commander.cardId = CardIds.Collectible.Neutral.GarrisonCommander
+        assertDamage(acting([hero(), commander, dagger], playerEntity: mana(4)), now: 1, next: 1)
+    }
+
+    func testGhoulChargeNeedsABoardSlot() {
+        let ghoul = heroPower(named: "Ghoul Charge", cardId: "HERO_11bp")
+        let six = (0..<6).map { _ in minion(atk: 0) }
+        assertDamage(acting([hero(), ghoul] + six, playerEntity: mana(2)), now: 1, next: 1)
+        assertDamage(acting([hero(), ghoul, minion(atk: 0)] + six, playerEntity: mana(2)), now: 0, next: 0)
+
+        let commander = minion(atk: 0)
+        commander.cardId = CardIds.Collectible.Neutral.GarrisonCommander
+        let five = (0..<5).map { _ in minion(atk: 0) }
+        assertDamage(acting([hero(), ghoul, commander] + five, playerEntity: mana(4)), now: 1, next: 1)
+        assertDamage(acting([hero(), ghoul, commander], playerEntity: mana(4)), now: 2, next: 2)
     }
 
     // MARK: - Weapon choice (HDT PlayerBoardTest)
@@ -417,6 +494,50 @@ class BoardDamageTests: XCTestCase {
                                                     prevValue: Zone.hand.rawValue, value: Zone.play.rawValue))
         XCTAssertFalse(BoardState.affectsBoardDamage(entity: inHand, tag: .zone,
                                                      prevValue: Zone.deck.rawValue, value: Zone.hand.rawValue))
+        XCTAssertTrue(BoardState.affectsBoardDamage(entity: inPlay, tag: .extra_attacks_this_turn, prevValue: 0, value: 1))
+        XCTAssertTrue(BoardState.affectsBoardDamage(entity: inPlay, tag: .rush, prevValue: 0, value: 1))
+    }
+
+    /// Counts the board damage refreshes the parser asks for
+    private class RefreshCountingGame: Game {
+        var boardDamageRequests = 0
+
+        override func updateBoardDamage() {
+            boardDamageRequests += 1
+        }
+    }
+
+    func testMinionCreatedInPlayRefreshesOnceItJoinsTheBoard() {
+        let game = RefreshCountingGame(hearthstoneRunState: HearthstoneRunState(isRunning: false, isActive: false))
+        game.isInMenu = false
+        game.player.id = 2
+        game.opponent.id = 1
+        let parser = PowerGameStateParser(with: game)
+        let prefix = "D 14:02:20.6622000 PowerTaskList.DebugPrintPower() - "
+        func feed(_ line: String) {
+            parser.handle(logLine: LogLine(namespace: .power, line: prefix + line))
+        }
+        let inHand = Entity(id: 96)
+        inHand[.zone] = Zone.hand.rawValue
+        inHand[.controller] = 1
+        game.entities[96] = inHand
+
+        // A deathrattle summon: the ZONE creation tag asks for a refresh while the minion still has
+        // outstanding tag changes, so Player.board leaves it out of that one
+        feed("    FULL_ENTITY - Updating [entityName=Ghoul id=140 zone=PLAY zonePos=2 cardId=HERO_11bpt player=1] CardID=HERO_11bpt")
+        feed("        tag=CONTROLLER value=1")
+        feed("        tag=CARDTYPE value=MINION")
+        feed("        tag=ATK value=3")
+        feed("        tag=ZONE value=PLAY")
+        XCTAssertTrue(game.entities[140]?.info.hasOutstandingTagChanges ?? false)
+        XCTAssertFalse(game.opponent.board.contains { $0.id == 140 })
+        game.boardDamageRequests = 0
+
+        // The next unrelated line runs the queued zone action and the minion joins the board
+        feed("    TAG_CHANGE Entity=[entityName=UNKNOWN ENTITY [cardType=INVALID] id=96 zone=HAND zonePos=1 cardId= player=1] tag=ZONE_POSITION value=2")
+        XCTAssertFalse(game.entities[140]?.info.hasOutstandingTagChanges ?? true)
+        XCTAssertTrue(game.opponent.board.contains { $0.id == 140 })
+        XCTAssertGreaterThan(game.boardDamageRequests, 0)
     }
 
     // MARK: - Display
@@ -431,10 +552,33 @@ class BoardDamageTests: XCTestCase {
     func testDisplayFitsTheBadge() {
         // The hosted app registers its bundled fonts; without Belwe the widths below would mean nothing
         XCTAssertNotNil(NSFont(name: BoardDamage.fontName, size: 18))
-        for (now, next) in [(12, 20), (24, 38), (99, 120)] {
+        // A borderless label like the badge's 54pt field, which pads its text
+        let field = NSTextField(labelWithString: "")
+        // The first ones fit at full size, the rest must shrink
+        for (now, next) in [(12, 20), (24, 38), (99, 120), (100, 100), (120, 240), (999, 999)] {
             let text = BoardDamage.attributedText(now: now, nextTurn: next)
             XCTAssertLessThanOrEqual(text.size().width, BoardDamage.maxTextWidth, text.string)
+            field.attributedStringValue = text
+            let needed = field.cell?.cellSize(forBounds: NSRect(x: 0, y: 0, width: 1000, height: 100)).width ?? 0
+            XCTAssertLessThanOrEqual(needed, 54, text.string)
+            let oneLine = text.boundingRect(with: NSSize(width: 1000, height: 1000), options: .usesLineFragmentOrigin)
+            let inField = text.boundingRect(with: NSSize(width: BoardDamage.maxTextWidth, height: 1000),
+                                            options: .usesLineFragmentOrigin)
+            XCTAssertEqual(inField.height, oneLine.height, text.string)
         }
+        let shrunk = BoardDamage.attributedText(now: 120, nextTurn: 240)
+        XCTAssertLessThan((shrunk.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)?.pointSize ?? 18, 18)
+    }
+
+    func testDisplayClipsInsteadOfWrapping() {
+        // Too wide even at the smallest size: the paragraph style, which wins over the field's, clips it
+        let text = BoardDamage.attributedText(now: 12345, nextTurn: 123456)
+        let paragraph = text.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle
+        XCTAssertEqual(paragraph?.lineBreakMode, .byClipping)
+        let oneLine = text.boundingRect(with: NSSize(width: 1000, height: 1000), options: .usesLineFragmentOrigin)
+        let inField = text.boundingRect(with: NSSize(width: BoardDamage.maxTextWidth, height: 1000),
+                                        options: .usesLineFragmentOrigin)
+        XCTAssertEqual(inField.height, oneLine.height)
     }
 
     func testDisplayFontsKeepTheirRatio() {

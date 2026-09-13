@@ -15,8 +15,9 @@ class BoardDamage: OverWindowController {
     
     var hasValidFrame = false
 
-    /// Room for the text inside the badge's text field, less the cell padding
-    static let maxTextWidth: CGFloat = 48
+    /// Room for the text inside the badge's 54pt borderless text field: the cell and the line fragment
+    /// padding take 2pt on each side, and wider text is clipped
+    static let maxTextWidth: CGFloat = 46
     static let fontName = "Belwe Bd BT"
     static let nowFontSize: CGFloat = 18
     static let nextTurnFontSize: CGFloat = 12
@@ -62,6 +63,9 @@ class BoardDamage: OverWindowController {
     private static func attributedText(now: Int, nextTurn: Int, nowFontSize size: CGFloat) -> NSAttributedString {
         let paragraph = NSMutableParagraphStyle()
         paragraph.alignment = .center
+        // An attributed string's paragraph style wins over the field's line break mode, and the default
+        // word wrapping would push the tail onto a second line outside the field
+        paragraph.lineBreakMode = .byClipping
         func attributes(_ fontSize: CGFloat) -> [NSAttributedString.Key: Any] {
             return [
                 .font: NSFont(name: fontName, size: fontSize) ?? NSFont.boldSystemFont(ofSize: fontSize),
