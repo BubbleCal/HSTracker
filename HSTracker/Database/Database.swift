@@ -79,9 +79,13 @@ class Database {
         return season(for: Date())
     }
 
-    /// The ranked season a date falls into (one season per calendar month, season 1
-    /// being April 2014), in the local time zone.
-    static func season(for date: Date, calendar: Calendar = .current) -> Int {
+    /// The ranked season a date falls into (one season per Gregorian month, season 1
+    /// being April 2014), in the given time zone. Always Gregorian: Calendar.current
+    /// follows the calendar chosen in Language & Region, and a Buddhist, Japanese or
+    /// Chinese lunar calendar gave years like 2569 or 8 and lunar months here.
+    static func season(for date: Date, timeZone: TimeZone = .current) -> Int {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
         let dc = calendar.dateComponents([.year, .month], from: date)
         return ((dc.year ?? 2014) - 2014) * 12 - 3 + (dc.month ?? 4)
     }

@@ -88,15 +88,19 @@ class RecordStatsTests: HSTrackerTests {
     // MARK: - Season
 
     func testSeasonForDate() {
+        let utc = TimeZone(identifier: "UTC")!
         var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(identifier: "UTC")!
-        func date(_ year: Int, _ month: Int, _ day: Int) -> Date {
-            return calendar.date(from: DateComponents(year: year, month: month, day: day, hour: 12))!
+        calendar.timeZone = utc
+        func date(_ year: Int, _ month: Int, _ day: Int, hour: Int = 12) -> Date {
+            return calendar.date(from: DateComponents(year: year, month: month, day: day, hour: hour))!
         }
-        XCTAssertEqual(Database.season(for: date(2014, 4, 10), calendar: calendar), 1)
-        XCTAssertEqual(Database.season(for: date(2026, 9, 13), calendar: calendar), (2026 - 2014) * 12 - 3 + 9)
-        XCTAssertEqual(Database.season(for: date(2026, 10, 1), calendar: calendar),
-                       Database.season(for: date(2026, 9, 30), calendar: calendar) + 1)
+        XCTAssertEqual(Database.season(for: date(2014, 4, 10), timeZone: utc), 1)
+        XCTAssertEqual(Database.season(for: date(2026, 9, 13), timeZone: utc), (2026 - 2014) * 12 - 3 + 9)
+        XCTAssertEqual(Database.season(for: date(2026, 10, 1), timeZone: utc),
+                       Database.season(for: date(2026, 9, 30), timeZone: utc) + 1)
+        // 30 Sept 20:00 UTC is already 1 October in UTC+8.
+        XCTAssertEqual(Database.season(for: date(2026, 9, 30, hour: 20), timeZone: TimeZone(secondsFromGMT: 8 * 3600)!),
+                       Database.season(for: date(2026, 10, 1), timeZone: utc))
         XCTAssertEqual(Database.currentSeason, Database.season(for: Date()))
     }
 
@@ -624,14 +628,15 @@ class RecordStatsTests: HSTrackerTests {
     private func game(_ result: GameResult, owner: RecordOwner = .deck(id: "active"), mode: GameMode = .ranked,
                       format: Format? = .standard, opponent: CardClass = .mage, coin: Bool? = nil,
                       turns: Int = 0, hoursAgo: Double? = nil, duration: TimeInterval? = nil,
-                      season: Int? = nil, before: RankSnapshot? = nil, after: RankSnapshot? = nil) -> RecordGame {
+                      season: Int? = nil, rankedSeasonId: Int = 0,
+                      before: RankSnapshot? = nil, after: RankSnapshot? = nil) -> RecordGame {
         nextGameOffset += 60
         let start = RecordStatsTests.now.addingTimeInterval(hoursAgo.map { -$0 * 3600 } ?? -nextGameOffset)
         return RecordGame(statId: UUID().uuidString, owner: owner, playerClass: .rogue, opponentClass: opponent,
                           opponentName: "Opponent", result: result, wasConceded: false, mode: mode, format: format,
                           coin: coin, turns: turns, startTime: start, duration: duration,
-                          season: season ?? Database.season(for: start, calendar: RecordStatsTests.utc),
-                          rankBefore: before, rankAfter: after)
+                          season: season ?? Database.season(for: start, timeZone: RecordStatsTests.utc.timeZone),
+                          rankedSeasonId: rankedSeasonId, rankBefore: before, rankAfter: after)
     }
 
     private func report(_ games: [RecordGame], filter: RecordFilter = RecordFilter(),
@@ -697,7 +702,7 @@ class RecordStatsTests: HSTrackerTests {
     }
 
     func testReportTimeFrames() {
-        let currentSeason = Database.season(for: RecordStatsTests.now, calendar: RecordStatsTests.utc)
+        let currentSeason = Database.season(for: RecordStatsTests.now, timeZone: RecordStatsTests.utc.timeZone)
         let games = [game(.win, hoursAgo: 1),          // today
                      game(.win, hoursAgo: 13),         // yesterday
                      game(.win, hoursAgo: 24 * 6),     // this week, this season
@@ -857,7 +862,7 @@ class RecordStatsTests: HSTrackerTests {
     }
 
     func testRankProgressionPerSeasonAndFormat() {
-        let currentSeason = Database.season(for: RecordStatsTests.now, calendar: RecordStatsTests.utc)
+        let currentSeason = Database.season(for: RecordStatsTests.now, timeZone: RecordStatsTests.utc.timeZone)
         // Newest first, as the report sorts them.
         let games = [
             // Current season, standard: Diamond 5 ★2 -> climbs to Diamond 4 ★1 -> drops to Diamond 5 ★3.
@@ -913,6 +918,50 @@ class RecordStatsTests: HSTrackerTests {
         filter = RecordFilter()
         filter.mode = .casual
         XCTAssertTrue(report(games, filter: filter).rankProgression.isEmpty)
+    }
+
+    func testRankProgressionGroupsByRankedSeasonId() {
+        let currentSeason = Database.season(for: RecordStatsTests.now, timeZone: RecordStatsTests.utc.timeZone)
+        // Ids numbered unlike Database.season, to show only their offset matters.
+        let currentId = 500
+        let games = [
+            game(.win, hoursAgo: 2, rankedSeasonId: currentId, before: rank(5, 0), after: rank(5, 1)),
+            game(.win, hoursAgo: 3, rankedSeasonId: currentId, before: rank(4, 3), after: rank(5, 0)),
+            // 1 September 02:00 UTC, before the server's rollover: still last season,
+            // where the player was climbing Legend.
+            game(.win, hoursAgo: 24 * 12 + 10, rankedSeasonId: currentId - 1,
+                 before: rank(51, 0, legend: 450), after: rank(51, 0, legend: 200)),
+            game(.loss, hoursAgo: 24 * 20, rankedSeasonId: currentId - 1,
+                 before: rank(51, 0, legend: 300), after: rank(51, 0, legend: 450)),
+            game(.win, hoursAgo: 24 * 21, rankedSeasonId: currentId - 1,
+                 before: rank(50, 3), after: rank(51, 0, legend: 300)),
+            // An older row without an id keeps its calendar month.
+            game(.win, hoursAgo: 24 * 50, before: rank(40, 0), after: rank(40, 1))
+        ]
+        XCTAssertEqual(games[2].season, currentSeason, "the calendar month is already the new one")
+
+        let progression = report(games).rankProgression
+        XCTAssertEqual(progression.map { $0.season }, [currentSeason, currentSeason - 1, currentSeason - 2])
+        let current = progression[0]
+        XCTAssertEqual(current.games, 2)
+        XCTAssertEqual(current.start, rank(4, 3))
+        XCTAssertEqual(current.current, rank(5, 1))
+        XCTAssertEqual(current.netStars, 1)
+        let last = progression[1]
+        XCTAssertEqual(last.games, 3)
+        XCTAssertEqual(last.start, rank(50, 3))
+        XCTAssertEqual(last.current, rank(51, 0, legend: 200))
+        XCTAssertEqual(last.peak, rank(51, 0, legend: 200))
+        XCTAssertEqual(progression[2].games, 1)
+    }
+
+    func testRecordGameSeasonComesFromStartTime() {
+        let stat = GameStats()
+        stat.gameMode = .ranked
+        stat.season = 3 // what a frozen or non-Gregorian season left behind
+        stat.startTime = RecordStatsTests.now
+        let recordGame = RecordGame(stat: stat, owner: .deck(id: "active"), ownerClass: .rogue)
+        XCTAssertEqual(recordGame.season, Database.season(for: RecordStatsTests.now))
     }
 
     func testLoadRecordDataReadsDecksAndBucketsOffTheMainThread() throws {

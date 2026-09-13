@@ -172,7 +172,10 @@ struct RecordGame {
     let turns: Int
     let startTime: Date
     let duration: TimeInterval?
+    /// Database.season of the start time: the calendar month the game was played in.
     let season: Int
+    /// Hearthstone's own ranked season id from MatchInfo; 0 or -1 when not known.
+    let rankedSeasonId: Int
     let rankBefore: RankSnapshot?
     let rankAfter: RankSnapshot?
 }
@@ -194,7 +197,11 @@ extension RecordGame {
                   turns: stat.turns,
                   startTime: stat.startTime,
                   duration: stat.duration,
-                  season: stat.season,
+                  // Derived from the start time rather than the stored season: rows
+                  // saved while Database.currentSeason was frozen at launch, or
+                  // computed with a non-Gregorian system calendar, hold wrong values.
+                  season: Database.season(for: stat.startTime),
+                  rankedSeasonId: stat.rankedSeasonId,
                   rankBefore: stat.rankBefore,
                   rankAfter: stat.rankAfter)
     }
@@ -417,7 +424,7 @@ extension StatsHelper {
             owners[info.owner] = info
         }
 
-        let currentSeason = Database.season(for: now, calendar: calendar)
+        let currentSeason = Database.season(for: now, timeZone: calendar.timeZone)
         let startOfToday = calendar.startOfDay(for: now)
         func inTimeFrame(_ game: RecordGame) -> Bool {
             switch filter.timeFrame {
@@ -493,15 +500,36 @@ extension StatsHelper {
     }
 
     /// Start, current and peak rank per season and format, newest season first.
+    ///
+    /// Games are grouped by Hearthstone's ranked season id when MatchInfo gave one:
+    /// the ladder rolls over at a server time, so a game played early on the 1st in
+    /// the user's time zone can still belong to the previous season, and filing it
+    /// under the new month would start that season at the old season's final rank.
+    /// The id is turned into a display season with the offset most of the user's
+    /// games agree on, which does not assume the id and Database.season number
+    /// seasons the same way. Games without an id fall back to their calendar month.
     static func rankProgression(newestFirst games: [RecordGame]) -> [RecordRankProgression] {
         struct Key: Hashable {
             let season: Int
             let format: Format
         }
+        let ranked = games.reversed().filter { game in
+            game.mode == .ranked && (game.rankBefore != nil || game.rankAfter != nil)
+        }
+        var offsetVotes = [Int: Int]()
+        for game in ranked where game.rankedSeasonId > 0 {
+            offsetVotes[game.season - game.rankedSeasonId, default: 0] += 1
+        }
+        let seasonOffset = offsetVotes.max { lhs, rhs in
+            lhs.value != rhs.value ? lhs.value < rhs.value : lhs.key > rhs.key
+        }?.key
         var groups = [Key: [RecordGame]]()
-        for game in games.reversed() where game.mode == .ranked
-            && (game.rankBefore != nil || game.rankAfter != nil) {
-            groups[Key(season: game.season, format: game.format ?? .unknown), default: []].append(game)
+        for game in ranked {
+            var season = game.season
+            if game.rankedSeasonId > 0, let offset = seasonOffset {
+                season = game.rankedSeasonId + offset
+            }
+            groups[Key(season: season, format: game.format ?? .unknown), default: []].append(game)
         }
 
         let formatOrder = RecordFilter.formats + [.unknown]
