@@ -330,6 +330,10 @@ struct RootOverlayView: View {
                 // never by the client's resolution.
                 BattlegroundsSessionOverlayView(viewModel: viewModel.battlegroundsSession,
                                                 canvasSize: geometry.size)
+                // The current match's action history. Fixed-pixel like the session panel above: its
+                // position is a percentage of the canvas and its text does not scale with the client.
+                ActionHistoryOverlayView(viewModel: viewModel.actionHistory,
+                                         canvasSize: geometry.size)
                 // Future SwiftUI overlay features attach here as additional children.
 
             }

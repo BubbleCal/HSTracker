@@ -15,10 +15,14 @@
 		37484050B853DC35C7EBE1CE /* ActionHistoryVisibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0ABACE823F2CE9F42FE8C50B /* ActionHistoryVisibility.swift */; };
 		4EE31E63414BF94560B1520C /* ActionHistoryRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01AF303551DAC01F4B90F883 /* ActionHistoryRecorder.swift */; };
 		7061A608209D38D4D8A2AFF4 /* ActionHistoryViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA28E67F86E4FC69A9830BC0 /* ActionHistoryViewModel.swift */; };
+		50E117B22F1F4D3CF5AF9D25 /* ActionHistoryPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8441B689E8E5D2F6ED799468 /* ActionHistoryPresentation.swift */; };
+		33817D38958B0F5AE271FAFA /* ActionHistoryRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A3646BD03970E0601D9DC9C /* ActionHistoryRowView.swift */; };
+		257A575331158C614AAE870B /* ActionHistoryOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5ADAA2C1BA088DB50409CE66 /* ActionHistoryOverlayView.swift */; };
 		4142FD5EA176D4723926F589 /* ActionHistoryLineParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3204CFFAF449B0F253E1040F /* ActionHistoryLineParserTests.swift */; };
 		7F2C43A935A0A68DA5952807 /* ActionHistoryVisibilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37A3ED54ACAAD229494B4681 /* ActionHistoryVisibilityTests.swift */; };
 		D263D38AEBD00222F3207171 /* ActionHistoryRecorderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 452016FCC727689B4E19D163 /* ActionHistoryRecorderTests.swift */; };
 		EAF95676C6577B2F43E65AD6 /* ActionHistoryReplayTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4980AF37EF880A5414F5B852 /* ActionHistoryReplayTests.swift */; };
+		84A92DD9DDD3525D628F3B99 /* ActionHistoryPresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5000344EA550B58FE632734 /* ActionHistoryPresentationTests.swift */; };
 		BB5E553A0000000000000064 /* BattlegroundsSessionOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB5E553A0000000000000001 /* BattlegroundsSessionOverlayView.swift */; };
 		BB5E551A0000000000000002 /* BattlegroundsSessionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB5E551A0000000000000001 /* BattlegroundsSessionViewModel.swift */; };
 		BB5E551A0000000000000005 /* BattlegroundsSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB5E551A0000000000000004 /* BattlegroundsSessionView.swift */; };
@@ -1875,10 +1879,14 @@
 		0ABACE823F2CE9F42FE8C50B /* ActionHistoryVisibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionHistoryVisibility.swift; sourceTree = "<group>"; };
 		01AF303551DAC01F4B90F883 /* ActionHistoryRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionHistoryRecorder.swift; sourceTree = "<group>"; };
 		FA28E67F86E4FC69A9830BC0 /* ActionHistoryViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionHistoryViewModel.swift; sourceTree = "<group>"; };
+		8441B689E8E5D2F6ED799468 /* ActionHistoryPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionHistoryPresentation.swift; sourceTree = "<group>"; };
+		4A3646BD03970E0601D9DC9C /* ActionHistoryRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionHistoryRowView.swift; sourceTree = "<group>"; };
+		5ADAA2C1BA088DB50409CE66 /* ActionHistoryOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionHistoryOverlayView.swift; sourceTree = "<group>"; };
 		3204CFFAF449B0F253E1040F /* ActionHistoryLineParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionHistoryLineParserTests.swift; sourceTree = "<group>"; };
 		37A3ED54ACAAD229494B4681 /* ActionHistoryVisibilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionHistoryVisibilityTests.swift; sourceTree = "<group>"; };
 		452016FCC727689B4E19D163 /* ActionHistoryRecorderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionHistoryRecorderTests.swift; sourceTree = "<group>"; };
 		4980AF37EF880A5414F5B852 /* ActionHistoryReplayTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionHistoryReplayTests.swift; sourceTree = "<group>"; };
+		B5000344EA550B58FE632734 /* ActionHistoryPresentationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionHistoryPresentationTests.swift; sourceTree = "<group>"; };
 		BB5E553A0000000000000001 /* BattlegroundsSessionOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BattlegroundsSessionOverlayView.swift; sourceTree = "<group>"; };
 		BB5E551A0000000000000001 /* BattlegroundsSessionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BattlegroundsSessionViewModel.swift; sourceTree = "<group>"; };
 		BB5E551A0000000000000004 /* BattlegroundsSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BattlegroundsSessionView.swift; sourceTree = "<group>"; };
@@ -4078,6 +4086,7 @@
 				37A3ED54ACAAD229494B4681 /* ActionHistoryVisibilityTests.swift */,
 				452016FCC727689B4E19D163 /* ActionHistoryRecorderTests.swift */,
 				4980AF37EF880A5414F5B852 /* ActionHistoryReplayTests.swift */,
+				B5000344EA550B58FE632734 /* ActionHistoryPresentationTests.swift */,
 				1CF1B5891E81426D007DCBF2 /* AlgorithmTests.swift */,
 				439C7E601C7772C100D29859 /* HSTrackerTests.swift */,
 				1CF1B58B1E815810007DCBF2 /* LogReaderTests.swift */,
@@ -4528,6 +4537,9 @@
 			isa = PBXGroup;
 			children = (
 				FA28E67F86E4FC69A9830BC0 /* ActionHistoryViewModel.swift */,
+				8441B689E8E5D2F6ED799468 /* ActionHistoryPresentation.swift */,
+				4A3646BD03970E0601D9DC9C /* ActionHistoryRowView.swift */,
+				5ADAA2C1BA088DB50409CE66 /* ActionHistoryOverlayView.swift */,
 			);
 			path = ActionHistory;
 			sourceTree = "<group>";
@@ -6903,6 +6915,9 @@
 				37484050B853DC35C7EBE1CE /* ActionHistoryVisibility.swift in Sources */,
 				4EE31E63414BF94560B1520C /* ActionHistoryRecorder.swift in Sources */,
 				7061A608209D38D4D8A2AFF4 /* ActionHistoryViewModel.swift in Sources */,
+				50E117B22F1F4D3CF5AF9D25 /* ActionHistoryPresentation.swift in Sources */,
+				33817D38958B0F5AE271FAFA /* ActionHistoryRowView.swift in Sources */,
+				257A575331158C614AAE870B /* ActionHistoryOverlayView.swift in Sources */,
 				B8956CFD25509B3F0073D70C /* BattlegroundsMinionView.swift in Sources */,
 				B86D89E62D95EC4D00AB65A5 /* FerociousFelbat.swift in Sources */,
 				B85462142CDEB9FF0083BB31 /* CrewmateGenerator.swift in Sources */,
@@ -8650,6 +8665,7 @@
 				7F2C43A935A0A68DA5952807 /* ActionHistoryVisibilityTests.swift in Sources */,
 				D263D38AEBD00222F3207171 /* ActionHistoryRecorderTests.swift in Sources */,
 				EAF95676C6577B2F43E65AD6 /* ActionHistoryReplayTests.swift in Sources */,
+				84A92DD9DDD3525D628F3B99 /* ActionHistoryPresentationTests.swift in Sources */,
 				439BD8C91EBCD40200959F69 /* EnumTests.swift in Sources */,
 				43C1C9F61E96CCDB008C20B1 /* SecretTests.swift in Sources */,
 				43C1C9FB1E96CCE9008C20B1 /* StatsTests.swift in Sources */,

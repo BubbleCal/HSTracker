@@ -491,6 +491,16 @@ final class Settings {
     // The action history panel on the overlay, for the current constructed match
     @UserDefault(key: Settings.show_action_history, defaultValue: true)
     static var showActionHistory: Bool
+    // Whether the panel is folded down to its title bar
+    @UserDefault(key: Settings.action_history_collapsed, defaultValue: false)
+    static var actionHistoryCollapsed: Bool
+    // Where the panel sits on the overlay canvas, as a percentage of the Hearthstone client's
+    // size, like battlegroundsSessionTop / battlegroundsSessionLeft. A negative left means the
+    // panel has never been dragged and follows the opponent tracker's width.
+    @UserDefault(key: Settings.action_history_top, defaultValue: 30.0)
+    static var actionHistoryTop: Double
+    @UserDefault(key: Settings.action_history_left, defaultValue: -1.0)
+    static var actionHistoryLeft: Double
     @UserDefault(key: Settings.remove_cards_from_deck, defaultValue: false)
     static var removeCardsFromDeck: Bool
     @UserDefault(key: Settings.highlight_last_drawn, defaultValue: true)
@@ -833,6 +843,9 @@ extension Settings {
     static let opponent_counters = "opponent_counters"
     static let opponent_corpses_counter = "opponent_corpses_counter"
     static let show_action_history = "show_action_history"
+    static let action_history_collapsed = "action_history_collapsed"
+    static let action_history_top = "action_history_top"
+    static let action_history_left = "action_history_left"
     static let interacted_with_link_opponentDeck = "interacted_with_link_opponentDeck"
     static let enable_link_opponent_deck = "enable_link_opponent_deck"
     static let opponent_related_cards = "opponent_related_cards"
