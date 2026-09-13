@@ -24,8 +24,11 @@ public struct Regex {
         }
     }
 
+    // NSRegularExpression ranges are in UTF-16 code units. String.count counts grapheme
+    // clusters, which is shorter for combining scripts such as Thai and would cut the end of
+    // the line off the search (e.g. "TriggerKeyword=SECRET" read as "SECR").
     public func match(_ someString: String) -> Bool {
-        let range = NSRange(location: 0, length: someString.count)
+        let range = NSRange(location: 0, length: someString.utf16.count)
         let matches = regex.numberOfMatches(in: someString,
                                             options: [],
                                             range: range)
@@ -34,7 +37,7 @@ public struct Regex {
 
     public func matches(_ someString: String) -> [Match] {
         var matches = [Match]()
-        let range = NSRange(location: 0, length: someString.count)
+        let range = NSRange(location: 0, length: someString.utf16.count)
         let results = regex.matches(in: someString,
                                     options: [],
                                     range: range)
@@ -55,7 +58,7 @@ public struct Regex {
 public extension String {
 
     func replace(_ pattern: Regex, with: String) -> String {
-        let range = NSRange(location: 0, length: self.count)
+        let range = NSRange(location: 0, length: self.utf16.count)
         return pattern.regex.stringByReplacingMatches(in: self,
                                                       options: [],
                                                       range: range,

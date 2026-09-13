@@ -18,6 +18,11 @@ class PowerGameStateParser: LogEventParser {
     static let TransferStudentToken = CardIds.Collectible.Neutral.TransferStudent + "t"
     
     final let BlockStartRegex = Regex(".*BLOCK_START.*BlockType=(\\w+).*id=(\\d*).*(cardId=(\\w*)).*player=(\\d*).*EffectCardId=(.*)\\sEffectIndex=.*Target=(.+).*SubOption=([^\\s]*)(?:\\sTriggerKeyword=\\w+)?")
+    // TriggerKeyword is optional and last on the line, so BlockStartRegex leaves it out of its
+    // capture groups: Regex.matches drops groups that did not participate, which would shift
+    // every later index. It is read with its own regex, anchored on the SubOption field that
+    // precedes it rather than on text that could appear inside an entity name.
+    final let TriggerKeywordRegex = Regex("\\sSubOption=\\S*\\s+TriggerKeyword=(\\w+)")
     final let CardIdRegex = Regex("cardId=(\\w+)")
     final let CreationRegex = Regex("FULL_ENTITY - Updating.*id=(\\d+).*zone=(\\w+).*CardID=(\\w*)")
     final let CreationTagRegex = Regex("tag=(\\w+) value=(\\w+)")
@@ -60,11 +65,12 @@ class PowerGameStateParser: LogEventParser {
     }
 
     // MARK: - blocks
-    func blockStart(type: String?, cardId: String?, target: String?, trigger: String?) {
+    func blockStart(type: String?, cardId: String?, target: String?, targetEntityId: Int? = nil, trigger: String?) {
         maxBlockId += 1
         let blockId = maxBlockId
-        currentBlock = currentBlock?.createChild(blockId: blockId, type: type, cardId: cardId, target: target, trigger: trigger) ?? Block(parent: nil, id: blockId, type: type, cardId: cardId, target: target, trigger: trigger)
-        AppDelegate.instance().coreManager.game.secretsManager?.onNewBlock()
+        currentBlock = currentBlock?.createChild(blockId: blockId, type: type, cardId: cardId, target: target, targetEntityId: targetEntityId, trigger: trigger) ?? Block(parent: nil, id: blockId, type: type, cardId: cardId, target: target, targetEntityId: targetEntityId, trigger: trigger)
+        // The event handler is the game the parser was created with (CoreManager's game in the app)
+        (eventHandler as? Game)?.secretsManager?.onNewBlock()
     }
 
     func blockEnd() {
@@ -666,18 +672,20 @@ class PowerGameStateParser: LogEventParser {
                 cardId = matches[3].value
             }
             let target = getTargetCardId(matches: matches)
+            let targetEntityId = getTargetEntityId(matches: matches)
             var correspondPlayer: Int?
             if matches.count > 4 {
                 if let v = Int(matches[4].value) {
                     correspondPlayer = v
                 }
             }
+            // HDT reads the triggerKeyword group of the same match, so only matched lines carry one
             var triggerKeyword: String?
-            if matches.count > 5 {
-                triggerKeyword = matches[5].value
+            if matches.count > 0 {
+                triggerKeyword = TriggerKeywordRegex.matches(logLine.line).first?.value
             }
             
-            blockStart(type: blockType, cardId: cardId, target: target, trigger: triggerKeyword)
+            blockStart(type: blockType, cardId: cardId, target: target, targetEntityId: targetEntityId, trigger: triggerKeyword)
 
             if matches.count > 0 && (blockType == "TRIGGER" || blockType == "POWER") {
                 let player = eventHandler.entities.values
@@ -1684,6 +1692,25 @@ class PowerGameStateParser: LogEventParser {
 
         let cardIdMatch = CardIdRegex.matches(target)
         return cardIdMatch.first?.value.trim()
+    }
+    
+    private func getTargetEntityId(matches: [Match]) -> Int? {
+        if matches.count < 7 {
+            return nil
+        }
+        let target = matches[6].value.trim()
+        // "Target=0" means no target. The entity form is "[entityName=... id=123 zone=... cardId=... player=1]";
+        // the name may contain spaces or brackets ("UNKNOWN ENTITY [cardType=INVALID]"), so read the id tag.
+        if target.hasPrefix("[") {
+            guard let id = tagChangeHandler.parseEntity(entity: target).id, id > 0 else {
+                return nil
+            }
+            return id
+        }
+        guard let id = Int(target), id > 0 else {
+            return nil
+        }
+        return id
     }
     
     private func removeKnownCardId(eventHandler: PowerEventHandler, count: Int = 1) {

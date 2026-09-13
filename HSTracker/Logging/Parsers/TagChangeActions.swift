@@ -779,11 +779,13 @@ struct TagChangeActions {
 
         entity.info.hidden = !isCultivatingSpriteBulb && (hideEntity || (isStartOfTheGameEffect && entity.isControlled(by: eventHandler.opponent.id)))
 
-        if isStartOfTheGameEffect {
+        // Only the opponent's reveals are start-of-game reveals, as in HDT: revealStartOfGameEntity
+        // predicts Fabled cards into the opponent's deck, which would be wrong for the player's own card.
+        if isStartOfTheGameEffect && entity.isControlled(by: eventHandler.opponent.id) {
             // Revealing a start-of-game effect (e.g. Azalina Soulsever) on the opponent's side before
             // the mulligan is over would leak deck information through the tracker while the player can
             // still see it; defer the reveal until the mulligan is done and catch up in mulliganStateChange.
-            if entity.isControlled(by: eventHandler.opponent.id), let game = eventHandler as? Game, !game.isMulliganDone() {
+            if let game = eventHandler as? Game, !game.isMulliganDone() {
                 entity.info.pendingStartOfGameReveal = true
             } else {
                 revealStartOfGameEntity(entity)
