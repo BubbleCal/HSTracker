@@ -649,6 +649,58 @@ class RecordStatsTests: HSTrackerTests {
         XCTAssertEqual(realm.objects(DefaultDeckStats.self).first?.gameStats.first?.statId, "legacy-1")
     }
 
+    func testASecondMigrationOfTheSameSchemaTakesAFreshBackup() throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("RecordStatsTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let fileURL = directory.appendingPathComponent("hstracker.realm")
+        let v8Types = [V8Deck.self, V8GameStats.self, V8RealmCard.self, V8ServerInfo.self, V8RealmSideboard.self]
+
+        func addGame(_ statId: String) throws {
+            try autoreleasepool {
+                let realm = try Realm(configuration: Realm.Configuration(fileURL: fileURL, schemaVersion: 8,
+                                                                         objectTypes: v8Types))
+                try realm.write {
+                    let deck = realm.object(ofType: V8Deck.self, forPrimaryKey: "legacy-deck") ?? {
+                        let deck = V8Deck()
+                        deck.deckId = "legacy-deck"
+                        realm.add(deck)
+                        return deck
+                    }()
+                    let stat = V8GameStats()
+                    stat.statId = statId
+                    deck.gameStats.append(stat)
+                }
+            }
+        }
+        func games(in url: URL) throws -> Int? {
+            return try autoreleasepool {
+                let realm = try Realm(configuration: Realm.Configuration(fileURL: url, readOnly: true, schemaVersion: 8,
+                                                                         objectTypes: v8Types))
+                return realm.object(ofType: V8Deck.self, forPrimaryKey: "legacy-deck")?.gameStats.count
+            }
+        }
+
+        try addGame("first")
+        let firstBackup = try XCTUnwrap(RealmHelper.backupBeforeMigration(fileURL: fileURL))
+        XCTAssertEqual(firstBackup.lastPathComponent, "hstracker.schema8.backup.realm")
+
+        // Back on the older release (the file never migrated here) with one more game.
+        try addGame("second")
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let secondBackup = try XCTUnwrap(RealmHelper.backupBeforeMigration(fileURL: fileURL, now: now))
+        XCTAssertNotEqual(secondBackup, firstBackup)
+        XCTAssertTrue(secondBackup.lastPathComponent.hasPrefix("hstracker.schema8.backup-"), secondBackup.lastPathComponent)
+        XCTAssertEqual(try games(in: secondBackup), 2)
+        XCTAssertEqual(try games(in: firstBackup), 1)
+
+        // Two copies within the same second still get names of their own.
+        let thirdBackup = try XCTUnwrap(RealmHelper.backupBeforeMigration(fileURL: fileURL, now: now))
+        XCTAssertNotEqual(thirdBackup, secondBackup)
+        XCTAssertEqual(try games(in: thirdBackup), 2)
+    }
+
     // MARK: - Report
 
     private static let utc: Calendar = {

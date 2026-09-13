@@ -31,12 +31,17 @@ struct RealmHelper {
 	/// longer be opened by an older HSTracker (Realm refuses a schema version lower
 	/// than the file's), and every build shares the same file, so going back to a
 	/// previous release would otherwise leave it without decks or statistics. The
-	/// copy, hstracker.schema<old>.backup.realm, can be put back by hand. An existing
-	/// backup for the same old version is kept, never overwritten.
+	/// copy, hstracker.schema<old>.backup.realm, can be put back by hand.
 	///
-	/// - Returns: the backup's URL when the file needs migrating and a backup exists.
+	/// A backup is never overwritten, but one for the same old version does not stop
+	/// a new copy either: a player who put the first backup back and kept playing on
+	/// the older release migrates again later, and only a copy taken now holds the
+	/// games from in between. That copy gets a timestamped name instead.
+	///
+	/// - Returns: the new backup's URL, or nil when the file needs no migration or
+	///   could not be copied.
 	@discardableResult
-	static func backupBeforeMigration(fileURL: URL) -> URL? {
+	static func backupBeforeMigration(fileURL: URL, now: Date = Date()) -> URL? {
 		let fileManager = FileManager.default
 		guard fileManager.fileExists(atPath: fileURL.path),
 			  let oldVersion = try? schemaVersionAtURL(fileURL),
@@ -44,16 +49,26 @@ struct RealmHelper {
 			return nil
 		}
 		let name = fileURL.deletingPathExtension().lastPathComponent
-		let backupURL = fileURL.deletingLastPathComponent()
-			.appendingPathComponent("\(name).schema\(oldVersion).backup.realm")
+		let directory = fileURL.deletingLastPathComponent()
+		var backupURL = directory.appendingPathComponent("\(name).schema\(oldVersion).backup.realm")
 		if fileManager.fileExists(atPath: backupURL.path) {
-			return backupURL
+			let formatter = DateFormatter()
+			formatter.locale = Locale(identifier: "en_US_POSIX")
+			formatter.dateFormat = "yyyyMMdd-HHmmss"
+			let stamp = formatter.string(from: now)
+			var suffix = 1
+			repeat {
+				let unique = suffix == 1 ? stamp : "\(stamp)-\(suffix)"
+				backupURL = directory.appendingPathComponent("\(name).schema\(oldVersion).backup-\(unique).realm")
+				suffix += 1
+			} while fileManager.fileExists(atPath: backupURL.path)
 		}
 		do {
 			try fileManager.copyItem(at: fileURL, to: backupURL)
 			logger.info("Backed up the schema \(oldVersion) database to \(backupURL.path) before migrating")
 			return backupURL
 		} catch {
+			// Migrating anyway: without it this build cannot open the database at all.
 			logger.error("Could not back up the database before migrating: \(error)")
 			return nil
 		}
