@@ -44,6 +44,8 @@ class Game: NSObject, PowerEventHandler {
 	private let turnTimer: TurnTimer
     
     private var _mulliganState: MulliganState?
+    /// The local player's mulligan and draws for the game's MulliganRecord.
+    let mulliganRecorder = MulliganRecorder()
     private var mulliganState: MulliganState {
         if let _mulliganState {
             return _mulliganState
@@ -1731,6 +1733,7 @@ class Game: NSObject, PowerEventHandler {
         _mulliganGuideParams = nil
         _mulliganV2Params = nil
         _mulliganState = nil
+        mulliganRecorder.reset()
         mulliganCardStats = nil
         if #available(macOS 10.15, *) {
             windowManager.rootOverlay?.viewModel.battlegroundsOpponentInfo.reset()
@@ -2067,6 +2070,8 @@ class Game: NSObject, PowerEventHandler {
 
     private var _lastReconnectStartTimestamp: Date = Date.distantPast
     func handleGameReconnect(timestamp: Date) {
+        // Before the async hop, so a game that ends right after the reconnect is still flagged
+        mulliganRecorder.gameReconnected()
         DispatchQueue.global().async {
             logger.info("Joined after mulligan, assuming reconnect.")
             
@@ -2278,6 +2283,7 @@ class Game: NSObject, PowerEventHandler {
         result.setOpponentCards(opponent.opponentCardList.filter { x in !x.isCreated })
 		
         result.deckId = currentDeck?.id ?? ""
+        result.mulligan = buildMulliganRecord()
         
         if isBattlegroundsMatch() {
             if let accountId {
@@ -2312,6 +2318,28 @@ class Game: NSObject, PowerEventHandler {
 		
 		return result
 	}
+
+    /// Always consumes what the recorder collected, so the next game starts clean, but
+    /// only constructed games keep it: Battlegrounds and Mercenaries have no mulligan of
+    /// this kind, and a spectated game is not the user's (recordGame drops those anyway).
+    func buildMulliganRecord() -> MulliganRecord? {
+        let record = mulliganRecorder.buildRecord(localPlayerId: player.id) { id in entities[id] }
+        guard !spectator && currentGameMode != .spectator && !isBattlegroundsMatch() && !isMercenariesMatch() else {
+            return nil
+        }
+        if let currentDeck {
+            // PlayingDeck.shortid holds DeckSerializer's deckstring, despite its name
+            record.deckstring = currentDeck.shortid
+            if currentDeck.shortid.isEmpty {
+                for card in currentDeck.cards {
+                    record.deckCards.append(RealmCard(id: card.id, count: card.count))
+                }
+            }
+        }
+        let offered: [String] = record.offered.map { "\($0.cardId)\($0.forced ? "(forced)" : "")\($0.kept ? "" : "(replaced)")" }
+        logger.info("Mulligan record: status=\(record.status) offered=\(offered) replacements=\(Array(record.replacementCardIds)) draws=\(record.draws.count)")
+        return record
+    }
 
     func trackGameEnd() {
         if !(isConstructedMatch() || isBattlegroundsMatch() || isArenaMatch) {
@@ -2479,6 +2507,7 @@ class Game: NSObject, PowerEventHandler {
                                              playerClass: stats.playerHero) {
         case .deck:
             guard let deck = persisted else { return }
+            stats.mulligan?.deckId = deck.deckId
             RealmHelper.addStatistics(to: deck, stats: stats)
             if Settings.autoArchiveArenaDeck &&
                 self.currentGameMode == .arena && deck.isArena && deck.arenaFinished() {
@@ -3537,6 +3566,7 @@ class Game: NSObject, PowerEventHandler {
         if cardId.isBlank {
             return
         }
+        mulliganRecorder.cardDrawn(playerId: player.id, entityId: entity.id, cardId: cardId ?? "", turn: turn)
         if cardId == CardIds.NonCollectible.Neutral.TheCoinBasic {
             playerGet(entity: entity, cardId: cardId, turn: turn)
         } else {

@@ -111,6 +111,10 @@ class ChoicesHandler: LogEventParser {
         if let cb = tmpChoice as? ChoiceBuilder {
             let choice = cb.buildOfferedChoice()
             game.choicesById[cb.id] = choice
+            // For any player: player.id may not be known yet this early in the game
+            if choice.choiceType == .mulligan {
+                game.mulliganRecorder.mulliganOffered(playerId: choice.playerId, entityIds: choice.offeredEntityIds ?? [])
+            }
             let taskList = cb.taskList
             
             if let tl = taskList {
@@ -128,6 +132,9 @@ class ChoicesHandler: LogEventParser {
         } else if let tc = tmpChoice as? OfferedChoice {
             let choice = tc.buildCompletedChoice()
             game.choicesById[tc.id] = choice
+            if choice.choiceType == .mulligan {
+                game.mulliganRecorder.mulliganChosen(playerId: choice.playerId, entityIds: choice.chosenEntityIds ?? [])
+            }
             if choice.playerId == game.player.id {
                 game.handlePlayerEntitiesChosen(choice: choice)
             }

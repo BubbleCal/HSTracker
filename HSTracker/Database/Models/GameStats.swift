@@ -83,6 +83,8 @@ class InternalGameStats {
     }
     var hsReplayId: String?
     var revealedCards: [Card] = []
+    /// Constructed games only; see Game.buildMulliganRecord.
+    var mulligan: MulliganRecord?
     
     var isDungeonMatch: Bool {
         return gameType == .gt_vs_ai && DefaultDecks.DungeonRun.isDungeonBoss(opponentHeroCardId)
@@ -212,6 +214,7 @@ class InternalGameStats {
             }
         }
         gameStats.recordVersion = GameStats.currentRecordVersion
+        gameStats.mulligan = mulligan
         for c in opponentCards {
             if let id = c.id {
                 let card = RealmCard(id: id, count: c.count)
@@ -266,7 +269,8 @@ extension InternalGameStats: CustomStringConvertible {
             "format: \(String(describing: format)), " +
             "hsReplayId: \(String(describing: hsReplayId)), " +
             "opponentCards: \(opponentCards), " +
-            "revealedCards: \(revealedCards)"
+            "revealedCards: \(revealedCards), " +
+            "mulligan: \(mulligan.map { "\($0.status)" } ?? "none")"
     }
 }
 
@@ -294,7 +298,8 @@ class GameStats: EmbeddedObject {
     /// Bumped when the recording code starts storing something older rows lack.
     /// 1: playerHero, coin/coinKnown, start and end time, note and the rank
     ///    before/after fields are copied from InternalGameStats.
-    static let currentRecordVersion = 1
+    /// 2: constructed games carry a MulliganRecord in `mulligan`.
+    static let currentRecordVersion = 2
 
     @objc dynamic var statId = ""
 
@@ -396,6 +401,9 @@ class GameStats: EmbeddedObject {
     @objc dynamic var hsReplayId: String?
     let opponentCards = List<RealmCard>()
     let revealedCards = List<RealmCard>()
+    /// The local player's mulligan and draws. Nil for Battlegrounds and Mercenaries
+    /// games and for every game recorded before recordVersion 2.
+    @objc dynamic var mulligan: MulliganRecord?
 
     let deck = LinkingObjects(fromType: Deck.self, property: "gameStats")
     let defaultDeckStats = LinkingObjects(fromType: DefaultDeckStats.self, property: "gameStats")
@@ -492,6 +500,7 @@ class GameStats: EmbeddedObject {
         for card in revealedCards {
             copy.revealedCards.append(RealmCard(id: card.id, count: card.count))
         }
+        copy.mulligan = mulligan?.detachedCopy()
         return copy
     }
 }

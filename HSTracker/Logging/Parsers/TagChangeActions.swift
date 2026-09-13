@@ -419,6 +419,13 @@ struct TagChangeActions {
             return
         }
 
+        // Snapshotted for both players, by the entity's own PlayerID, since player.id may
+        // still be unknown. The hand is final at this point: the replacements have been
+        // dealt and the replaced cards shuffled back.
+        if Mulligan.done.rawValue == value, entity.has(tag: .player_id), let game = eventHandler as? Game {
+            game.mulliganRecorder.mulliganDone(playerId: entity[.player_id], entities: eventHandler.entities.values)
+        }
+
         if entity.isPlayer(eventHandler: eventHandler) && Mulligan.done.rawValue == value {
             if #available(macOS 10.15, *) {
                 Task.detached {

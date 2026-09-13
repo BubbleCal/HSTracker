@@ -141,7 +141,7 @@ class RecordStatsTests: HSTrackerTests {
         XCTAssertEqual(stats.duration, 600)
         XCTAssertEqual(stats.note, "x")
         XCTAssertEqual(stats.recordVersion, GameStats.currentRecordVersion)
-        XCTAssertEqual(stats.recordVersion, 1)
+        XCTAssertEqual(stats.recordVersion, 2)
         // InternalGameStats' 0 must not become a real-looking rank.
         XCTAssertEqual(stats.rank, -1)
         XCTAssertEqual(stats.opponentRank, -1)
@@ -250,6 +250,8 @@ class RecordStatsTests: HSTrackerTests {
                 stat.opponentCards.append(RealmCard(id: "EX1_002", count: 1))
             case "revealedCards":
                 stat.revealedCards.append(RealmCard(id: "EX1_003", count: 1))
+            case "mulligan":
+                stat.mulligan = MulliganRecorderTests.makeRecord()
             case "serverInfo":
                 let info = ServerInfo()
                 for (infoIndex, infoProperty) in info.objectSchema.properties.enumerated() {
@@ -284,6 +286,11 @@ class RecordStatsTests: HSTrackerTests {
                 let lhs = (original.value(forKey: property.name) as? List<RealmCard>).map { Array($0) } ?? []
                 let rhs = (copy.value(forKey: property.name) as? List<RealmCard>).map { Array($0) } ?? []
                 XCTAssertEqual(lhs.map { "\($0.id)x\($0.count)" }, rhs.map { "\($0.id)x\($0.count)" },
+                               property.name, file: file, line: line)
+            case "mulligan":
+                XCTAssertNotNil(copy.mulligan, file: file, line: line)
+                XCTAssertFalse(original.mulligan === copy.mulligan, file: file, line: line)
+                XCTAssertEqual(MulliganRecorderTests.summary(original.mulligan), MulliganRecorderTests.summary(copy.mulligan),
                                property.name, file: file, line: line)
             case "serverInfo":
                 let lhs = try? XCTUnwrap(original.serverInfo)
@@ -647,6 +654,75 @@ class RecordStatsTests: HSTrackerTests {
             realm.add(bucket)
         }
         XCTAssertEqual(realm.objects(DefaultDeckStats.self).first?.gameStats.first?.statId, "legacy-1")
+    }
+
+    func testMigrationFromSchema9KeepsGamesWithoutMulliganRecords() throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("RecordStatsTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let fileURL = directory.appendingPathComponent("hstracker.realm")
+        let v9Types = [V9Deck.self, V9GameStats.self, V9DefaultDeckStats.self, V8RealmCard.self,
+                       V8ServerInfo.self, V8RealmSideboard.self]
+
+        // A realm as the build before mulligan records left it: schema 9, a deck game and a no-deck game.
+        try autoreleasepool {
+            let realm = try Realm(configuration: Realm.Configuration(fileURL: fileURL, schemaVersion: 9,
+                                                                     objectTypes: v9Types))
+            try realm.write {
+                let deck = V9Deck()
+                deck.deckId = "schema9-deck"
+                deck._playerClass = CardClass.priest.rawValue
+                let stat = V9GameStats()
+                stat.statId = "schema9-deck-game"
+                stat._result = GameResult.loss.rawValue
+                stat.coin = true
+                stat.coinKnown = true
+                stat.recordVersion = 1
+                stat.starLevel = 30
+                stat.opponentCards.append(V8RealmCard(id: "EX1_610", count: 1))
+                deck.gameStats.append(stat)
+                realm.add(deck)
+
+                let bucket = V9DefaultDeckStats()
+                bucket.playerClassRaw = CardClass.mage.rawValue
+                let noDeck = V9GameStats()
+                noDeck.statId = "schema9-no-deck-game"
+                noDeck.recordVersion = 1
+                bucket.gameStats.append(noDeck)
+                realm.add(bucket)
+            }
+        }
+        XCTAssertEqual(try schemaVersionAtURL(fileURL), 9)
+
+        let backupURL = try XCTUnwrap(RealmHelper.backupBeforeMigration(fileURL: fileURL))
+        XCTAssertEqual(backupURL.lastPathComponent, "hstracker.schema9.backup.realm")
+        let realm = try Realm(configuration: RealmHelper.configuration(fileURL: fileURL))
+        XCTAssertEqual(try schemaVersionAtURL(fileURL), RealmHelper.schemaVersion)
+        XCTAssertGreaterThanOrEqual(RealmHelper.schemaVersion, 10)
+
+        let deck = try XCTUnwrap(realm.object(ofType: Deck.self, forPrimaryKey: "schema9-deck"))
+        let stat = try XCTUnwrap(deck.gameStats.first)
+        XCTAssertEqual(stat.statId, "schema9-deck-game")
+        XCTAssertEqual(stat.result, .loss)
+        XCTAssertEqual(stat.coinIfKnown, true)
+        XCTAssertEqual(stat.recordVersion, 1)
+        XCTAssertEqual(stat.starLevel, 30)
+        XCTAssertEqual(stat.opponentCards.first?.id, "EX1_610")
+        XCTAssertNil(stat.mulligan)
+        let bucket = try XCTUnwrap(realm.object(ofType: DefaultDeckStats.self, forPrimaryKey: CardClass.mage.rawValue))
+        XCTAssertEqual(bucket.gameStats.first?.statId, "schema9-no-deck-game")
+        XCTAssertNil(bucket.gameStats.first?.mulligan)
+
+        // New games carry a record in the migrated file.
+        let newGame = GameStats()
+        newGame.statId = "schema10-game"
+        newGame.mulligan = MulliganRecorderTests.makeRecord()
+        try realm.write {
+            deck.gameStats.append(newGame)
+        }
+        XCTAssertEqual(MulliganRecorderTests.summary(deck.gameStats.last?.mulligan),
+                       MulliganRecorderTests.summary(MulliganRecorderTests.makeRecord()))
     }
 
     func testASecondMigrationOfTheSameSchemaTakesAFreshBackup() throws {
@@ -1206,5 +1282,98 @@ class V8RealmSideboard: EmbeddedObject {
     let cards = List<V8RealmCard>()
 
     override class func _realmObjectName() -> String? { return "RealmSideboard" }
+    override class func shouldIncludeInDefaultSchema() -> Bool { return false }
+}
+
+// MARK: - Schema 9 models
+
+// Frozen copies of the models that changed between schema 9 and 10, for
+// testMigrationFromSchema9KeepsGamesWithoutMulliganRecords. RealmCard, ServerInfo and
+// RealmSideboard did not change, so their schema 8 copies above are reused.
+
+class V9Deck: Object {
+    @objc dynamic var deckId: String = ""
+    @objc dynamic var name = ""
+    @objc dynamic var _playerClass = CardClass.neutral.rawValue
+    @objc dynamic var heroId = ""
+    @objc dynamic var deckMajorVersion: Int = 1
+    @objc dynamic var deckMinorVersion: Int = 0
+    @objc dynamic var creationDate = Date()
+    @objc dynamic var lastEdited = Date()
+    let hearthstatsId = RealmProperty<Int?>()
+    let hearthstatsVersionId = RealmProperty<Int?>()
+    let hearthStatsArenaId = RealmProperty<Int?>()
+    @objc dynamic var isActive = true
+    @objc dynamic var isArena = false
+    @objc dynamic var isDungeon = false
+    @objc dynamic var isDuels = false
+    let hsDeckId = RealmProperty<Int64?>()
+    let cards = List<V8RealmCard>()
+    let gameStats = List<V9GameStats>()
+    let sideboards = List<V8RealmSideboard>()
+
+    override static func primaryKey() -> String? { return "deckId" }
+    override class func _realmObjectName() -> String? { return "Deck" }
+    override class func shouldIncludeInDefaultSchema() -> Bool { return false }
+}
+
+class V9DefaultDeckStats: Object {
+    @objc dynamic var playerClassRaw = CardClass.neutral.rawValue
+    let gameStats = List<V9GameStats>()
+
+    override static func primaryKey() -> String? { return "playerClassRaw" }
+    override class func _realmObjectName() -> String? { return "DefaultDeckStats" }
+    override class func shouldIncludeInDefaultSchema() -> Bool { return false }
+}
+
+class V9GameStats: EmbeddedObject {
+    @objc dynamic var statId = ""
+    @objc dynamic var _playerHero = CardClass.neutral.rawValue
+    @objc dynamic var _opponentHero = CardClass.neutral.rawValue
+    @objc dynamic var coin = false
+    @objc dynamic var coinKnown = false
+    @objc dynamic var _gameMode = GameMode.none.rawValue
+    @objc dynamic var _result = GameResult.unknown.rawValue
+    @objc dynamic var turns = -1
+    @objc dynamic var startTime = Date()
+    @objc dynamic var endTime = Date()
+    @objc dynamic var note = ""
+    @objc dynamic var playerName = ""
+    @objc dynamic var opponentName = ""
+    @objc dynamic var wasConceded = false
+    @objc dynamic var rank = -1
+    @objc dynamic var stars = -1
+    @objc dynamic var legendRank = -1
+    @objc dynamic var opponentLegendRank = -1
+    @objc dynamic var opponentRank = -1
+    @objc dynamic var leagueId = -1
+    @objc dynamic var starLevel = -1
+    @objc dynamic var starMultiplier = -1
+    @objc dynamic var starLevelAfter = -1
+    @objc dynamic var starsAfter = -1
+    @objc dynamic var legendRankAfter = -1
+    @objc dynamic var opponentStarLevel = -1
+    @objc dynamic var recordVersion = 0
+    let hearthstoneBuild = RealmProperty<Int?>()
+    @objc dynamic var playerCardbackId = -1
+    @objc dynamic var opponentCardbackId = -1
+    @objc dynamic var friendlyPlayerId = -1
+    @objc dynamic var scenarioId = -1
+    @objc dynamic var serverInfo: V8ServerInfo?
+    @objc dynamic var season = 0
+    @objc dynamic var _gameType = GameType.gt_unknown.rawValue
+    let hsDeckId = RealmProperty<Int64?>()
+    @objc dynamic var brawlSeasonId = -1
+    @objc dynamic var rankedSeasonId = -1
+    @objc dynamic var arenaWins = 0
+    @objc dynamic var arenaLosses = 0
+    @objc dynamic var brawlWins = 0
+    @objc dynamic var brawlLosses = 0
+    @objc dynamic var __format: String?
+    @objc dynamic var hsReplayId: String?
+    let opponentCards = List<V8RealmCard>()
+    let revealedCards = List<V8RealmCard>()
+
+    override class func _realmObjectName() -> String? { return "GameStats" }
     override class func shouldIncludeInDefaultSchema() -> Bool { return false }
 }

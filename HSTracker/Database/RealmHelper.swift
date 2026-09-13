@@ -74,7 +74,7 @@ struct RealmHelper {
 		}
 	}
 
-	static let schemaVersion: UInt64 = 9
+	static let schemaVersion: UInt64 = 10
 
 	/// The app's Realm configuration for a given file; tests open a schema-8 file with it
 	/// to exercise the real migration.
@@ -131,6 +131,9 @@ struct RealmHelper {
                 // and nothing is backfilled. coinKnown=false and recordVersion=0 mark
                 // the old rows' coin and duration as unknown, and starLevel=0 their
                 // rank. Existing GameStats are never rewritten.
+                // version == 10 : GameStats.mulligan, an embedded MulliganRecord with
+                // its MulliganOfferedCard and MulliganDrawnCard lists. Additive: old
+                // games read a nil mulligan, and nothing is backfilled.
 		})
 	}
 	
