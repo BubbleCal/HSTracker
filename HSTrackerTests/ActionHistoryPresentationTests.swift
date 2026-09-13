@@ -6,7 +6,8 @@
 //  folding and dragging, and the ActionHistory_* entries in Localizable.xcstrings.
 //
 //  Nothing here writes Settings: the test host is HSTracker.app, whose defaults domain is the
-//  player's own, so toggleCollapsed and endDrag (which persist) are not called.
+//  player's own, so toggleCollapsed is not called and the view models save their position into
+//  savedPositions instead.
 //
 
 import XCTest
@@ -18,9 +19,12 @@ class ActionHistoryPresentationTests: HSTrackerTests {
     private static let knownCardId = "ACTIONHISTORY_TEST_001"
     private static let knownCardName = "Test Minion"
     private let time = Date(timeIntervalSince1970: 1_700_000_000)
+    // What the view models made by makeViewModel saved, as (top, left)
+    private var savedPositions: [(top: Double, left: Double)] = []
 
     override func setUp() {
         super.setUp()
+        savedPositions = []
         let card = Card()
         card.id = ActionHistoryPresentationTests.knownCardId
         card.name = ActionHistoryPresentationTests.knownCardName
@@ -167,7 +171,8 @@ class ActionHistoryPresentationTests: HSTrackerTests {
     // The automatic position the app starts from, not the player's saved one (see the view model's init)
     @available(macOS 10.15, *)
     private func makeViewModel() -> ActionHistoryViewModel {
-        return ActionHistoryViewModel(top: 30, left: -1, collapsed: false)
+        return ActionHistoryViewModel(top: Settings.actionHistoryDefaultTop, left: Settings.actionHistoryDefaultLeft, collapsed: false,
+                                      savePosition: { [unowned self] top, left in self.savedPositions.append((top, left)) })
     }
 
     func testTheLatestTwoTurnsUnfoldUntilThePlayerFoldsThem() {
@@ -270,6 +275,126 @@ class ActionHistoryPresentationTests: HSTrackerTests {
         viewModel.drag(translation: .zero, canvasSize: canvas)
         viewModel.secretHelperBottom = canvas.height / 2
         XCTAssertEqual(viewModel.origin(canvasSize: canvas).y, top, accuracy: 0.01)
+    }
+
+    func testReleasingADragSavesWhereThePanelStoppedOnce() {
+        guard #available(macOS 10.15, *) else { return }
+        let viewModel = makeViewModel()
+        viewModel.panelSize = CGSize(width: ActionHistoryViewModel.panelWidth, height: 300)
+        let canvas = CGSize(width: 2000, height: 1000)
+
+        // A mouse up without a drag, such as the end of a click on the title bar, saves nothing
+        viewModel.endDrag()
+        XCTAssertTrue(savedPositions.isEmpty)
+
+        viewModel.drag(translation: CGSize(width: 100, height: 50), startLocation: CGPoint(x: 400, y: 300), canvasSize: canvas)
+        viewModel.drag(translation: CGSize(width: 200, height: 100), startLocation: CGPoint(x: 400, y: 300), canvasSize: canvas)
+        XCTAssertTrue(savedPositions.isEmpty, "the position is saved on mouse up, not on every move")
+        viewModel.endDrag()
+        viewModel.endDrag()
+        XCTAssertEqual(savedPositions.count, 1)
+        XCTAssertEqual(savedPositions.first?.top, viewModel.top)
+        XCTAssertEqual(savedPositions.first?.left, viewModel.left)
+
+        // Reopened from what was saved, it comes back to the same spot
+        let reopened = ActionHistoryViewModel(top: viewModel.top, left: viewModel.left, collapsed: false, savePosition: { _, _ in })
+        reopened.panelSize = viewModel.panelSize
+        XCTAssertEqual(reopened.origin(canvasSize: canvas), viewModel.origin(canvasSize: canvas))
+    }
+
+    func testDraggingPastAnEdgeStoresNoOvershoot() {
+        guard #available(macOS 10.15, *) else { return }
+        let viewModel = makeViewModel()
+        viewModel.panelSize = CGSize(width: ActionHistoryViewModel.panelWidth, height: 300)
+        let canvas = CGSize(width: 2000, height: 1000)
+        let start = viewModel.origin(canvasSize: canvas)
+        let grab = CGPoint(x: start.x + 50, y: start.y + 10)
+
+        // Pulled far past the bottom-right corner, then back within the same drag: the panel follows
+        // the mouse back from the total translation instead of waiting for it to cover the overshoot
+        viewModel.drag(translation: CGSize(width: 10_000, height: 10_000), startLocation: grab, canvasSize: canvas)
+        XCTAssertEqual(viewModel.left, Double((canvas.width - ActionHistoryViewModel.panelWidth) / canvas.width) * 100.0, accuracy: 0.0001)
+        XCTAssertEqual(viewModel.top, Double((canvas.height - ActionHistoryViewModel.titleBarHeight) / canvas.height) * 100.0, accuracy: 0.0001)
+        let back = CGSize(width: canvas.width - ActionHistoryViewModel.panelWidth - 100 - start.x,
+                          height: canvas.height / 2 - start.y)
+        viewModel.drag(translation: back, startLocation: grab, canvasSize: canvas)
+        XCTAssertEqual(viewModel.origin(canvasSize: canvas).x, canvas.width - ActionHistoryViewModel.panelWidth - 100, accuracy: 0.01)
+        XCTAssertEqual(viewModel.origin(canvasSize: canvas).y, canvas.height / 2, accuracy: 0.01)
+
+        // Past the top-left corner it stops at zero, still a placed position rather than the automatic one
+        viewModel.drag(translation: CGSize(width: -10_000, height: -10_000), startLocation: grab, canvasSize: canvas)
+        XCTAssertEqual(viewModel.left, 0)
+        XCTAssertEqual(viewModel.top, 0)
+        viewModel.endDrag()
+        XCTAssertEqual(savedPositions.last?.left, 0)
+        XCTAssertEqual(savedPositions.last?.top, 0)
+    }
+
+    func testADragThatNeverEndedDoesNotMoveTheNextOne() {
+        guard #available(macOS 10.15, *) else { return }
+        let viewModel = makeViewModel()
+        viewModel.panelSize = CGSize(width: ActionHistoryViewModel.panelWidth, height: 300)
+        let canvas = CGSize(width: 2000, height: 1000)
+        let start = viewModel.origin(canvasSize: canvas)
+
+        // Cancelled without onEnded, as when the panel goes away under the mouse
+        viewModel.drag(translation: CGSize(width: 300, height: 200), startLocation: CGPoint(x: start.x + 20, y: start.y + 5), canvasSize: canvas)
+        let dropped = viewModel.origin(canvasSize: canvas)
+        XCTAssertEqual(dropped.x, start.x + 300, accuracy: 0.01)
+
+        // The next press starts from where the panel is now, not from where the first drag began
+        viewModel.drag(translation: CGSize(width: 10, height: 10), startLocation: CGPoint(x: dropped.x + 20, y: dropped.y + 5), canvasSize: canvas)
+        XCTAssertEqual(viewModel.origin(canvasSize: canvas).x, dropped.x + 10, accuracy: 0.01)
+        XCTAssertEqual(viewModel.origin(canvasSize: canvas).y, dropped.y + 10, accuracy: 0.01)
+    }
+
+    func testAPlacedPanelKeepsItsPlaceWhenTheGameWindowIsResized() {
+        guard #available(macOS 10.15, *) else { return }
+        let viewModel = makeViewModel()
+        viewModel.panelSize = CGSize(width: ActionHistoryViewModel.panelWidth, height: 300)
+        let canvas = CGSize(width: 2000, height: 1000)
+        let start = viewModel.origin(canvasSize: canvas)
+        viewModel.drag(translation: CGSize(width: 1000 - start.x, height: 250 - start.y), startLocation: .zero, canvasSize: canvas)
+        viewModel.endDrag()
+        XCTAssertEqual(viewModel.origin(canvasSize: canvas), CGPoint(x: 1000, y: 250))
+
+        // The same share of a larger or smaller window
+        XCTAssertEqual(viewModel.origin(canvasSize: CGSize(width: 3000, height: 1500)), CGPoint(x: 1500, y: 375))
+        XCTAssertEqual(viewModel.origin(canvasSize: CGSize(width: 1000, height: 500)), CGPoint(x: 500, y: 125))
+
+        // A window too small for that share still shows the whole width and the title bar
+        let right = ActionHistoryViewModel(top: 99, left: 90, collapsed: false, savePosition: { _, _ in })
+        right.panelSize = viewModel.panelSize
+        let small = CGSize(width: 800, height: 600)
+        XCTAssertEqual(right.origin(canvasSize: small), CGPoint(x: small.width - ActionHistoryViewModel.panelWidth,
+                                                                y: small.height - ActionHistoryViewModel.titleBarHeight))
+        // Back in a large window it goes back to its saved share, not to where the small one pushed it
+        XCTAssertEqual(right.origin(canvasSize: CGSize(width: 10_000, height: 10_000)), CGPoint(x: 9000, y: 9900))
+    }
+
+    func testResettingPutsThePanelBackBelowTheSecretHelper() {
+        guard #available(macOS 10.15, *) else { return }
+        let viewModel = makeViewModel()
+        viewModel.panelSize = CGSize(width: ActionHistoryViewModel.panelWidth, height: 300)
+        let canvas = CGSize(width: 1440, height: 900)
+        let automatic = viewModel.origin(canvasSize: canvas)
+
+        viewModel.drag(translation: CGSize(width: 600, height: 300), startLocation: .zero, canvasSize: canvas)
+        viewModel.endDrag()
+        viewModel.secretHelperBottom = automatic.y + 400
+        XCTAssertEqual(viewModel.origin(canvasSize: canvas).y, automatic.y + 300, accuracy: 0.01, "the player's position wins")
+
+        viewModel.resetPosition()
+        XCTAssertEqual(viewModel.top, Settings.actionHistoryDefaultTop)
+        XCTAssertEqual(viewModel.left, Settings.actionHistoryDefaultLeft)
+        XCTAssertEqual(savedPositions.last?.top, Settings.actionHistoryDefaultTop)
+        XCTAssertEqual(savedPositions.last?.left, Settings.actionHistoryDefaultLeft)
+        XCTAssertEqual(viewModel.origin(canvasSize: canvas).x, automatic.x, accuracy: 0.01)
+        XCTAssertEqual(viewModel.origin(canvasSize: canvas).y, automatic.y + 400 + ActionHistoryViewModel.margin, accuracy: 0.01)
+
+        // A reset in the middle of a drag does not leave the drag's origin behind
+        viewModel.drag(translation: CGSize(width: 10, height: 0), canvasSize: canvas)
+        XCTAssertEqual(viewModel.origin(canvasSize: canvas).x, automatic.x + 10, accuracy: 0.01)
     }
 
     func testWeaponsAndLocationsAreBrokenRatherThanKilled() {

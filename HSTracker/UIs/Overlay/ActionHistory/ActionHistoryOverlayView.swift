@@ -8,9 +8,11 @@
 import SwiftUI
 
 // Places the action history panel on the RootOverlay canvas. The placement follows
-// BattlegroundsSessionOverlayView: a position stored as percentages of the canvas, dragged only while
-// the overlay is unlocked (Settings.windowsLocked), and an interactive region computed from that
-// position and the panel's reported size so clicks everywhere else still reach Hearthstone.
+// BattlegroundsSessionOverlayView: a position stored as percentages of the canvas, and an interactive
+// region computed from that position and the panel's reported size so clicks everywhere else still
+// reach Hearthstone. Unlike the session panel it can be dragged by its title bar while the overlay
+// is locked too: players keep their windows locked through a match, and the panel is only ever up
+// during one, so a move that needed unlocking first made it look fixed in place.
 //
 // It lives in RootOverlayView's fixed-pixel layer rather than the 1080-reference scaled subtree: the
 // panel is text meant to stay readable, and a smaller Hearthstone window should leave more of the
@@ -108,9 +110,10 @@ struct ActionHistoryOverlayView: View {
         .padding(.trailing, 4)
         .frame(height: ActionHistoryViewModel.titleBarHeight)
         .contentShape(Rectangle())
-        // Only the title bar drags: the list below has rows to click and a scroller to grab. HDT
-        // moves overlay elements only while the overlay is unlocked and saves on mouse up.
-        .gesture(dragGesture, including: Settings.windowsLocked ? .none : .all)
+        // Only the title bar drags: the list below has rows to click, card names to hover and a
+        // scroller to grab. A double click puts the panel back below the secret helper. The fold
+        // button keeps its own clicks - a child's gesture wins over its parent's.
+        .gesture(dragGesture.exclusively(before: resetGesture))
     }
 
     private func list(placement: CardTooltipPlacement) -> some View {
@@ -179,14 +182,24 @@ struct ActionHistoryOverlayView: View {
         }
     }
 
+    // Saved on mouse up, as HDT saves a moved overlay element. RootOverlayWindow keeps the canvas
+    // taking the mouse until the button comes back up, so the drag carries on when the cursor gets
+    // ahead of the panel's interactive region or past the canvas edge the panel stops at.
     private var dragGesture: some Gesture {
-        DragGesture(minimumDistance: 1, coordinateSpace: .global)
+        // .global: the panel moves under the gesture, so a local translation would chase itself
+        DragGesture(minimumDistance: ActionHistoryViewModel.dragThreshold, coordinateSpace: .global)
             .onChanged { value in
-                guard !Settings.windowsLocked else { return }
-                viewModel.drag(translation: value.translation, canvasSize: canvasSize)
+                viewModel.drag(translation: value.translation, startLocation: value.startLocation, canvasSize: canvasSize)
             }
             .onEnded { _ in
                 viewModel.endDrag()
+            }
+    }
+
+    private var resetGesture: some Gesture {
+        TapGesture(count: 2)
+            .onEnded {
+                viewModel.resetPosition()
             }
     }
 }

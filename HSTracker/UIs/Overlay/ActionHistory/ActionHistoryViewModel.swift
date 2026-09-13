@@ -24,6 +24,9 @@ class ActionHistoryViewModel: ObservableObject {
     static let titleBarHeight: CGFloat = 24
     // Room kept free under the panel and below the secret helper
     static let margin: CGFloat = 8
+    // How far the mouse has to move with the button down before the title bar starts dragging. A
+    // click that wobbles a pixel or two must not turn the automatic position into a saved one.
+    static let dragThreshold: CGFloat = 4
 
     // Driven by Game.updateActionHistory, the way Game.updateCounters drives the counters.
     @Published var isShown = false
@@ -59,16 +62,25 @@ class ActionHistoryViewModel: ObservableObject {
     @Published private(set) var expandedEntries = Set<Int>()
 
     private var version: Int?
+    // Where the panel was when the current drag began, and where that drag's mouse went down
     private var dragOrigin: CGPoint?
+    private var dragStartLocation: CGPoint?
+    private let savePosition: (_ top: Double, _ left: Double) -> Void
     private var scrollerStyleObserver: NSObjectProtocol?
 
     // The saved chrome state is passed in so tests can start from a known position rather than
-    // wherever the player last left the panel in the app, whose defaults the hosted tests share.
+    // wherever the player last left the panel in the app, whose defaults the hosted tests share -
+    // and for the same reason where a moved position is saved to.
     init(top: Double = Settings.actionHistoryTop, left: Double = Settings.actionHistoryLeft,
-         collapsed: Bool = Settings.actionHistoryCollapsed) {
+         collapsed: Bool = Settings.actionHistoryCollapsed,
+         savePosition: @escaping (_ top: Double, _ left: Double) -> Void = { top, left in
+             Settings.actionHistoryTop = top
+             Settings.actionHistoryLeft = left
+         }) {
         self.top = top
         self.left = left
         self.collapsed = collapsed
+        self.savePosition = savePosition
         scrollerStyleObserver = NotificationCenter.default.addObserver(forName: NSScroller.preferredScrollerStyleDidChangeNotification,
                                                                        object: nil, queue: .main) { [weak self] _ in
             let inset = ActionHistoryViewModel.currentScrollerInset()
@@ -147,7 +159,6 @@ class ActionHistoryViewModel: ObservableObject {
     /// The panel's top-left corner in the canvas's real pixels, kept on the canvas so a smaller
     /// Hearthstone window cannot push it out of reach.
     func origin(canvasSize: CGSize) -> CGPoint {
-        let width = panelSize.width > 0 ? panelSize.width : ActionHistoryViewModel.panelWidth
         var y = canvasSize.height * CGFloat(top) / 100.0
         let x: CGFloat
         if left < 0 {
@@ -161,9 +172,14 @@ class ActionHistoryViewModel: ObservableObject {
         } else {
             x = canvasSize.width * CGFloat(left) / 100.0
         }
-        // Keep at least the title bar on the canvas
-        return CGPoint(x: min(max(0, x), max(0, canvasSize.width - width)),
-                       y: min(max(0, y), max(0, canvasSize.height - ActionHistoryViewModel.titleBarHeight)))
+        return clamped(CGPoint(x: x, y: y), canvasSize: canvasSize)
+    }
+
+    // The whole width and at least the title bar - the only drag handle - stay on the canvas
+    private func clamped(_ point: CGPoint, canvasSize: CGSize) -> CGPoint {
+        let width = panelSize.width > 0 ? panelSize.width : ActionHistoryViewModel.panelWidth
+        return CGPoint(x: min(max(0, point.x), max(0, canvasSize.width - width)),
+                       y: min(max(0, point.y), max(0, canvasSize.height - ActionHistoryViewModel.titleBarHeight)))
     }
 
     /// Opens the card image on the side of the panel facing the middle of the screen.
@@ -182,20 +198,45 @@ class ActionHistoryViewModel: ObservableObject {
     }
 
     // Moves by the drag's total translation from where the panel was when the drag began, which is
-    // also where an automatic position turns into a saved percentage.
-    func drag(translation: CGSize, canvasSize: CGSize) {
+    // also where an automatic position turns into a saved percentage: from then on the player's
+    // position wins over the spot below the secret helper.
+    //
+    // The position is clamped here rather than only when it is drawn, so pulling the panel past an
+    // edge does not store an overshoot that has to be dragged back before it moves again, and what
+    // is saved is where the panel is seen. Being percentages, it keeps its place when the
+    // Hearthstone window is resized; origin(canvasSize:) clamps again if the window got smaller.
+    //
+    // - Parameter startLocation: where the gesture's mouse went down. A different one is a new
+    //   gesture even if the last one never ended - SwiftUI cancels a drag without calling onEnded
+    //   when the panel is removed under it, for instance at the end of a game.
+    func drag(translation: CGSize, startLocation: CGPoint? = nil, canvasSize: CGSize) {
         guard canvasSize.width > 0, canvasSize.height > 0 else { return }
+        if let startLocation, startLocation != dragStartLocation {
+            dragOrigin = nil
+            dragStartLocation = startLocation
+        }
         let start = dragOrigin ?? origin(canvasSize: canvasSize)
         dragOrigin = start
-        left = max(0, Double((start.x + translation.width) / canvasSize.width) * 100.0)
-        top = max(0, Double((start.y + translation.height) / canvasSize.height) * 100.0)
+        let moved = clamped(CGPoint(x: start.x + translation.width, y: start.y + translation.height), canvasSize: canvasSize)
+        left = Double(moved.x / canvasSize.width) * 100.0
+        top = Double(moved.y / canvasSize.height) * 100.0
     }
 
     // Saved once on mouse up, as BattlegroundsSessionViewModel.endDrag does
     func endDrag() {
         guard dragOrigin != nil else { return }
         dragOrigin = nil
-        Settings.actionHistoryTop = top
-        Settings.actionHistoryLeft = left
+        dragStartLocation = nil
+        savePosition(top, left)
+    }
+
+    // Back to the automatic position below the secret helper, for a panel dragged somewhere it is
+    // no longer wanted.
+    func resetPosition() {
+        dragOrigin = nil
+        dragStartLocation = nil
+        top = Settings.actionHistoryDefaultTop
+        left = Settings.actionHistoryDefaultLeft
+        savePosition(top, left)
     }
 }

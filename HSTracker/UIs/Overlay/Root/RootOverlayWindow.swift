@@ -18,6 +18,9 @@ class RootOverlayWindow: OverWindowController {
     private var regionSubscription: AnyCancellable?
     private var globalMouseMonitor: Any?
     private var localMouseMonitor: Any?
+    private var localPressMonitor: Any?
+    // Whether the left button went down on this canvas and has not come back up yet
+    private var pressCaptured = false
     private var fallbackTimer: Timer?
     private var hoveredCardId: String?
     private weak var hoveredView: CardHoverNSView?
@@ -56,6 +59,9 @@ class RootOverlayWindow: OverWindowController {
         if let monitor = localMouseMonitor {
             NSEvent.removeMonitor(monitor)
         }
+        if let monitor = localPressMonitor {
+            NSEvent.removeMonitor(monitor)
+        }
         fallbackTimer?.invalidate()
     }
 
@@ -73,6 +79,30 @@ class RootOverlayWindow: OverWindowController {
         // region again.
         localMouseMonitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved]) { [weak self] event in
             self?.updateMouseThrough()
+            return event
+        }
+        // A press that went down on an interactive child belongs to it until the button comes up.
+        // Moves with the button held arrive as drags, which the mouse-moved monitors above never
+        // see, and by the time the timer below checks, a panel being dragged can be a step behind
+        // the cursor or stopped at the canvas edge while the cursor goes on - dropping the window
+        // back to click-through there would end the drag halfway.
+        localPressMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp]) { [weak self] event in
+            guard let self else { return event }
+            switch event.type {
+            case .leftMouseDown:
+                self.pressCaptured = event.window != nil && event.window === self.window
+            case .leftMouseUp:
+                self.pressCaptured = false
+                // After the release has been handled: it was routed here already, but the gesture
+                // it ends has not seen it yet
+                DispatchQueue.main.async { [weak self] in
+                    self?.updateMouseThrough()
+                }
+                return event
+            default:
+                break
+            }
+            self.updateMouseThrough()
             return event
         }
         regionSubscription = viewModel.$interactiveRegions.sink { [weak self] _ in
@@ -108,6 +138,15 @@ class RootOverlayWindow: OverWindowController {
         // interactive region with it in the same pass - the sweep that would
         // have dismissed it lives at the end of updateCardHover().
         updateCardHover(isMasked: isMasked)
+
+        if pressCaptured {
+            // pressedMouseButtons as well, in case the release went somewhere this never saw
+            if NSEvent.pressedMouseButtons & 1 != 0 {
+                setIgnoresMouseEvents(false)
+                return
+            }
+            pressCaptured = false
+        }
 
         guard !viewModel.interactiveRegions.isEmpty, !isMasked else {
             setIgnoresMouseEvents(true)

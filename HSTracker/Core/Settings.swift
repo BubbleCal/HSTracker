@@ -496,10 +496,13 @@ final class Settings {
     static var actionHistoryCollapsed: Bool
     // Where the panel sits on the overlay canvas, as a percentage of the Hearthstone client's
     // size, like battlegroundsSessionTop / battlegroundsSessionLeft. A negative left means the
-    // panel has never been dragged and follows the opponent tracker's width.
-    @UserDefault(key: Settings.action_history_top, defaultValue: 30.0)
+    // panel has never been dragged (or was reset by double-clicking its title bar) and follows the
+    // opponent tracker's width.
+    static let actionHistoryDefaultTop = 30.0
+    static let actionHistoryDefaultLeft = -1.0
+    @UserDefault(key: Settings.action_history_top, defaultValue: Settings.actionHistoryDefaultTop)
     static var actionHistoryTop: Double
-    @UserDefault(key: Settings.action_history_left, defaultValue: -1.0)
+    @UserDefault(key: Settings.action_history_left, defaultValue: Settings.actionHistoryDefaultLeft)
     static var actionHistoryLeft: Double
     @UserDefault(key: Settings.remove_cards_from_deck, defaultValue: false)
     static var removeCardsFromDeck: Bool
