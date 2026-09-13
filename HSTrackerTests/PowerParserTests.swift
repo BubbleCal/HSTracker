@@ -271,12 +271,59 @@ class PowerParserTests: HSTrackerTests {
         let secret = createOpponentSecret(id: 96, cardClass: .mage)
         game.secretsManager?.handleCardPlayed(entity: createPlayerSpell(), parentCardId: "")
         let tracked = game.secretsManager?.secrets.first { $0.entity.id == secret.id }
-        XCTAssertEqual(tracked?.isExcluded(cardId: CardIds.Secrets.Mage.Counterspell), true)
+        XCTAssertEqual(tracked?.isExcluded(cardId: CardIds.Secrets.Mage.Counterspell), false)
         XCTAssertEqual(tracked?.isExcluded(cardId: CardIds.Secrets.Mage.ManaBind), false)
 
         handle(PowerParserTests.playWithoutTargetLine)
 
+        XCTAssertEqual(tracked?.isExcluded(cardId: CardIds.Secrets.Mage.Counterspell), true)
         XCTAssertEqual(tracked?.isExcluded(cardId: CardIds.Secrets.Mage.ManaBind), true)
+    }
+
+    private static let triggerVisualLine = "D 14:22:29.2640010 PowerTaskList.DebugPrintPower() - BLOCK_START BlockType=TRIGGER Entity=[entityName=弑君者 id=51 zone=PLAY zonePos=0 cardId=TIME_875t1 player=2] EffectCardId=System.Collections.Generic.List`1[System.String] EffectIndex=1 Target=0 SubOption=-1 TriggerKeyword=TRIGGER_VISUAL"
+
+    private func fillOpponentBoard() -> [Entity] {
+        return (0..<7).map { _ -> Entity in
+            let minion = createEntity(cardId: "EX1_020")
+            minion[.cardtype] = CardType.minion.rawValue
+            minion[.controller] = game.opponent.id
+            minion[.zone] = Zone.play.rawValue
+            return minion
+        }
+    }
+
+    func testRootBlockEnd_BoardFullBetweenAfterCastTriggers_SummoningSecretsNotExcluded() {
+        let secret = createOpponentSecret(id: 96, cardClass: .rogue)
+        let board = fillOpponentBoard()
+        handle(PowerParserTests.playWithoutTargetLine)
+        game.secretsManager?.handleCardPlayed(entity: createPlayerSpell(), parentCardId: "")
+        // The spell's block ends on a full board, which the older after-cast secrets resolve on
+        handle(PowerParserTests.blockEndLine)
+        // A later after-cast trigger frees a slot in its own root block
+        handle(PowerParserTests.triggerVisualLine)
+        board[0][.zone] = Zone.graveyard.rawValue
+        handle(PowerParserTests.blockEndLine)
+        handle(PowerParserTests.playWithoutTargetLine)
+
+        let tracked = game.secretsManager?.secrets.first { $0.entity.id == secret.id }
+        XCTAssertEqual(tracked?.isExcluded(cardId: CardIds.Secrets.Rogue.StickySituation), false)
+        XCTAssertEqual(tracked?.isExcluded(cardId: CardIds.Secrets.Rogue.DirtyTricks), true)
+    }
+
+    func testNestedBlockEnd_BoardFullInsideThePlay_SummoningSecretsExcluded() {
+        let secret = createOpponentSecret(id: 96, cardClass: .rogue)
+        let board = fillOpponentBoard()
+        handle(PowerParserTests.playWithoutTargetLine)
+        game.secretsManager?.handleCardPlayed(entity: createPlayerSpell(), parentCardId: "")
+        // Inside the play the board is still full; the spell frees a slot before its block ends
+        handle(PowerParserTests.triggerVisualLine)
+        handle(PowerParserTests.blockEndLine)
+        board[0][.zone] = Zone.graveyard.rawValue
+        handle(PowerParserTests.blockEndLine)
+        handle(PowerParserTests.playWithoutTargetLine)
+
+        let tracked = game.secretsManager?.secrets.first { $0.entity.id == secret.id }
+        XCTAssertEqual(tracked?.isExcluded(cardId: CardIds.Secrets.Rogue.StickySituation), true)
     }
 
     func testNestedPlayBlock_LeavesPendingSecretChecks() {

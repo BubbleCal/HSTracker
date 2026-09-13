@@ -22,6 +22,8 @@ class FloatingCard: OverWindowController {
     var isBattlegrounds = false
     // A short note under the image, such as why the secret helper ruled a secret out
     private(set) var subtitle: String?
+    // false shows the subtitle alone, for players who turned card previews off
+    private(set) var showsImage = true
 
     private static let subtitlePadding: CGFloat = 6
     private var subtitleBox: NSView?
@@ -31,9 +33,10 @@ class FloatingCard: OverWindowController {
     private var imageBottomToWindow: NSLayoutConstraint?
     private var imageBottomToSubtitle: NSLayoutConstraint?
 
-    func set(card: Card, subtitle: String? = nil) {
+    func set(card: Card, subtitle: String? = nil, showsImage: Bool = true) {
         self.card = card
         self.subtitle = subtitle?.isEmpty == false ? subtitle : nil
+        self.showsImage = showsImage || self.subtitle == nil
         reload()
     }
 
@@ -112,7 +115,7 @@ class FloatingCard: OverWindowController {
     }
 
     private func reload() {
-        if let cardId = self.card?.id, let baconTriple = card?.baconTriple {
+        if showsImage, let cardId = self.card?.id, let baconTriple = card?.baconTriple {
             if isBattlegrounds {
                 ImageUtils.cardArtBG(for: cardId, baconTriple: baconTriple, completion: { image in
                     DispatchQueue.main.async {
@@ -129,12 +132,12 @@ class FloatingCard: OverWindowController {
         }
 
         window?.backgroundColor = NSColor.clear
-        imageView.isHidden = false
+        imageView.isHidden = !showsImage
 
         // "pack frame"
         if let window = self.window {
             let width = window.frame.size.width
-            let totalHeight = width * 250/180 + subtitleHeight(width: width)
+            let totalHeight = (showsImage ? width * 250/180 : 0) + subtitleHeight(width: width)
             self.window?.setContentSize(NSSize(width: width,
                     height: totalHeight))
         }

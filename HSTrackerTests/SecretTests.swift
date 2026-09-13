@@ -505,9 +505,9 @@ class SecretTests: HSTrackerTests {
     func testSpellCast_ExcludesAfterBoundary_NotBefore() {
         game.secretsManager?.handleCardPlayed(entity: playerSpell2, parentCardId: "")
 
-        // Only Counterspell is known right away; everything else waits for the spell to resolve
+        // Everything waits for the spell to resolve, Counterspell included (an older Ice Trap may stop it)
         verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All)
-        verifySecrets(secretIndex: 1, allSecrets: CardIds.Secrets.Mage.All, triggered: [CardIds.Secrets.Mage.Counterspell])
+        verifySecrets(secretIndex: 1, allSecrets: CardIds.Secrets.Mage.All)
         verifySecrets(secretIndex: 2, allSecrets: CardIds.Secrets.Paladin.All)
         verifySecrets(secretIndex: 3, allSecrets: CardIds.Secrets.Rogue.All)
 
@@ -546,7 +546,9 @@ class SecretTests: HSTrackerTests {
         resolve()
 
         verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All, triggered: [CardIds.Secrets.Hunter.IceTrap])
-        verifySecrets(secretIndex: 1, allSecrets: CardIds.Secrets.Mage.All, triggered: [CardIds.Secrets.Mage.Counterspell])
+        // The Mage secret may be a newer Counterspell that never saw the spell Ice Trap returned
+        // (HDT returns after Ice Trap without ruling Counterspell out)
+        verifySecrets(secretIndex: 1, allSecrets: CardIds.Secrets.Mage.All)
         verifySecrets(secretIndex: 2, allSecrets: CardIds.Secrets.Paladin.All)
         verifySecrets(secretIndex: 3, allSecrets: CardIds.Secrets.Rogue.All)
     }
@@ -676,6 +678,8 @@ class SecretTests: HSTrackerTests {
         resolve()
 
         verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All)
+        // Returned by something untracked before Counterspell could see it
+        verifySecrets(secretIndex: 1, allSecrets: CardIds.Secrets.Mage.All)
         verifySecrets(secretIndex: 2, allSecrets: CardIds.Secrets.Paladin.All)
         verifySecrets(secretIndex: 3, allSecrets: CardIds.Secrets.Rogue.All)
     }
@@ -778,6 +782,48 @@ class SecretTests: HSTrackerTests {
 
         XCTAssertEqual(game.secretsManager?.secrets[2].isExcluded(cardId: CardIds.Secrets.Paladin.NeverSurrender), false)
         XCTAssertEqual(game.secretsManager?.secrets[0].isExcluded(cardId: CardIds.Secrets.Hunter.CatTrick), true)
+        // Whether Counterspell reacts to the spell Oh My Yogg! casts instead is unverified
+        XCTAssertEqual(game.secretsManager?.secrets[1].isExcluded(cardId: CardIds.Secrets.Mage.Counterspell), false)
+    }
+
+    // MARK: - Board and hand after the play
+
+    func testSpellCast_AfterCastTriggerFreesFullBoard_SummoningSecretsNotExcluded() {
+        let board = fillOpponentBoard(upTo: 7)
+        let hand = fillOpponentHand(upTo: 10)
+        game.secretsManager?.handleCardPlayed(entity: playerSpell2, parentCardId: "")
+        // The spell's PLAY block ends; the older Cat Trick resolves on the full board and hand
+        game.secretsManager?.sampleAfterRootBlock()
+        // Then the player's Wild Pyromancer kills a minion, and its death phase frees a slot
+        board[0][.health] = 1
+        board[0][.damage] = 1
+        game.secretsManager?.sampleAfterRootBlock()
+        board[0][.zone] = Zone.graveyard.rawValue
+        // and something takes a card from the opponent's hand
+        hand[0][.zone] = Zone.graveyard.rawValue
+        game.secretsManager?.sampleAfterRootBlock()
+        resolve()
+
+        XCTAssertEqual(game.opponentBoardCount, 6)
+        XCTAssertEqual(game.secretsManager?.secrets[0].isExcluded(cardId: CardIds.Secrets.Hunter.CatTrick), false)
+        XCTAssertEqual(game.secretsManager?.secrets[1].isExcluded(cardId: CardIds.Secrets.Mage.NetherwindPortal), false)
+        XCTAssertEqual(game.secretsManager?.secrets[3].isExcluded(cardId: CardIds.Secrets.Rogue.StickySituation), false)
+        XCTAssertEqual(game.secretsManager?.secrets[3].isExcluded(cardId: CardIds.Secrets.Rogue.DirtyTricks), false)
+        XCTAssertEqual(game.secretsManager?.secrets[0].isExcluded(cardId: CardIds.Secrets.Hunter.IceTrap), true)
+    }
+
+    func testSpellCast_SpellKillsMinionOnFullBoard_SummoningSecretsExcluded() {
+        let board = fillOpponentBoard(upTo: 7)
+        game.secretsManager?.handleCardPlayed(entity: playerSpell2, parentCardId: "")
+        // Mortally wounded when the spell's block ends, gone in the death phase before any trigger
+        board[0][.to_be_destroyed] = 1
+        game.secretsManager?.sampleAfterRootBlock()
+        board[0][.zone] = Zone.graveyard.rawValue
+        game.secretsManager?.sampleAfterRootBlock()
+        resolve()
+
+        XCTAssertEqual(game.secretsManager?.secrets[0].isExcluded(cardId: CardIds.Secrets.Hunter.CatTrick), true)
+        XCTAssertEqual(game.secretsManager?.secrets[3].isExcluded(cardId: CardIds.Secrets.Rogue.StickySituation), true)
     }
 
     func testThirdCardIsQuest_ExcludesMotionDeniedRatTrapGallopingHiddenWisdom() {
@@ -995,6 +1041,66 @@ class SecretTests: HSTrackerTests {
 
         XCTAssertEqual(game.secretsManager?.secrets.count, 4)
         XCTAssertEqual(game.secretsManager?.secrets[3].isExcluded(cardId: CardIds.Secrets.Rogue.Ambush), false)
+    }
+
+    func testMinionPlayed_AfterSummonTriggerFreesFullBoard_AmbushAndKidnapNotExcluded() {
+        let board = fillOpponentBoard(upTo: 7)
+        playerMinion1[.zone] = Zone.play.rawValue
+        game.playerMinionPlayed(entity: playerMinion1)
+        // The minion's PLAY block ends with the board full; then the player's Knife Juggler kills a
+        // minion after the older Ambush and Kidnap saw no room
+        game.secretsManager?.sampleAfterRootBlock()
+        board[0][.zone] = Zone.graveyard.rawValue
+        game.secretsManager?.sampleAfterRootBlock()
+        resolve()
+
+        XCTAssertEqual(game.secretsManager?.secrets[3].isExcluded(cardId: CardIds.Secrets.Rogue.Ambush), false)
+        XCTAssertEqual(game.secretsManager?.secrets[3].isExcluded(cardId: CardIds.Secrets.Rogue.Kidnap), false)
+    }
+
+    func testHiddenCache_PlayTakenBack_CardRevealedAsMinionLater_NotExcluded() {
+        playerMinion1[.zone] = Zone.play.rawValue
+        game.playerMinionPlayed(entity: playerMinion1)
+        // Snipe or Explosive Runes killed the minion: Hidden Cache never had its chance
+        playerMinion1[.zone] = Zone.graveyard.rawValue
+        resolve()
+
+        // The opponent plays the card that was in hand on their turn
+        opponentCardInHand1[.cardtype] = CardType.minion.rawValue
+        opponentCardInHand1[.zone] = Zone.play.rawValue
+        game.secretsManager?.onEntityRevealedAsMinion(entity: opponentCardInHand1)
+        XCTAssertEqual(game.secretsManager?.secrets[0].isExcluded(cardId: CardIds.Secrets.Hunter.HiddenCache), false)
+    }
+
+    func testHiddenCache_ResolvedPlay_CardRevealedAsMinionLater_ExcludedOnlyOnThePlaysSecrets() {
+        gameEntity[.turn] = 3
+        let playTurn = game.turnNumber()
+        playerMinion1[.zone] = Zone.play.rawValue
+        game.playerMinionPlayed(entity: playerMinion1)
+        resolve()
+        addOpponentSecret(secretHunter2)
+
+        gameEntity[.turn] = 4
+        opponentCardInHand1[.cardtype] = CardType.minion.rawValue
+        game.secretsManager?.onEntityRevealedAsMinion(entity: opponentCardInHand1)
+
+        XCTAssertEqual(secret(secretHunter1)?.exclusion(for: CardIds.Secrets.Hunter.HiddenCache)?.turn, playTurn)
+        XCTAssertEqual(secret(secretHunter2)?.isExcluded(cardId: CardIds.Secrets.Hunter.HiddenCache), false)
+    }
+
+    func testHiddenCache_KnownMinionLeftHandBeforeTheNextPlay_NotExcluded() {
+        opponentCardInHand1[.cardtype] = CardType.minion.rawValue
+        playerMinion1[.zone] = Zone.play.rawValue
+        game.playerMinionPlayed(entity: playerMinion1)
+        XCTAssertEqual(game.secretsManager?.secrets[0].isExcluded(cardId: CardIds.Secrets.Hunter.HiddenCache), true)
+        playerMinion1[.zone] = Zone.graveyard.rawValue
+        resolve()
+        XCTAssertEqual(game.secretsManager?.secrets[0].isExcluded(cardId: CardIds.Secrets.Hunter.HiddenCache), false)
+
+        opponentCardInHand1[.zone] = Zone.play.rawValue
+        playerMinion2[.zone] = Zone.play.rawValue
+        game.playerMinionPlayed(entity: playerMinion2)
+        XCTAssertEqual(game.secretsManager?.secrets[0].isExcluded(cardId: CardIds.Secrets.Hunter.HiddenCache), false)
     }
 
     func testMinionPlayed_HiddenCacheSavedAndRestoredWhenMinionPlayedSecretTriggered() {
@@ -1848,6 +1954,35 @@ class SecretTests: HSTrackerTests {
         verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All, triggered: [CardIds.Secrets.Hunter.ExplosiveTrap])
     }
 
+    func testSecretList_AutoGrayoutTurnedOffMidGame_RecordedDeductionsListedAsPossibleUntilTurnedBackOn() {
+        attackOpponentHeroWithHero()
+        // A revealed copy after the attack had already ruled the card out still holds with the option off
+        secretMage2.cardId = CardIds.Secrets.Mage.IceBarrier.ids[0]
+        addOpponentSecret(secretMage2)
+        XCTAssertEqual(listedCard(CardIds.Secrets.Hunter.ExplosiveTrap, in: game.secretsManager?.getSecretList())?.count, 0)
+
+        game.secretsManager?.autoGrayoutSecrets = { false }
+        var list = game.secretsManager?.getSecretList()
+        XCTAssertEqual(listedCard(CardIds.Secrets.Hunter.ExplosiveTrap, in: list)?.count, 1)
+        XCTAssertNil(game.secretsManager?.exclusionSummary(cardId: CardIds.Secrets.Hunter.ExplosiveTrap.ids[0]))
+        XCTAssertEqual(list?.filter { $0.count <= 0 }.count, 0)
+        // Ice Barrier stays ruled out on the first Mage secret: only the revealed one allows it
+        XCTAssertEqual(secret(secretMage1)?.exclusion(for: CardIds.Secrets.Mage.IceBarrier)?.reason, .copyRevealed)
+        XCTAssertEqual(listedCard(CardIds.Secrets.Mage.IceBarrier, in: list)?.count, 1)
+        XCTAssertEqual(listedCard(CardIds.Secrets.Mage.Counterspell, in: list)?.count, 2)
+
+        // A click on a row the option shows as possible dims it
+        game.secretsManager?.toggle(cardId: CardIds.Secrets.Hunter.ExplosiveTrap.ids[0])
+        list = game.secretsManager?.getSecretList()
+        XCTAssertEqual(listedCard(CardIds.Secrets.Hunter.ExplosiveTrap, in: list)?.count, 0)
+        game.secretsManager?.toggle(cardId: CardIds.Secrets.Hunter.ExplosiveTrap.ids[0])
+
+        game.secretsManager?.autoGrayoutSecrets = { true }
+        list = game.secretsManager?.getSecretList()
+        XCTAssertEqual(listedCard(CardIds.Secrets.Hunter.BearTrap, in: list)?.count, 0)
+        XCTAssertNotNil(game.secretsManager?.exclusionSummary(cardId: CardIds.Secrets.Hunter.BearTrap.ids[0]))
+    }
+
     func testExclusionSummary_ListsEachSecretsReasonNewestFirst() {
         addOpponentSecret(secretMage2)
         gameEntity[.turn] = 5
@@ -1924,6 +2059,22 @@ class SecretTests: HSTrackerTests {
         stack.layoutSubtreeIfNeeded()
         XCTAssertGreaterThan(grayOut.frame.minX, showSecretHelper.frame.minX)
         XCTAssertEqual(remove.frame.minX, grayOut.frame.minX)
+    }
+
+    func testFloatingCard_SubtitleWithoutImage_WindowFitsTheNoteAlone() {
+        let floatingCard = FloatingCard(windowNibName: "FloatingCard")
+        guard let window = floatingCard.window else { return XCTFail("the floating card has no window") }
+        window.setContentSize(NSSize(width: 256, height: 388))
+
+        // With card previews off, the reason for a dimmed secret row shows on its own
+        floatingCard.set(card: Card(id: CardIds.Secrets.Hunter.ExplosiveTrap.ids[0]), subtitle: "Turn 5: You attacked the enemy hero",
+                         showsImage: false)
+
+        XCTAssertFalse(floatingCard.showsImage)
+        XCTAssertTrue(floatingCard.imageView.isHidden)
+        let noteHeight = floatingCard.subtitleHeight(width: window.frame.width)
+        XCTAssertGreaterThan(noteHeight, 0)
+        XCTAssertEqual(window.contentView?.frame.height ?? 0, noteHeight, accuracy: 0.5)
     }
 
     func setPlayerAsCurrentPlayer() {

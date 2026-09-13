@@ -27,6 +27,12 @@ enum SecretExclusionReason: String, CaseIterable {
     var localizationKey: String {
         return "SecretReason_" + rawValue.prefix(1).uppercased() + rawValue.dropFirst()
     }
+
+    // A deduction from what happened in the game, which Gray out secrets controls. A revealed copy
+    // is a game rule, and an exclusion without a reason is a manual one.
+    static func isAutomatic(_ reason: SecretExclusionReason?) -> Bool {
+        return reason != nil && reason != .copyRevealed
+    }
 }
 
 struct SecretExclusion {
@@ -64,6 +70,11 @@ class Secret {
         return lock.around { _exclusions }
     }
 
+    // Both, taken together, so a candidate excluded or included in between cannot mismatch
+    var state: (excluded: [MultiIdCard: Bool], exclusions: [MultiIdCard: SecretExclusion]) {
+        return lock.around { (_excluded, _exclusions) }
+    }
+
     init(entity: Entity, entryOrder: Int = 0) throws {
         guard entity.isSecret else { throw SecretError.entityIsNotSecret(entity: entity) }
         guard entity.has(tag: .class) else { throw SecretError.entityHasNoClass(entity: entity) }
@@ -81,7 +92,8 @@ class Secret {
     }
 
     // Returns true only when the candidate was possible before, so callers can report each
-    // exclusion once. The first reason is kept.
+    // exclusion once. The first reason is kept, unless a revealed copy or a manual exclusion comes
+    // after a deduction: those still hold with Gray out secrets off.
     @discardableResult
     func exclude(cardId: MultiIdCard, reason: SecretExclusionReason? = nil, turn: Int = 0) -> Bool {
         // A locked secret cannot trigger, so a condition met meanwhile says nothing about it
@@ -89,7 +101,13 @@ class Secret {
             return false
         }
         return lock.around {
-            guard let isExcluded = _excluded[cardId], !isExcluded else { return false }
+            guard let isExcluded = _excluded[cardId] else { return false }
+            if isExcluded {
+                if SecretExclusionReason.isAutomatic(_exclusions[cardId]?.reason) && !SecretExclusionReason.isAutomatic(reason) {
+                    _exclusions[cardId] = SecretExclusion(reason: reason, turn: turn)
+                }
+                return false
+            }
             _excluded[cardId] = true
             _exclusions[cardId] = SecretExclusion(reason: reason, turn: turn)
             return true

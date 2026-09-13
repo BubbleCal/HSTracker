@@ -257,12 +257,15 @@ class WindowManager {
             guard let self else {
                 return
             }
-            guard Settings.showFloatingCard else { return }
-            
             guard let card = notification.userInfo?["card"] as? Card,
                 let arrayFrame = notification.userInfo?["frame"] as? [CGFloat] else {
                     return
             }
+            // With card previews off, a note such as why a secret was ruled out still shows, alone
+            let subtitle = notification.userInfo?["subtitle"] as? String
+            let useFrame = notification.userInfo?["useFrame"] as? Bool ?? false
+            let showsImage = Settings.showFloatingCard
+            guard showsImage || (useFrame && subtitle?.isEmpty == false) else { return }
             
             var floatingCard = self.floatingCard
             if let index = notification.userInfo?["index"] as? Int {
@@ -272,8 +275,6 @@ class WindowManager {
                     floatingCard = self.floatingCard3
                 }
             }
-            
-            let useFrame = notification.userInfo?["useFrame"] as? Bool ?? false
 
             if let bgs = notification.userInfo?["battlegrounds"] as? Bool, bgs {
                 floatingCard.isBattlegrounds = true
@@ -285,7 +286,7 @@ class WindowManager {
                 self.closeRequestTimer = nil
             }
             
-            floatingCard.set(card: card, subtitle: notification.userInfo?["subtitle"] as? String)
+            floatingCard.set(card: card, subtitle: subtitle, showsImage: showsImage)
             
             if let fWindow = floatingCard.window {
                 if !useFrame {
@@ -305,9 +306,13 @@ class WindowManager {
                 fWindow.ignoresMouseEvents = true
                 
                 if useFrame {
-                    // The caller's frame fits the image alone; a subtitle hangs below it
+                    // The caller's frame fits the image alone; a subtitle hangs below it, or takes the
+                    // middle of that frame when there is no image
                     let extra = floatingCard.subtitleHeight(width: arrayFrame[2])
-                    fWindow.setFrame(NSRect(x: arrayFrame[0], y: arrayFrame[1] - extra, width: arrayFrame[2], height: arrayFrame[3] + extra), display: true)
+                    let frame = floatingCard.showsImage
+                        ? NSRect(x: arrayFrame[0], y: arrayFrame[1] - extra, width: arrayFrame[2], height: arrayFrame[3] + extra)
+                        : NSRect(x: arrayFrame[0], y: arrayFrame[1] + (arrayFrame[3] - extra) / 2, width: arrayFrame[2], height: extra)
+                    fWindow.setFrame(frame, display: true)
                     floatingCard.updateSubtitleLayout()
                 }
 
@@ -330,7 +335,8 @@ class WindowManager {
     }
 
     func hideFloatingCard(_ notification: Notification) {
-        guard Settings.showFloatingCard else { return }
+        // A subtitle-only card shows with previews off too
+        guard Settings.showFloatingCard || (floatingCard.isWindowLoaded && floatingCard.window?.isVisible == true) else { return }
         
         // hide popup
         guard let card = notification.userInfo?["card"] as? Card

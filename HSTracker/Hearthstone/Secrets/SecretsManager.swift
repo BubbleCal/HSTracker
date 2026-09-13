@@ -40,13 +40,16 @@ private final class MinionPlaySnapshot {
     let minionId: Int
     let secretIds: Set<Int>
     let turn: Int
+    // The cards in the opponent's hand at the play, for Hidden Cache
+    let opponentHandIds: Set<Int>
     // Secret entity id -> candidates this play ruled out. Guarded by SecretsManager.pendingLock.
     var saved = [Int: [MultiIdCard]]()
 
-    init(minionId: Int, secretIds: Set<Int>, turn: Int) {
+    init(minionId: Int, secretIds: Set<Int>, turn: Int, opponentHandIds: Set<Int> = []) {
         self.minionId = minionId
         self.secretIds = secretIds
         self.turn = turn
+        self.opponentHandIds = opponentHandIds
     }
 
     func save(_ transitions: [(secretId: Int, card: MultiIdCard)]) {
@@ -69,6 +72,15 @@ private struct PlayerTurnEnd {
 private struct SecretCandidate {
     let card: MultiIdCard
     let possible: Bool
+}
+
+// The board and hand the after-play secrets may have seen, from the end of the play to the boundary
+private struct AfterPlayWindow {
+    let fullestBoard: Int
+    let fullestHand: Int
+
+    var freeSpaceOnBoard: Bool { return fullestBoard < 7 }
+    var freeSpaceInHand: Bool { return fullestHand < 10 }
 }
 
 private enum PendingSecretCheck {
@@ -97,8 +109,13 @@ class SecretsManager {
     // 0 by the time ARMOR changes, so the ids are kept until the next block starts.
     private var predamagedEntityIds = Set<Int>()
     private var armorLostThisBlock = [Int: Int]()
-    
-    private var entititesInHandOnMinionsPlayed: Set<Entity>  = Set<Entity>()
+    // Guarded by pendingLock: the fullest opponent board and hand seen at the end of a root block
+    // since the last boundary
+    private var fullestSinceBoundary: (board: Int, hand: Int)?
+    // Guarded by pendingLock: the minion plays whose after-play secrets had their chance (resolved
+    // with the minion in play, or not resolved yet), for Hidden Cache once a card that was in the
+    // opponent's hand then turns out to be a minion
+    private var minionPlaysSeeingHand = [MinionPlaySnapshot]()
     
     private var game: Game
     private let _availableSecrets: AvailableSecretsProvider
@@ -132,7 +149,6 @@ class SecretsManager {
     private var freeSpaceInHand: Bool { return game.opponentHandCount < 10 }
     // HDT SecretsEventHandler.HandleAction: with Gray out secrets off, no event rules anything out
     private var handleAction: Bool { return hasActiveSecrets && autoGrayoutSecrets() }
-    private var isAnyMinionInOpponentsHand: Bool { return entititesInHandOnMinionsPlayed.first(where: { entity in entity.isMinion }) != nil }
     
     private var hasActiveSecrets: Bool {
         return secrets.count > 0
@@ -163,9 +179,9 @@ class SecretsManager {
                                  invokeCallback: Bool) -> [(secretId: Int, card: MultiIdCard)] {
         // Also covers checks queued before Gray out secrets was turned off. A revealed copy is not a
         // deduction but a game rule (HDT's NewSecret and RemoveSecret exclude it either way), and a
-        // reason-less exclusion is a manual toggle.
-        let isAutomatic: (SecretExclusionReason?) -> Bool = { reason in reason != nil && reason != .copyRevealed }
-        let entries = autoGrayoutSecrets() ? entries : entries.filter { !isAutomatic($0.reason) }
+        // reason-less exclusion is a manual toggle. What was recorded before is filtered when the
+        // list is built (possibleCandidates).
+        let entries = autoGrayoutSecrets() ? entries : entries.filter { !SecretExclusionReason.isAutomatic($0.reason) }
         guard !entries.isEmpty else { return [] }
         let turn = turn ?? game.turnNumber()
         var events = [SecretExclusionEvent]()
@@ -207,6 +223,23 @@ class SecretsManager {
         events.forEach { onExclusionChanged?($0) }
     }
 
+    // Whether each candidate of the secret is still possible, as the panel shows it. Gray out
+    // secrets decides this when the list is built, so turning it off mid-game lists the candidates
+    // ruled out so far as possible again, and turning it back on dims them again.
+    private func possibleCandidates(_ secret: Secret) -> [MultiIdCard: Bool] {
+        let state = secret.state
+        guard !autoGrayoutSecrets() else { return state.excluded.mapValues { !$0 } }
+        var possible = [MultiIdCard: Bool]()
+        for (card, isExcluded) in state.excluded {
+            possible[card] = !isExcluded || SecretExclusionReason.isAutomatic(state.exclusions[card]?.reason)
+        }
+        return possible
+    }
+
+    private func isVisiblyExcluded(_ secret: Secret, _ card: MultiIdCard) -> Bool {
+        return secret.isExcluded(cardId: card) && (autoGrayoutSecrets() || !SecretExclusionReason.isAutomatic(secret.exclusion(for: card)?.reason))
+    }
+
     private var activeSecretIds: Set<Int> {
         return Set(secrets.array().map { $0.entity.id })
     }
@@ -222,8 +255,11 @@ class SecretsManager {
         guard let card = CardIds.Secrets.getSecretMultiIdCard(cardId) else { return nil }
         var seen = Set<String>()
         let format = String.localizedString("SecretHelper_RuledOutFormat", comment: "")
+        let grayout = autoGrayoutSecrets()
         var lines = secrets.array()
             .compactMap { $0.exclusion(for: card) }
+            // With Gray out secrets off, the deductions recorded so far do not dim the row
+            .filter { grayout || !SecretExclusionReason.isAutomatic($0.reason) }
             .sorted { $0.turn > $1.turn }
             .compactMap { exclusion -> String? in
                 guard let reason = exclusion.reason, seen.insert("\(exclusion.turn):\(reason.rawValue)").inserted else { return nil }
@@ -262,6 +298,8 @@ class SecretsManager {
             playerTurnEnd = nil
             predamagedEntityIds.removeAll()
             armorLostThisBlock.removeAll()
+            fullestSinceBoundary = nil
+            minionPlaysSeeingHand.removeAll()
         }
         _lastPlayedMinionId = 0
         entityDamageDealtHistory.removeAll()
@@ -269,7 +307,6 @@ class SecretsManager {
         _lastStartOfTurnDamageCheck = 0
         _lastStartOfTurnMinionCheck = 0
         opponentTookDamageDuringTurns.removeAll()
-        entititesInHandOnMinionsPlayed.removeAll()
         secrets.removeAll()
         _triggeredSecrets.removeAll()
         nextEntryOrder = 0
@@ -291,7 +328,6 @@ class SecretsManager {
             nextEntryOrder += 1
             secrets.append(secret)
             logger.info("new secret : \(entity)")
-            onNewSecret(secret: secret)
             onChanged?(getSecretList())
             return true
         } catch {
@@ -325,10 +361,11 @@ class SecretsManager {
     func toggle(cardId: String) {
         // MultiIdCard equality compares every id, so look up the full card for multi-print secrets
         let mcid = CardIds.Secrets.getSecretMultiIdCard(cardId) ?? MultiIdCard(cardId)
-        let excluded = secrets.any { $0.isExcluded(cardId: mcid) }
-        if excluded {
-            include(cardIds: [mcid], on: secrets.array())
-        } else {
+        // What the panel shows: with Gray out secrets off, an automatic exclusion lists the card as
+        // possible, and a click has to replace it with a manual one to dim the row
+        let excluded = secrets.any { isVisiblyExcluded($0, mcid) }
+        include(cardIds: [mcid], on: secrets.array())
+        if !excluded {
             exclude(cardId: mcid, invokeCallback: false)
         }
     }
@@ -420,8 +457,8 @@ class SecretsManager {
 
         let createdSecrets = secrets
             .filter { $0.entity.info.created }
-            .flatMap { $0.excluded }
-            .filter { !$0.value }
+            .flatMap { self.possibleCandidates($0) }
+            .filter { $0.value }
             .map { $0.key }
             .unique()
         
@@ -489,13 +526,13 @@ class SecretsManager {
                 let creatableSecrets = getCreatableSecretsFromGenerator(generator, gameMode, format)
                 
                 if let drawer, let tutor = _relatedCardsManager.getSpellSchoolTutor(drawer.cardId) {
-                    secretsCreated.append(contentsOf: SecretsManager.getFilteredSecretsByDrawerFromSingleSecret(secret, tutor, creatableSecrets))
+                    secretsCreated.append(contentsOf: getFilteredSecretsByDrawerFromSingleSecret(secret, tutor, creatableSecrets))
                 } else {
                     secretsCreated.append(contentsOf: getFilteredSecrets(secret, creatableSecrets))
                 }
             } else {
                 if let drawer, let tutor = _relatedCardsManager.getSpellSchoolTutor(drawer.cardId) {
-                    secretsCreated.append(contentsOf: SecretsManager.getFilteredSecretsByDrawerFromSingleSecret(secret, tutor, availableSecrets))
+                    secretsCreated.append(contentsOf: getFilteredSecretsByDrawerFromSingleSecret(secret, tutor, availableSecrets))
                 } else {
                     secretsCreated.append(contentsOf: getFilteredSecrets(secret, availableSecrets))
                 }
@@ -514,10 +551,10 @@ class SecretsManager {
                 
                 if let drawer, let spellSchoolTutor = _relatedCardsManager.getSpellSchoolTutor(drawer.cardId) {
                     if let creator, let creatableSecrets = availableCreatedBy[creator.cardId] {
-                        let secrets = SecretsManager.getFilteredSecretsByDrawerFromSingleSecret(secret, spellSchoolTutor, creatableSecrets)
+                        let secrets = getFilteredSecretsByDrawerFromSingleSecret(secret, spellSchoolTutor, creatableSecrets)
                         secretsCreated.append(contentsOf: secrets)
                     } else {
-                        let secrets = SecretsManager.getFilteredSecretsByDrawerFromSingleSecret(secret, spellSchoolTutor, availableSecrets)
+                        let secrets = getFilteredSecretsByDrawerFromSingleSecret(secret, spellSchoolTutor, availableSecrets)
                         secretsCreated.append(contentsOf: secrets)
                     }
                 } else {
@@ -543,7 +580,7 @@ class SecretsManager {
         var filteredSecrets = [SecretCandidate]()
         for (secret, drawSource) in secretAndDrawSource {
             if let drawSource, let spellSchoolTutor = _relatedCardsManager.getSpellSchoolTutor(drawSource.cardId) {
-                filteredSecrets.append(contentsOf: SecretsManager.getFilteredSecretsByDrawerFromSingleSecret(secret, spellSchoolTutor, availableSecrets))
+                filteredSecrets.append(contentsOf: getFilteredSecretsByDrawerFromSingleSecret(secret, spellSchoolTutor, availableSecrets))
             } else {
                 filteredSecrets.append(contentsOf: getFilteredSecrets(secret, availableSecrets))
             }
@@ -553,11 +590,11 @@ class SecretsManager {
     }
 
     // The pool is what a tutor could have drawn; whether a candidate is still possible is kept apart
-    private static func getFilteredSecretsByDrawerFromSingleSecret(_ secret: Secret, _ spellSchoolTutor: ISpellSchoolTutor, _ availableSecrets: Set<String>) -> [SecretCandidate] {
+    private func getFilteredSecretsByDrawerFromSingleSecret(_ secret: Secret, _ spellSchoolTutor: ISpellSchoolTutor, _ availableSecrets: Set<String>) -> [SecretCandidate] {
         let spellSchools = spellSchoolTutor.tutoredSpellSchools
-        return secret.excluded
+        return possibleCandidates(secret)
             .filter { x in x.key.ids.any { availableSecrets.contains($0) }}
-            .map { x in (card: Card(id: x.key.ids[0]), possible: !x.value) }
+            .map { x in (card: Card(id: x.key.ids[0]), possible: x.value) }
             .filter { x in spellSchools.contains(x.card.spellSchool.rawValue) }
             .compactMap { x in CardIds.Secrets.getSecretMultiIdCard(x.card.id).map { SecretCandidate(card: $0, possible: x.possible) } }
     }
@@ -634,9 +671,9 @@ class SecretsManager {
     }
     
     private func getFilteredSecrets(_ secret: Secret, _ allowedSecrets: Set<String>) -> [SecretCandidate] {
-        return secret.excluded
+        return possibleCandidates(secret)
             .filter { x in x.key.ids.any { allowedSecrets.contains($0) }}
-            .map { x in SecretCandidate(card: x.key, possible: !x.value) }
+            .map { x in SecretCandidate(card: x.key, possible: x.value) }
     }
     
     // count is the number of secrets whose pool holds the card and that still allow it
@@ -790,30 +827,32 @@ class SecretsManager {
         // Ambush and Kidnap are decided once the battlecry and the older secrets resolved (see
         // resolveMinionPlayed): Kidnap's Sack or a battlecry summon can fill the board first.
 
-        //Hidden cache will only trigger if the opponent has a minion in hand.
-        //We might not know this for certain - requires additional tracking logic.
-        let cardsInOpponentsHand = game.entities.values.filter({ e in
+        // Hidden Cache only triggers with a minion in the opponent's hand. The unknown cards are
+        // kept with the play, so one revealed as a minion later still rules it out (see
+        // onEntityRevealedAsMinion).
+        let cardsInOpponentsHand = game.entities.values.filter { e in
             e.isInHand && e.isControlled(by: game.opponent.id)
-        }).compactMap({ e in e })
-        for cardInOpponentsHand in cardsInOpponentsHand {
-            entititesInHandOnMinionsPlayed.insert(cardInOpponentsHand)
         }
-
-        if isAnyMinionInOpponentsHand {
+        if cardsInOpponentsHand.any({ $0.isMinion }) {
             exclude.append(CardIds.Secrets.Hunter.HiddenCache)
         }
 
-        let snapshot = MinionPlaySnapshot(minionId: entity.id, secretIds: activeSecretIds, turn: game.turnNumber())
+        let secretIds = activeSecretIds
+        let snapshot = MinionPlaySnapshot(minionId: entity.id, secretIds: secretIds, turn: game.turnNumber(),
+                                          opponentHandIds: Set(cardsInOpponentsHand.map { $0.id }))
         let transitions = applyExclusions(exclude.map { ($0, .minionPlayed) }, secretIds: snapshot.secretIds, turn: snapshot.turn, invokeCallback: true)
         pendingLock.around {
             snapshot.save(transitions)
             pendingChecks.append(.minionPlayed(snapshot))
             lastMinionPlay = snapshot
+            // A play only matters while one of the secrets it saw is still in play
+            minionPlaysSeeingHand.removeAll { $0.secretIds.isDisjoint(with: secretIds) }
+            minionPlaysSeeingHand.append(snapshot)
         }
     }
 
     // At the boundary after a minion play
-    private func resolveMinionPlayed(_ snapshot: MinionPlaySnapshot) {
+    private func resolveMinionPlayed(_ snapshot: MinionPlaySnapshot, window: AfterPlayWindow) {
         // After-play secrets do not trigger on a minion that was countered, removed, returned or is
         // about to die by then (Mirror Entity's wiki notes), so anything that took the minion out of
         // play before the boundary means they never had their chance: Explosive Runes or Snipe
@@ -823,8 +862,9 @@ class SecretsManager {
             restoreSaved(snapshot)
             return
         }
-        // The board counts Kidnapper's Sacks, Ambushers and copies the older secrets summoned
-        guard freeSpaceOnBoard else { return }
+        // The board counts Kidnapper's Sacks, Ambushers and copies the older secrets summoned, and a
+        // board that was full at any point after the play may be the one they saw
+        guard window.freeSpaceOnBoard else { return }
         let transitions = applyExclusions([(CardIds.Secrets.Rogue.Ambush, .minionPlayed), (CardIds.Secrets.Rogue.Kidnap, .minionPlayed)],
                                           secretIds: snapshot.secretIds, turn: snapshot.turn, invokeCallback: true)
         pendingLock.around { snapshot.save(transitions) }
@@ -836,6 +876,8 @@ class SecretsManager {
         let saved: [Int: [MultiIdCard]] = pendingLock.around {
             let saved = snapshot.saved
             snapshot.saved.removeAll()
+            // Its after-play secrets never had their chance, so its hand says nothing about Hidden Cache
+            minionPlaysSeeingHand.removeAll { $0 === snapshot }
             return saved
         }
         var restored = false
@@ -984,20 +1026,23 @@ class SecretsManager {
     // reader thread at a root PLAY/ATTACK BLOCK_START and at every STEP change.
     func resolvePendingChecks() {
         resolveAvenge(summonsResolved: true)
-        let (checks, triggered) = pendingLock.around {
-            let state = (pendingChecks, triggeredSinceBoundary)
+        let (checks, triggered, fullest) = pendingLock.around {
+            let state = (pendingChecks, triggeredSinceBoundary, fullestSinceBoundary)
             pendingChecks.removeAll()
             triggeredSinceBoundary.removeAll()
+            fullestSinceBoundary = nil
             return state
         }
+        let window = AfterPlayWindow(fullestBoard: max(fullest?.board ?? 0, game.opponentBoardCount),
+                                     fullestHand: max(fullest?.hand ?? 0, game.opponentHandCount))
         for check in checks {
             switch check {
             case .spellCast(let snapshot):
-                resolveSpellCast(snapshot, triggered: triggered)
+                resolveSpellCast(snapshot, triggered: triggered, window: window)
             case .threeCards(let snapshot):
-                resolveThreeCards(snapshot, triggered: triggered)
+                resolveThreeCards(snapshot, triggered: triggered, window: window)
             case .minionPlayed(let snapshot):
-                resolveMinionPlayed(snapshot)
+                resolveMinionPlayed(snapshot, window: window)
             case .reckoning(let dealerId, let secretIds, let turn):
                 // The dealer has to survive the exchange for Reckoning to have had a target
                 if let dealer = game.entities[dealerId], dealer.isInPlay && dealer.health > 0 && !dealer.has(tag: .to_be_destroyed) {
@@ -1007,30 +1052,57 @@ class SecretsManager {
         }
     }
 
+    // Called at the end of every root block. The after-play triggers (the older secrets, Knife
+    // Juggler, Wild Pyromancer...) each resolve in a root block of their own, in play order, so a
+    // secret may have seen the board or hand as it stood between any two of them. Only the fullest
+    // state since the play is safe to rule a summon or draw out with, not the one at the next action.
+    func sampleAfterRootBlock() {
+        guard pendingLock.around({ !pendingChecks.isEmpty }) else { return }
+        // Minions the block mortally wounded leave in the death phase that follows, before any
+        // other trigger resolves
+        let board = game.entities.values.filter { $0.isInPlay && $0.takesBoardSlot && $0.isControlled(by: game.opponent.id)
+            && !$0.has(tag: .to_be_destroyed) && !($0.isMinion && $0.has(tag: .health) && $0.health <= 0) }.count
+        let hand = game.opponentHandCount
+        pendingLock.around {
+            fullestSinceBoundary = (max(fullestSinceBoundary?.board ?? 0, board), max(fullestSinceBoundary?.hand ?? 0, hand))
+        }
+    }
+
     // HDT HandleCardPlayed checks these 750 ms after the cast with the board as it was then. The
     // "after cast" secrets react once the spell resolved, so their board and hand conditions are
     // read here, when its deaths and the older secrets' summons are on the board.
-    private func resolveSpellCast(_ snapshot: SpellCastSnapshot, triggered: [Entity]) {
+    private func resolveSpellCast(_ snapshot: SpellCastSnapshot, triggered: [Entity], window: AfterPlayWindow) {
+        // An older Ice Trap sends the spell back before a newer Counterspell sees it, and whether
+        // Counterspell reacts to the spell Oh My Yogg! casts instead is unverified, so both keep it
+        // possible (HDT returns after Ice Trap without ruling Counterspell out). A spell that was
+        // countered anyway (CANT_PLAY) was not countered by another Counterspell of the same
+        // player, since the same secret cannot be in play twice; one that triggered is revealed.
+        let returnedToHand = game.entities[snapshot.spellEntityId]?.isInHand ?? true
+        let iceTrapOrYoggTriggered = triggered.any {
+            CardIds.Secrets.Hunter.IceTrap == $0.cardId || CardIds.Secrets.Paladin.OhMyYogg == $0.cardId
+        }
+        var candidates = !returnedToHand && !iceTrapOrYoggTriggered ? [CardIds.Secrets.Mage.Counterspell] : []
         // A countered or returned spell was never cast, so nothing else had a chance to trigger.
         // Which of Counterspell and Ice Trap came first does not matter for the others.
         if playWasStopped(snapshot.spellEntityId, triggered: triggered) {
+            applyExclusions(candidates.map { ($0, .spellCast) }, secretIds: snapshot.secretIds, turn: snapshot.turn, invokeCallback: true)
             return
         }
-        var candidates = [CardIds.Secrets.Hunter.IceTrap, CardIds.Secrets.Hunter.BargainBin, CardIds.Secrets.Paladin.OhMyYogg]
+        candidates += [CardIds.Secrets.Hunter.IceTrap, CardIds.Secrets.Hunter.BargainBin, CardIds.Secrets.Paladin.OhMyYogg]
 
         // Oh My Yogg! replaces the spell, and whether Never Surrender! still reacts is unknown
         let ohMyYoggTriggered = triggered.any { CardIds.Secrets.Paladin.OhMyYogg == $0.cardId }
         if snapshot.opponentHadMinions && !ohMyYoggTriggered {
             candidates.append(CardIds.Secrets.Paladin.NeverSurrender)
         }
-        if snapshot.freeSpaceInHandAtCast && freeSpaceInHand {
+        if snapshot.freeSpaceInHandAtCast && window.freeSpaceInHand {
             candidates.append(CardIds.Secrets.Mage.ManaBind)
         }
         // Dirty Tricks does not activate when the hand is full after the spell was cast
-        if freeSpaceInHand {
+        if window.freeSpaceInHand {
             candidates.append(CardIds.Secrets.Rogue.DirtyTricks)
         }
-        if freeSpaceOnBoard {
+        if window.freeSpaceOnBoard {
             candidates.append(CardIds.Secrets.Hunter.CatTrick)
             candidates.append(CardIds.Secrets.Mage.NetherwindPortal)
             candidates.append(CardIds.Secrets.Rogue.StickySituation)
@@ -1056,18 +1128,18 @@ class SecretsManager {
     }
 
     // Rat Trap, Galloping Savior and Hidden Wisdom summon or draw after the card resolved
-    private func resolveThreeCards(_ snapshot: CardPlaySnapshot, triggered: [Entity]) {
+    private func resolveThreeCards(_ snapshot: CardPlaySnapshot, triggered: [Entity], window: AfterPlayWindow) {
         // Whether a countered or returned card still counts as played is unverified, so it rules
         // nothing out
         if playWasStopped(snapshot.cardEntityId, triggered: triggered) {
             return
         }
         var entries: [(card: MultiIdCard, reason: SecretExclusionReason?)] = [(CardIds.Secrets.Hunter.MotionDenied, .threeCardsPlayed)]
-        if snapshot.freeSpaceOnBoardAtPlay && freeSpaceOnBoard {
+        if snapshot.freeSpaceOnBoardAtPlay && window.freeSpaceOnBoard {
             entries.append((CardIds.Secrets.Hunter.RatTrap, .threeCardsPlayed))
             entries.append((CardIds.Secrets.Paladin.GallopingSavior, .threeCardsPlayed))
         }
-        if snapshot.freeSpaceInHandAtPlay && freeSpaceInHand {
+        if snapshot.freeSpaceInHandAtPlay && window.freeSpaceInHand {
             entries.append((CardIds.Secrets.Paladin.HiddenWisdom, .threeCardsPlayed))
         }
         applyExclusions(entries, secretIds: snapshot.secretIds, turn: snapshot.turn, invokeCallback: true)
@@ -1239,11 +1311,9 @@ class SecretsManager {
         var exclude = playedFromHandExclusions(entity: entity)
 
         if entity.isSpell {
-            // Two Counterspells cannot be active at once, so casting a spell rules it out now
-            exclude.append((CardIds.Secrets.Mage.Counterspell, .spellCast))
-
-            // The other reactions wait for the spell to resolve, in case Counterspell or Ice Trap
-            // stopped it. The PLAY block names the target before CARD_TARGET is logged.
+            // Every reaction, Counterspell included, waits for the spell to resolve, in case an older
+            // Ice Trap or Counterspell stopped it. The PLAY block names the target before CARD_TARGET
+            // is logged.
             let targetId = targetEntityId ?? (entity.has(tag: .card_target) ? entity[.card_target] : nil)
             let snapshot = SpellCastSnapshot(spellEntityId: entity.id, secretIds: activeSecretIds, turn: game.turnNumber(),
                                              opponentHadMinions: game.opponentMinionCount > 0,
@@ -1288,12 +1358,6 @@ class SecretsManager {
         return exclude
     }
     
-    func onNewSecret(secret: Secret) {
-        if secret.entity[GameTag.class] == CardClass.allCases.firstIndex(of: .hunter) {
-            entititesInHandOnMinionsPlayed.removeAll()
-        }
-    }
-    
     func handleCardDrawn(entity: Entity) {
         guard handleAction else { return }
         // Draws on the opponent's turn (their AoE on Acolyte of Pain) cannot trigger their secret
@@ -1312,20 +1376,17 @@ class SecretsManager {
         exclude(cardId: CardIds.Secrets.Hunter.DartTrap, reason: .heroPowerUsed)
     }
     
+    // A card that was in the opponent's hand when minions were played turned out to be a minion.
+    // Only the plays whose after-play secrets had their chance count, and only on the secrets that
+    // were in play for them.
     func onEntityRevealedAsMinion(entity: Entity) {
-        if entititesInHandOnMinionsPlayed.contains(entity) && entity.isMinion {
-            let transitions = applyExclusions([(CardIds.Secrets.Hunter.HiddenCache, .minionPlayed)], secretIds: nil, turn: nil, invokeCallback: true)
-            // Revealed while a minion play is still resolving: save it with that play, so it is
-            // taken back like the others if the minion leaves play first
-            pendingLock.around {
-                let play = pendingChecks.last { check in
-                    if case .minionPlayed = check { return true }
-                    return false
-                }
-                if case .minionPlayed(let snapshot) = play {
-                    snapshot.save(transitions)
-                }
-            }
+        guard entity.isMinion else { return }
+        let plays = pendingLock.around { minionPlaysSeeingHand.filter { $0.opponentHandIds.contains(entity.id) } }
+        for play in plays {
+            let transitions = applyExclusions([(CardIds.Secrets.Hunter.HiddenCache, .minionPlayed)], secretIds: play.secretIds,
+                                              turn: play.turn, invokeCallback: true)
+            // Saved with the play, so it is taken back like the others if the play is
+            pendingLock.around { play.save(transitions) }
         }
     }
     

@@ -84,6 +84,10 @@ class PowerGameStateParser: LogEventParser {
             (eventHandler as? Game)?.secretsManager?.resolvePendingAvenge()
         }
         currentBlock = currentBlock?.parent
+        // Between two root blocks the board is what the next trigger in line sees
+        if currentBlock == nil {
+            (eventHandler as? Game)?.secretsManager?.sampleAfterRootBlock()
+        }
         if let entity = eventHandler.entities[currentEntityId] {
             entity.info.hasOutstandingTagChanges = false
         }
