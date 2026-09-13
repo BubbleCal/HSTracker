@@ -121,7 +121,7 @@ protocol PowerEventHandler: AnyObject {
     
     func playerHeroPower(cardId: String, turn: Int)
     
-    func playerPlay(entity: Entity, cardId: String?, turn: Int, parentCardId: String)
+    func playerPlay(entity: Entity, cardId: String?, turn: Int, parentCardId: String, targetEntityId: Int?)
     
     func playerGet(entity: Entity, cardId: String?, turn: Int)
     

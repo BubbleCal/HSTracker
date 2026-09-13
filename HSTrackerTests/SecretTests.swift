@@ -633,6 +633,218 @@ class SecretTests: HSTrackerTests {
         verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Rogue.All)
     }
 
+    // MARK: - Spells and played cards
+
+    private func fillOpponentBoard(upTo count: Int) -> [Entity] {
+        let missing = max(0, count - game.opponentBoardCount)
+        return (0..<missing).map { _ in createOpponentMinion(cardId: "EX1_020", zone: .play) }
+    }
+
+    private func fillOpponentHand(upTo count: Int) -> [Entity] {
+        let missing = max(0, count - game.opponentHandCount)
+        return (0..<missing).map { _ in
+            let card = createNewEntity(cardId: "")
+            card[.controller] = heroOpponent.id
+            card[.zone] = Zone.hand.rawValue
+            game.entities[card.id] = card
+            return card
+        }
+    }
+
+    func testSpellCast_SpellHasCantPlay_NothingElseExcluded() {
+        game.secretsManager?.handleCardPlayed(entity: playerSpell2, parentCardId: "")
+        // A Counterspell nobody tracks (e.g. created for the opponent's hero) still marks the spell
+        playerSpell2[.cant_play] = 1
+        resolve()
+
+        verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All)
+        verifySecrets(secretIndex: 1, allSecrets: CardIds.Secrets.Mage.All, triggered: [CardIds.Secrets.Mage.Counterspell])
+        verifySecrets(secretIndex: 2, allSecrets: CardIds.Secrets.Paladin.All)
+        verifySecrets(secretIndex: 3, allSecrets: CardIds.Secrets.Rogue.All)
+    }
+
+    func testSpellCast_SpellBackInHand_NothingElseExcluded() {
+        game.secretsManager?.handleCardPlayed(entity: playerSpell2, parentCardId: "")
+        playerSpell2[.zone] = Zone.hand.rawValue
+        resolve()
+
+        verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All)
+        verifySecrets(secretIndex: 2, allSecrets: CardIds.Secrets.Paladin.All)
+        verifySecrets(secretIndex: 3, allSecrets: CardIds.Secrets.Rogue.All)
+    }
+
+    func testSpellCast_OpponentBoardFullAtCastButFreedByResolution_ExcludesNetherwindPortalCatTrickSticky() {
+        let board = fillOpponentBoard(upTo: 7)
+        game.secretsManager?.handleCardPlayed(entity: playerSpell2, parentCardId: "")
+        board.forEach { $0[.zone] = Zone.graveyard.rawValue }
+        resolve()
+
+        XCTAssertEqual(game.secretsManager?.secrets[0].isExcluded(cardId: CardIds.Secrets.Hunter.CatTrick), true)
+        XCTAssertEqual(game.secretsManager?.secrets[1].isExcluded(cardId: CardIds.Secrets.Mage.NetherwindPortal), true)
+        XCTAssertEqual(game.secretsManager?.secrets[3].isExcluded(cardId: CardIds.Secrets.Rogue.StickySituation), true)
+        // Never Surrender! reacts when the spell is cast, while the board still held minions
+        XCTAssertEqual(game.secretsManager?.secrets[2].isExcluded(cardId: CardIds.Secrets.Paladin.NeverSurrender), true)
+    }
+
+    func testSpellCast_OpponentBoardFilledDuringResolution_SummoningSecretsNotExcluded() {
+        _ = fillOpponentBoard(upTo: 6)
+        game.secretsManager?.handleCardPlayed(entity: playerSpell2, parentCardId: "")
+        // An older summoning secret or a deathrattle took the last slot
+        _ = fillOpponentBoard(upTo: 7)
+        resolve()
+
+        XCTAssertEqual(game.secretsManager?.secrets[0].isExcluded(cardId: CardIds.Secrets.Hunter.CatTrick), false)
+        XCTAssertEqual(game.secretsManager?.secrets[1].isExcluded(cardId: CardIds.Secrets.Mage.NetherwindPortal), false)
+        XCTAssertEqual(game.secretsManager?.secrets[3].isExcluded(cardId: CardIds.Secrets.Rogue.StickySituation), false)
+        XCTAssertEqual(game.secretsManager?.secrets[1].isExcluded(cardId: CardIds.Secrets.Mage.ManaBind), true)
+    }
+
+    func testSpellCast_OpponentHandFilledDuringResolution_DirtyTricksAndManaBindNotExcluded() {
+        _ = fillOpponentHand(upTo: 9)
+        game.secretsManager?.handleCardPlayed(entity: playerSpell2, parentCardId: "")
+        _ = fillOpponentHand(upTo: 10)
+        resolve()
+
+        XCTAssertEqual(game.secretsManager?.secrets[3].isExcluded(cardId: CardIds.Secrets.Rogue.DirtyTricks), false)
+        XCTAssertEqual(game.secretsManager?.secrets[1].isExcluded(cardId: CardIds.Secrets.Mage.ManaBind), false)
+        XCTAssertEqual(game.secretsManager?.secrets[1].isExcluded(cardId: CardIds.Secrets.Mage.NetherwindPortal), true)
+    }
+
+    func testSpellCast_PlayerMinionKilledBySpell_PressurePlateNotExcluded() {
+        playerMinion1[.zone] = Zone.play.rawValue
+        game.secretsManager?.handleCardPlayed(entity: playerSpell2, parentCardId: "")
+        playerMinion1[.zone] = Zone.graveyard.rawValue
+        resolve()
+
+        XCTAssertEqual(game.secretsManager?.secrets[0].isExcluded(cardId: CardIds.Secrets.Hunter.PressurePlate), false)
+        XCTAssertEqual(game.secretsManager?.secrets[0].isExcluded(cardId: CardIds.Secrets.Hunter.CatTrick), true)
+    }
+
+    func testSpellCast_PlayerMinionLeftToDestroy_PressurePlateExcluded() {
+        playerMinion1[.zone] = Zone.play.rawValue
+        game.secretsManager?.handleCardPlayed(entity: playerSpell2, parentCardId: "")
+        resolve()
+
+        XCTAssertEqual(game.secretsManager?.secrets[0].isExcluded(cardId: CardIds.Secrets.Hunter.PressurePlate), true)
+    }
+
+    func testSpellCast_OnlyDormantPlayerMinion_PressurePlateNotExcluded() {
+        playerMinion1[.zone] = Zone.play.rawValue
+        playerMinion1[.dormant] = 1
+        game.secretsManager?.handleCardPlayed(entity: playerSpell2, parentCardId: "")
+        resolve()
+
+        XCTAssertEqual(game.secretsManager?.secrets[0].isExcluded(cardId: CardIds.Secrets.Hunter.PressurePlate), false)
+    }
+
+    func testSpellCast_BlockTargetMinion_ExcludesSpellbenderWithoutCardTargetTag() {
+        XCTAssertFalse(playerSpell2.has(tag: .card_target))
+        game.secretsManager?.handleCardPlayed(entity: playerSpell2, parentCardId: "", targetEntityId: opponentMinion1.id)
+        resolve()
+
+        XCTAssertEqual(game.secretsManager?.secrets[1].isExcluded(cardId: CardIds.Secrets.Mage.Spellbender), true)
+    }
+
+    func testSpellCast_BlockTargetHero_SpellbenderNotExcluded() {
+        game.secretsManager?.handleCardPlayed(entity: playerSpell2, parentCardId: "", targetEntityId: heroOpponent.id)
+        resolve()
+
+        XCTAssertEqual(game.secretsManager?.secrets[1].isExcluded(cardId: CardIds.Secrets.Mage.Spellbender), false)
+    }
+
+    func testSpellCast_TargetedMinionWithFullBoard_SpellbenderNotExcluded() {
+        _ = fillOpponentBoard(upTo: 7)
+        game.secretsManager?.handleCardPlayed(entity: playerSpell1, parentCardId: "")
+        resolve()
+
+        XCTAssertEqual(game.secretsManager?.secrets[1].isExcluded(cardId: CardIds.Secrets.Mage.Spellbender), false)
+    }
+
+    func testSpellCast_OhMyYoggTriggered_NeverSurrenderNotExcluded() {
+        opponentMinion1[.zone] = Zone.play.rawValue
+        addOpponentSecret(secretPaladin2)
+        game.secretsManager?.handleCardPlayed(entity: playerSpell2, parentCardId: "")
+
+        secretPaladin2.cardId = CardIds.Secrets.Paladin.OhMyYogg.ids[0]
+        game.opponentSecretTrigger(entity: secretPaladin2, cardId: secretPaladin2.cardId, turn: 1, otherId: secretPaladin2.id)
+        resolve()
+
+        XCTAssertEqual(game.secretsManager?.secrets[2].isExcluded(cardId: CardIds.Secrets.Paladin.NeverSurrender), false)
+        XCTAssertEqual(game.secretsManager?.secrets[0].isExcluded(cardId: CardIds.Secrets.Hunter.CatTrick), true)
+    }
+
+    func testThirdCardIsQuest_ExcludesMotionDeniedRatTrapGallopingHiddenWisdom() {
+        setPlayerAsCurrentPlayer()
+        heroPlayer[.num_cards_played_this_turn] = 3
+        let quest = createNewEntity(cardId: "TLC_817")
+        quest[.cardtype] = CardType.spell.rawValue
+        quest[.quest] = 1
+        quest[.controller] = heroPlayer.id
+        quest[.zone] = Zone.secret.rawValue
+        game.entities[quest.id] = quest
+
+        game.playerSecretPlayed(entity: quest, cardId: quest.cardId, turn: 1, fromZone: .hand, parentCardId: "")
+        // Quests are no casts for the spell reactions
+        XCTAssertEqual(game.secretsManager?.secrets[1].isExcluded(cardId: CardIds.Secrets.Mage.Counterspell), false)
+        resolve()
+
+        verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All,
+                      triggered: [CardIds.Secrets.Hunter.MotionDenied, CardIds.Secrets.Hunter.RatTrap])
+        verifySecrets(secretIndex: 1, allSecrets: CardIds.Secrets.Mage.All)
+        verifySecrets(secretIndex: 2, allSecrets: CardIds.Secrets.Paladin.All,
+                      triggered: [CardIds.Secrets.Paladin.GallopingSavior, CardIds.Secrets.Paladin.HiddenWisdom])
+        verifySecrets(secretIndex: 3, allSecrets: CardIds.Secrets.Rogue.All)
+    }
+
+    func testQuestDrawnThisTurnPlayed_ExcludesAzeriteVein() {
+        let quest = createNewEntity(cardId: "TLC_817")
+        quest[.cardtype] = CardType.spell.rawValue
+        quest[.quest] = 1
+        quest[.controller] = heroPlayer.id
+        quest[.num_turns_in_hand] = 1
+        quest[.zone] = Zone.secret.rawValue
+        game.entities[quest.id] = quest
+
+        game.playerSecretPlayed(entity: quest, cardId: quest.cardId, turn: 1, fromZone: .hand, parentCardId: "")
+
+        verifySecrets(secretIndex: 1, allSecrets: CardIds.Secrets.Mage.All, triggered: [CardIds.Secrets.Mage.AzeriteVein])
+    }
+
+    func testThirdCard_OpponentBoardFilledDuringResolution_RatTrapNotExcluded() {
+        setPlayerAsCurrentPlayer()
+        heroPlayer[.num_cards_played_this_turn] = 3
+        _ = fillOpponentBoard(upTo: 6)
+        game.secretsManager?.handleCardPlayed(entity: playerMinion1, parentCardId: "")
+        _ = fillOpponentBoard(upTo: 7)
+        resolve()
+
+        verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All, triggered: [CardIds.Secrets.Hunter.MotionDenied])
+        verifySecrets(secretIndex: 2, allSecrets: CardIds.Secrets.Paladin.All, triggered: [CardIds.Secrets.Paladin.HiddenWisdom])
+    }
+
+    func testThirdCard_Countered_ThreeCardSecretsNotExcluded() {
+        setPlayerAsCurrentPlayer()
+        heroPlayer[.num_cards_played_this_turn] = 3
+        addOpponentSecret(secretMage2)
+        game.secretsManager?.handleCardPlayed(entity: playerSpell2, parentCardId: "")
+
+        secretMage2.cardId = CardIds.Secrets.Mage.Counterspell.ids[0]
+        game.opponentSecretTrigger(entity: secretMage2, cardId: secretMage2.cardId, turn: 1, otherId: secretMage2.id)
+        resolve()
+
+        verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All)
+        verifySecrets(secretIndex: 2, allSecrets: CardIds.Secrets.Paladin.All)
+    }
+
+    func testThirdCard_NotThePlayersTurn_NothingPending() {
+        heroPlayer[.num_cards_played_this_turn] = 3
+        game.secretsManager?.handleCardPlayed(entity: playerMinion1, parentCardId: "")
+        resolve()
+
+        verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All)
+        verifySecrets(secretIndex: 2, allSecrets: CardIds.Secrets.Paladin.All)
+    }
+
     func testSingleSecret_OneMinionDied() {
         opponentMinion2[.zone] = Zone.play.rawValue
         game.opponentMinionDeath(entity: opponentMinion1, turn: 2)
@@ -734,6 +946,7 @@ class SecretTests: HSTrackerTests {
     }
     
     func testSingleSecret_NoMinionTarget_SpellPlayed_ThirdThisTurn() {
+        setPlayerAsCurrentPlayer()
         game.playerEntity?[.num_cards_played_this_turn] = 3
         game.secretsManager?.handleCardPlayed(entity: playerSpell2, parentCardId: "")
         resolve()
@@ -1021,8 +1234,10 @@ class SecretTests: HSTrackerTests {
     // TODO: Add test for Rat Trap, Hidden Wisdom, Sacred Trial, etc.
 
     func testSingleSecret_OpponentPlaysTwoCards() {
+        setPlayerAsCurrentPlayer()
         heroPlayer[GameTag.num_cards_played_this_turn] = 2
         game.secretsManager?.handleCardPlayed(entity: playerMinion1, parentCardId: "")
+        resolve()
         verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All)
         verifySecrets(secretIndex: 1, allSecrets: CardIds.Secrets.Mage.All)
         verifySecrets(secretIndex: 2, allSecrets: CardIds.Secrets.Paladin.All)
@@ -1030,8 +1245,14 @@ class SecretTests: HSTrackerTests {
     }
 
     func testSingleSecret_OpponentPlaysThreeCards() {
+        setPlayerAsCurrentPlayer()
         heroPlayer[GameTag.num_cards_played_this_turn] = 3
         game.secretsManager?.handleCardPlayed(entity: playerMinion1, parentCardId: "")
+        // Rat Trap and the others react after the card resolved
+        verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All)
+        verifySecrets(secretIndex: 2, allSecrets: CardIds.Secrets.Paladin.All)
+
+        resolve()
         verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All, triggered: [CardIds.Secrets.Hunter.RatTrap, CardIds.Secrets.Hunter.MotionDenied])
         verifySecrets(secretIndex: 1, allSecrets: CardIds.Secrets.Mage.All)
         verifySecrets(secretIndex: 2, allSecrets: CardIds.Secrets.Paladin.All, triggered: [CardIds.Secrets.Paladin.GallopingSavior, CardIds.Secrets.Paladin.HiddenWisdom])

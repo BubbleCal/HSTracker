@@ -16,14 +16,26 @@ private struct SpellCastSnapshot {
     let spellEntityId: Int
     let secretIds: Set<Int>
     let turn: Int
-    // Spell reactions whose preconditions held when the spell was cast
-    let candidates: [MultiIdCard]
-    let freeSpaceOnBoard: Bool
-    let targetEntityId: Int?
+    // "When cast" preconditions, which only the board at cast time decides
+    let opponentHadMinions: Bool
+    let freeSpaceInHandAtCast: Bool
+    let freeSpaceOnBoardAtCast: Bool
+    // nil when neither the PLAY block nor CARD_TARGET named a target at cast time
+    let targetIsMinion: Bool?
+}
+
+// A card that was the third or later one played this turn
+private struct CardPlaySnapshot {
+    let cardEntityId: Int
+    let secretIds: Set<Int>
+    let turn: Int
+    let freeSpaceOnBoardAtPlay: Bool
+    let freeSpaceInHandAtPlay: Bool
 }
 
 private enum PendingSecretCheck {
     case spellCast(SpellCastSnapshot)
+    case threeCards(CardPlaySnapshot)
     case reckoning(dealerId: Int, secretIds: Set<Int>, turn: Int)
 }
 
@@ -844,6 +856,8 @@ class SecretsManager {
             switch check {
             case .spellCast(let snapshot):
                 resolveSpellCast(snapshot, triggered: triggered)
+            case .threeCards(let snapshot):
+                resolveThreeCards(snapshot, triggered: triggered)
             case .reckoning(let dealerId, let secretIds, let turn):
                 // The dealer has to survive the hit for Reckoning to have had a target
                 if let dealer = game.entities[dealerId], dealer.health > 0 && dealer[.zone] != Zone.graveyard.rawValue {
@@ -853,26 +867,84 @@ class SecretsManager {
         }
     }
 
+    // HDT HandleCardPlayed checks these 750 ms after the cast with the board as it was then. The
+    // "after cast" secrets react once the spell resolved, so their board and hand conditions are
+    // read here, when its deaths and the older secrets' summons are on the board.
     private func resolveSpellCast(_ snapshot: SpellCastSnapshot, triggered: [Entity]) {
-        // Counterspell/Ice trap order may matter in rare edge cases where both are in play.
-        // This is currently not handled.
-        if triggered.any({ x in CardIds.Secrets.Mage.Counterspell == x.cardId }) {
+        // A countered or returned spell was never cast, so nothing else had a chance to trigger.
+        // Which of Counterspell and Ice Trap came first does not matter for the others.
+        if playWasStopped(snapshot.spellEntityId, triggered: triggered) {
             return
         }
-        if triggered.any({ x in CardIds.Secrets.Hunter.IceTrap == x.cardId }) {
-            applyExclusions([(CardIds.Secrets.Hunter.IceTrap, .spellCast)], secretIds: snapshot.secretIds, turn: snapshot.turn, invokeCallback: true)
-            return
+        var candidates = [CardIds.Secrets.Hunter.IceTrap, CardIds.Secrets.Hunter.BargainBin, CardIds.Secrets.Paladin.OhMyYogg]
+
+        // Oh My Yogg! replaces the spell, and whether Never Surrender! still reacts is unknown
+        let ohMyYoggTriggered = triggered.any { CardIds.Secrets.Paladin.OhMyYogg == $0.cardId }
+        if snapshot.opponentHadMinions && !ohMyYoggTriggered {
+            candidates.append(CardIds.Secrets.Paladin.NeverSurrender)
         }
-        var candidates = snapshot.candidates
-        if snapshot.freeSpaceOnBoard {
-            // The PLAY block's Target is known at cast time; CARD_TARGET has been logged by now either way
-            let spell = game.entities[snapshot.spellEntityId]
-            let targetId = snapshot.targetEntityId ?? (spell?.has(tag: .card_target) == true ? spell?[.card_target] : nil)
-            if let targetId, let target = game.entities[targetId], target.isMinion {
-                candidates.append(CardIds.Secrets.Mage.Spellbender)
-            }
+        if snapshot.freeSpaceInHandAtCast && freeSpaceInHand {
+            candidates.append(CardIds.Secrets.Mage.ManaBind)
+        }
+        // Dirty Tricks does not activate when the hand is full after the spell was cast
+        if freeSpaceInHand {
+            candidates.append(CardIds.Secrets.Rogue.DirtyTricks)
+        }
+        if freeSpaceOnBoard {
+            candidates.append(CardIds.Secrets.Hunter.CatTrick)
+            candidates.append(CardIds.Secrets.Mage.NetherwindPortal)
+            candidates.append(CardIds.Secrets.Rogue.StickySituation)
+        }
+        // Pressure Plate needs a minion of the player left to destroy once the spell resolved
+        if game.entities.values.any({ $0.isInPlay && $0.isMinion && $0.isControlled(by: game.player.id)
+            && !$0.has(tag: .dormant) && !$0.has(tag: .untouchable) }) {
+            candidates.append(CardIds.Secrets.Hunter.PressurePlate)
+        }
+        if snapshot.freeSpaceOnBoardAtCast && spellTargetedMinion(snapshot) {
+            candidates.append(CardIds.Secrets.Mage.Spellbender)
         }
         applyExclusions(candidates.map { ($0, .spellCast) }, secretIds: snapshot.secretIds, turn: snapshot.turn, invokeCallback: true)
+    }
+
+    private func spellTargetedMinion(_ snapshot: SpellCastSnapshot) -> Bool {
+        if let targetIsMinion = snapshot.targetIsMinion {
+            return targetIsMinion
+        }
+        // Older logs write CARD_TARGET after the spell's ZONE change
+        guard let spell = game.entities[snapshot.spellEntityId], spell.has(tag: .card_target) else { return false }
+        return game.entities[spell[.card_target]]?.isMinion ?? false
+    }
+
+    // Rat Trap, Galloping Savior and Hidden Wisdom summon or draw after the card resolved
+    private func resolveThreeCards(_ snapshot: CardPlaySnapshot, triggered: [Entity]) {
+        // Whether a countered or returned card still counts as played is unverified, so it rules
+        // nothing out
+        if playWasStopped(snapshot.cardEntityId, triggered: triggered) {
+            return
+        }
+        var entries: [(card: MultiIdCard, reason: SecretExclusionReason?)] = [(CardIds.Secrets.Hunter.MotionDenied, .threeCardsPlayed)]
+        if snapshot.freeSpaceOnBoardAtPlay && freeSpaceOnBoard {
+            entries.append((CardIds.Secrets.Hunter.RatTrap, .threeCardsPlayed))
+            entries.append((CardIds.Secrets.Paladin.GallopingSavior, .threeCardsPlayed))
+        }
+        if snapshot.freeSpaceInHandAtPlay && freeSpaceInHand {
+            entries.append((CardIds.Secrets.Paladin.HiddenWisdom, .threeCardsPlayed))
+        }
+        applyExclusions(entries, secretIds: snapshot.secretIds, turn: snapshot.turn, invokeCallback: true)
+    }
+
+    // True when the card was countered (CANT_PLAY, Counterspell, or Objection! for a minion) or sent
+    // back to the hand (Ice Trap), which the secrets that triggered since the play tell apart from
+    // the card simply resolving
+    private func playWasStopped(_ entityId: Int, triggered: [Entity]) -> Bool {
+        guard let card = game.entities[entityId] else { return true }
+        if card[.cant_play] == 1 || card.isInHand {
+            return true
+        }
+        return triggered.any { secret in
+            CardIds.Secrets.Mage.Counterspell == secret.cardId || CardIds.Secrets.Hunter.IceTrap == secret.cardId
+                || (card.isMinion && CardIds.Secrets.Mage.Objection == secret.cardId)
+        }
     }
 
     private func recordTriggered(_ entity: Entity) {
@@ -971,63 +1043,30 @@ class SecretsManager {
         recordTriggered(entity)
     }
 
-    func handleCardPlayed(entity: Entity, parentCardId: String) {
+    func handleCardPlayed(entity: Entity, parentCardId: String, targetEntityId: Int? = nil) {
         guard handleAction else { return }
-        
+
+        // Sparkjoy Cheat casts the secret, which is not a play and does not count as one
+        if entity.isSpell && parentCardId == CardIds.Collectible.Rogue.SparkjoyCheat {
+            return
+        }
+
         savedSecrets.removeAll()
 
-        var exclude: [(card: MultiIdCard, reason: SecretExclusionReason?)] = []
-        
-        if let player = game.playerEntity, player.has(tag: .num_cards_played_this_turn) && (player[.num_cards_played_this_turn] >= 3) {
-            exclude.append((CardIds.Secrets.Hunter.MotionDenied, .threeCardsPlayed))
-            if freeSpaceOnBoard {
-                exclude.append((CardIds.Secrets.Hunter.RatTrap, .threeCardsPlayed))
-                exclude.append((CardIds.Secrets.Paladin.GallopingSavior, .threeCardsPlayed))
-            }
-            
-            if freeSpaceInHand {
-                exclude.append((CardIds.Secrets.Paladin.HiddenWisdom, .threeCardsPlayed))
-            }
-        }
-        
-        if entity[.num_turns_in_hand] == 1 {
-            if freeSpaceInHand {
-                exclude.append((CardIds.Secrets.Mage.AzeriteVein, .cardFromThisTurnPlayed))
-            }
-        }
-        
+        var exclude = playedFromHandExclusions(entity: entity)
+
         if entity.isSpell {
-            if parentCardId == CardIds.Collectible.Rogue.SparkjoyCheat {
-                return
-            }
             // Two Counterspells cannot be active at once, so casting a spell rules it out now
             exclude.append((CardIds.Secrets.Mage.Counterspell, .spellCast))
 
             // The other reactions wait for the spell to resolve, in case Counterspell or Ice Trap
-            // stopped it
-            var candidates = [CardIds.Secrets.Hunter.IceTrap, CardIds.Secrets.Hunter.BargainBin, CardIds.Secrets.Paladin.OhMyYogg]
-            
-            if game.opponentMinionCount > 0 {
-                candidates.append(CardIds.Secrets.Paladin.NeverSurrender)
-            }
-
-            if game.opponentHandCount < 10 {
-                candidates.append(CardIds.Secrets.Rogue.DirtyTricks)
-                candidates.append(CardIds.Secrets.Mage.ManaBind)
-            }
-
-            if freeSpaceOnBoard {
-                candidates.append(CardIds.Secrets.Hunter.CatTrick)
-                candidates.append(CardIds.Secrets.Mage.NetherwindPortal)
-                candidates.append(CardIds.Secrets.Rogue.StickySituation)
-            }
-
-            if game.playerMinionCount > 0 {
-                candidates.append(CardIds.Secrets.Hunter.PressurePlate)
-            }
+            // stopped it. The PLAY block names the target before CARD_TARGET is logged.
+            let targetId = targetEntityId ?? (entity.has(tag: .card_target) ? entity[.card_target] : nil)
             let snapshot = SpellCastSnapshot(spellEntityId: entity.id, secretIds: activeSecretIds, turn: game.turnNumber(),
-                                             candidates: candidates, freeSpaceOnBoard: freeSpaceOnBoard,
-                                             targetEntityId: entity.has(tag: .card_target) ? entity[.card_target] : nil)
+                                             opponentHadMinions: game.opponentMinionCount > 0,
+                                             freeSpaceInHandAtCast: freeSpaceInHand,
+                                             freeSpaceOnBoardAtCast: freeSpaceOnBoard,
+                                             targetIsMinion: targetId.flatMap { game.entities[$0]?.isMinion })
             pendingLock.around { pendingChecks.append(.spellCast(snapshot)) }
         } else if entity.isMinion && game.playerMinionCount > 3 {
             exclude.append((CardIds.Secrets.Paladin.SacredTrial, .minionPlayed))
@@ -1037,6 +1076,33 @@ class SecretsManager {
             exclude.append((CardIds.Secrets.Hunter.BargainBin, .weaponPlayed))
         }
         applyExclusions(exclude, secretIds: nil, turn: nil, invokeCallback: true)
+    }
+
+    // Quests, sidequests, sigils and objectives go from the hand to the secret zone like secrets,
+    // and count as played cards. HDT skips them; whether the spell reactions see them is unverified,
+    // so only the played-card counts apply.
+    func handleQuestPlayed(entity: Entity) {
+        guard handleAction else { return }
+        applyExclusions(playedFromHandExclusions(entity: entity), secretIds: nil, turn: nil, invokeCallback: true)
+    }
+
+    // The rules every card played from hand is subject to. Returns the immediate exclusions and
+    // queues the ones that wait for the card to resolve.
+    private func playedFromHandExclusions(entity: Entity) -> [(card: MultiIdCard, reason: SecretExclusionReason?)] {
+        var exclude: [(card: MultiIdCard, reason: SecretExclusionReason?)] = []
+
+        // NUM_CARDS_PLAYED_THIS_TURN is logged before the ZONE change, so it already counts this card
+        if let player = game.playerEntity, player.isCurrentPlayer && player[.num_cards_played_this_turn] >= 3 {
+            let snapshot = CardPlaySnapshot(cardEntityId: entity.id, secretIds: activeSecretIds, turn: game.turnNumber(),
+                                            freeSpaceOnBoardAtPlay: freeSpaceOnBoard, freeSpaceInHandAtPlay: freeSpaceInHand)
+            pendingLock.around { pendingChecks.append(.threeCards(snapshot)) }
+        }
+
+        // Azerite Vein triggers when the card is played, so countering it changes nothing
+        if entity[.num_turns_in_hand] == 1 && freeSpaceInHand {
+            exclude.append((CardIds.Secrets.Mage.AzeriteVein, .cardFromThisTurnPlayed))
+        }
+        return exclude
     }
     
     func onNewSecret(secret: Secret) {

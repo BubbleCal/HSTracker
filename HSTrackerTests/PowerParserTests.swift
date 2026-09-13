@@ -291,6 +291,29 @@ class PowerParserTests: HSTrackerTests {
         XCTAssertEqual(tracked?.isExcluded(cardId: CardIds.Secrets.Mage.ManaBind), true)
     }
 
+    func testPlayBlockTarget_ReachesSpellbenderCheckBeforeCardTarget() {
+        let secret = createOpponentSecret(id: 96, cardClass: .mage)
+        // The ids of playWithTargetLine: Sylvanas's Triumph (10) played from hand on Tar Creeper (91)
+        let spell = createEntity(cardId: "CATA_557", id: 10)
+        spell[.cardtype] = CardType.spell.rawValue
+        spell[.controller] = game.player.id
+        spell[.zone] = Zone.hand.rawValue
+        let target = createEntity(cardId: "CORE_UNG_928", id: 91)
+        target[.cardtype] = CardType.minion.rawValue
+        target[.controller] = game.opponent.id
+        target[.zone] = Zone.play.rawValue
+
+        handle(PowerParserTests.playWithTargetLine)
+        handle("D 13:59:26.9484680 PowerTaskList.DebugPrintPower() -     TAG_CHANGE Entity=[entityName=希尔瓦娜斯的胜利 id=10 zone=HAND zonePos=3 cardId=CATA_557 player=1] tag=ZONE value=PLAY ")
+        XCTAssertFalse(spell.has(tag: .card_target))
+        handle(PowerParserTests.blockEndLine)
+        handle(PowerParserTests.playWithoutTargetLine)
+
+        let tracked = game.secretsManager?.secrets.first { $0.entity.id == secret.id }
+        XCTAssertEqual(tracked?.isExcluded(cardId: CardIds.Secrets.Mage.Counterspell), true)
+        XCTAssertEqual(tracked?.isExcluded(cardId: CardIds.Secrets.Mage.Spellbender), true)
+    }
+
     func testDeathsBlockEnd_ResolvesAvengeBeforeDeathrattleSummons() {
         let secret = createOpponentSecret(id: 96, cardClass: .paladin)
         let dying = createEntity(cardId: "EX1_020")

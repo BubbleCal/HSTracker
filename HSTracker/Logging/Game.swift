@@ -2888,7 +2888,7 @@ class Game: NSObject, PowerEventHandler {
         updateTrackers()
     }
 
-    func playerPlay(entity: Entity, cardId: String?, turn: Int, parentCardId: String) {
+    func playerPlay(entity: Entity, cardId: String?, turn: Int, parentCardId: String, targetEntityId: Int?) {
         if cardId.isBlank {
             return
         }
@@ -2898,7 +2898,7 @@ class Game: NSObject, PowerEventHandler {
             playedCards.append(PlayedCard(player: .player, cardId: cardId, turn: turn))
         }
 
-        secretsManager?.handleCardPlayed(entity: entity, parentCardId: parentCardId)
+        secretsManager?.handleCardPlayed(entity: entity, parentCardId: parentCardId, targetEntityId: targetEntityId)
         updateTrackers()
     }
     
@@ -2928,6 +2928,10 @@ class Game: NSObject, PowerEventHandler {
                 player.sigilPlayedFromHand(entity: entity, turn: turn)
             } else if entity.isObjective {
                 player.objectivePlayedFromHand(entity: entity, turn: turn)
+            }
+            // HDT returns here, but these are played cards for the "three cards" secrets and Azerite Vein
+            if fromZone == .hand {
+                secretsManager?.handleQuestPlayed(entity: entity)
             }
             return
         }

@@ -1292,6 +1292,7 @@ struct TagChangeActions {
 
         let currentBlockCardId = powerGameStateParser?.getCurrentBlock()?.cardId ?? ""
         let currentBlockType = powerGameStateParser?.getCurrentBlock()?.type ?? ""
+        let currentBlockTargetEntityId = powerGameStateParser?.getCurrentBlock()?.targetEntityId
 
         // When a card is moved from hand it is not relevant if it was mulliganed.
         // If not cleared, we may display mulliganed mark to cards if they return to hand.
@@ -1301,7 +1302,8 @@ struct TagChangeActions {
             eventHandler.lastCardPlayed = id
             if controller == eventHandler.player.id {
                 if cardId != "" {
-                    eventHandler.playerPlay(entity: entity, cardId: cardId, turn: eventHandler.turnNumber(), parentCardId: currentBlockCardId)
+                    eventHandler.playerPlay(entity: entity, cardId: cardId, turn: eventHandler.turnNumber(), parentCardId: currentBlockCardId,
+                                            targetEntityId: currentBlockTargetEntityId)
                 }
                 var magnetic = false
                 if entity.isMinion {
