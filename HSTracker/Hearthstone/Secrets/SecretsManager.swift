@@ -31,6 +31,9 @@ class SecretsManager {
     private var savedSecrets = SynchronizedArray<MultiIdCard>()
     
     var onChanged: (([Card]) -> Void)?
+    // Fired on the parser thread for every candidate that becomes impossible or possible again
+    var onExclusionChanged: ((SecretExclusionEvent) -> Void)?
+    private var nextEntryOrder = 0
     
     init(game: Game, availableSecrets: AvailableSecretsProvider, relatedCardsManager: RelatedCardsManager) {
         self.game = game
@@ -55,22 +58,106 @@ class SecretsManager {
         }
     }
     
+    // Excludes the candidates on every active secret, or only on the secrets in `secretIds` (the ones
+    // that were active when the event happened), and records why for the hover text and the history.
+    func exclude(cardIds: [MultiIdCard], reason: SecretExclusionReason, secretIds: Set<Int>? = nil) {
+        applyExclusions(cardIds.map { ($0, reason) }, secretIds: secretIds, turn: nil, invokeCallback: true)
+    }
+
+    func exclude(cardId: MultiIdCard, reason: SecretExclusionReason, secretIds: Set<Int>? = nil, invokeCallback: Bool = true) {
+        applyExclusions([(cardId, reason)], secretIds: secretIds, turn: nil, invokeCallback: invokeCallback)
+    }
+
+    // HDT's signatures, kept for callers that have no reason to record
     func exclude(cardId: MultiIdCard, invokeCallback: Bool = true) {
-        secrets.forEach {
-            $0.exclude(cardId: cardId)
+        applyExclusions([(cardId, nil)], secretIds: nil, turn: nil, invokeCallback: invokeCallback)
+    }
+
+    func exclude(cardIds: [MultiIdCard]) {
+        applyExclusions(cardIds.map { ($0, nil) }, secretIds: nil, turn: nil, invokeCallback: true)
+    }
+
+    private func applyExclusions(_ entries: [(card: MultiIdCard, reason: SecretExclusionReason?)], secretIds: Set<Int>?, turn: Int?, invokeCallback: Bool) {
+        guard !entries.isEmpty else { return }
+        let turn = turn ?? game.turnNumber()
+        var events = [SecretExclusionEvent]()
+        for secret in secrets.array() {
+            if let secretIds, !secretIds.contains(secret.entity.id) {
+                continue
+            }
+            var changed = false
+            for entry in entries where secret.exclude(cardId: entry.card, reason: entry.reason, turn: turn) {
+                changed = true
+                events.append(SecretExclusionEvent(secretEntityId: secret.entity.id, cardId: entry.card.ids[0],
+                                                   exclusion: SecretExclusion(reason: entry.reason, turn: turn), included: false))
+            }
+            // Every candidate gone means a wrong rule or a secret we do not know yet. Keep showing
+            // the dimmed rows rather than guessing.
+            if changed && !secret.excluded.values.contains(false) {
+                logger.warning("all candidates excluded for secret \(secret.entity.id)")
+            }
         }
-        
-        if invokeCallback {
+        events.forEach { onExclusionChanged?($0) }
+        if invokeCallback && !events.isEmpty {
             onChanged?(getSecretList())
         }
     }
-    
-    func exclude(cardIds: [MultiIdCard]) {
-        cardIds.enumerated().forEach {
-            exclude(cardId: $1, invokeCallback: $0 == cardIds.count - 1)
+
+    private func include(cardIds: [MultiIdCard], on targets: [Secret]) {
+        var events = [SecretExclusionEvent]()
+        for secret in targets {
+            for card in cardIds {
+                if let exclusion = secret.include(cardId: card) {
+                    events.append(SecretExclusionEvent(secretEntityId: secret.entity.id, cardId: card.ids[0],
+                                                       exclusion: exclusion, included: true))
+                }
+            }
+        }
+        events.forEach { onExclusionChanged?($0) }
+    }
+
+    private var activeSecretIds: Set<Int> {
+        return Set(secrets.array().map { $0.entity.id })
+    }
+
+    func refresh() {
+        onChanged?(getSecretList())
+    }
+
+    // The hover line for a dimmed row, e.g. "Turn 5: You attacked the enemy hero". A row is dimmed
+    // once no active secret allows the card, so the latest exclusion is the one that dimmed it.
+    func exclusionSummary(cardId: String) -> String? {
+        guard let card = CardIds.Secrets.getSecretMultiIdCard(cardId) else { return nil }
+        let latest = secrets.array()
+            .compactMap { $0.exclusion(for: card) }
+            .filter { $0.reason != nil }
+            .max { $0.turn < $1.turn }
+        if let latest, let reason = latest.reason {
+            let text = String.localizedString(reason.localizationKey, comment: "")
+            return String(format: String.localizedString("SecretHelper_RuledOutFormat", comment: ""), latest.turn, text)
+        }
+        if gameModeHasCardLimit(game.currentGameType) && hasPlayedBothCopies(card) {
+            return String.localizedString("SecretReason_BothCopiesPlayed", comment: "")
+        }
+        return nil
+    }
+
+    private func gameModeHasCardLimit(_ gameMode: GameType) -> Bool {
+        return switch gameMode {
+        case .gt_casual, .gt_ranked, .gt_vs_friend, .gt_vs_ai:
+            true
+        default:
+            false
         }
     }
-    
+
+    // Revealed secrets from the opponent's starting deck; ids above 68 were created during the game
+    private func hasPlayedBothCopies(_ card: MultiIdCard) -> Bool {
+        return game.opponent.revealedEntities.filter {
+            $0.id < 68 && $0.isSecret && $0.hasCardId && card == $0.cardId && !$0.info.created
+        }.count >= 2
+    }
+
     func reset() {
         _avengeDeathRattleCount = 0
         _awaitingAvenge = false
@@ -81,6 +168,7 @@ class SecretsManager {
         entititesInHandOnMinionsPlayed.removeAll()
         secrets.removeAll()
         _triggeredSecrets.removeAll()
+        nextEntryOrder = 0
     }
     
     @discardableResult
@@ -91,11 +179,12 @@ class SecretsManager {
         
         if entity.hasCardId {
             if let secretMultiIdCard = CardIds.Secrets.getSecretMultiIdCard(entity.cardId) {
-                exclude(cardId: secretMultiIdCard, invokeCallback: false)
+                exclude(cardId: secretMultiIdCard, reason: .copyRevealed, invokeCallback: false)
             }
         }
         do {
-            let secret = try Secret(entity: entity)
+            let secret = try Secret(entity: entity, entryOrder: nextEntryOrder)
+            nextEntryOrder += 1
             secrets.append(secret)
             logger.info("new secret : \(entity)")
             onNewSecret(secret: secret)
@@ -118,7 +207,7 @@ class SecretsManager {
         secrets.remove(secret)
         if secret.entity.hasCardId {
             if let secretMultiIdCard = CardIds.Secrets.getSecretMultiIdCard(secret.entity.cardId) {
-                exclude(cardId: secretMultiIdCard, invokeCallback: false)
+                exclude(cardId: secretMultiIdCard, reason: .copyRevealed, invokeCallback: false)
                 savedSecrets.remove(secretMultiIdCard)
             }
         }
@@ -127,10 +216,11 @@ class SecretsManager {
     }
     
     func toggle(cardId: String) {
-        let mcid = MultiIdCard(cardId)
+        // MultiIdCard equality compares every id, so look up the full card for multi-print secrets
+        let mcid = CardIds.Secrets.getSecretMultiIdCard(cardId) ?? MultiIdCard(cardId)
         let excluded = secrets.any { $0.isExcluded(cardId: mcid) }
         if excluded {
-            secrets.forEach { $0.include(cardId: mcid) }
+            include(cardIds: [mcid], on: secrets.array())
         } else {
             exclude(cardId: mcid, invokeCallback: false)
         }
@@ -182,17 +272,8 @@ class SecretsManager {
     }
     
     private func getSecretsFromDeck(_ gameMode: GameType, _ format: FormatType) -> [Card] {
-        let gameModeHasCardLimit = switch gameMode {
-        case .gt_casual, .gt_ranked, .gt_vs_friend, .gt_vs_ai:
-            true
-        default:
-            false
-        }
-        
-        let opponentEntities = game.opponent.revealedEntities.filter {
-            $0.id < 68 && $0.isSecret && $0.hasCardId
-        }
-        
+        let gameModeHasCardLimit = gameModeHasCardLimit(gameMode)
+
         let createdSecrets = secrets
             .filter { $0.entity.info.created }
             .flatMap { $0.excluded }
@@ -206,11 +287,8 @@ class SecretsManager {
         
         let filteredSecretsFromDeck = getFilteredSecretsByDrawer(secretsFromDeck, availableSecrets)
         
-        let hasPlayedTwoOf: ((_ card: MultiIdCard) -> Bool) = { card in
-            opponentEntities.filter { card == $0.cardId && !$0.info.created }.count >= 2
-        }
         let adjustCount: ((_ card: MultiIdCard, _ count: Int) -> Int) = { card, count in
-            gameModeHasCardLimit && hasPlayedTwoOf(card) && !createdSecrets.contains(card) ? 0 : count
+            gameModeHasCardLimit && self.hasPlayedBothCopies(card) && !createdSecrets.contains(card) ? 0 : count
         }
         
         let cards = filteredSecretsFromDeck
@@ -536,7 +614,10 @@ class SecretsManager {
                 exclude.append(CardIds.Secrets.Hunter.FreezingTrap)
             }
         }
-        self.exclude(cardIds: exclude)
+        let defenderReason: SecretExclusionReason = defender.isHero ? .attackedHero : .attackedMinion
+        let attackerRuled = [CardIds.Secrets.Paladin.JudgementofJustice, CardIds.Secrets.Mage.MysticMisdirection]
+        applyExclusions(exclude.map { card in (card, attackerRuled.contains(card) ? .minionAttacked : defenderReason) },
+                        secretIds: nil, turn: nil, invokeCallback: true)
     }
 
     func handleFastCombat(entity: Entity) {
@@ -607,7 +688,7 @@ class SecretsManager {
             exclude.append(CardIds.Secrets.Hunter.HiddenCache)
         }
 
-        self.exclude(cardIds: exclude)
+        self.exclude(cardIds: exclude, reason: .minionPlayed)
     }
 
     func handleOpponentMinionDeath(entity: Entity) {
@@ -620,8 +701,9 @@ class SecretsManager {
             exclude.append(CardIds.Secrets.Rogue.CheatDeath)
         }
         
+        var secondDeathExclude: [MultiIdCard] = []
         if let opponent_minions_died = game.opponentEntity?[.num_friendly_minions_that_died_this_turn], opponent_minions_died >= 1 {
-            exclude.append(CardIds.Secrets.Paladin.HandOfSalvation)
+            secondDeathExclude.append(CardIds.Secrets.Paladin.HandOfSalvation)
         }
 
         var numDeathrattleMinions = 0
@@ -666,7 +748,8 @@ class SecretsManager {
             exclude.append(CardIds.Secrets.Hunter.UntimelyDeath)
         }
 
-        self.exclude(cardIds: exclude)
+        applyExclusions(exclude.map { ($0, .enemyMinionDied) } + secondDeathExclude.map { ($0, .secondEnemyMinionDied) },
+                        secretIds: nil, turn: nil, invokeCallback: true)
     }
     
     func handlePlayerMinionDeath(entity: Entity) {
@@ -676,11 +759,7 @@ class SecretsManager {
         // killing the minion later in the turn (combat, board clears, end of turn effects)
         // leaves them valid.
         guard _triggeredSecrets.any({ x in CardIds.Secrets.minionPlayed.any({ s in s == x.cardId }) }) else { return }
-        savedSecrets.forEach { savedSecret in
-            secrets.forEach { secret in
-                secret.include(cardId: savedSecret)
-            }
-        }
+        include(cardIds: savedSecrets.array(), on: secrets.array())
 
         onChanged?(getSecretList())
     }
@@ -698,7 +777,7 @@ class SecretsManager {
             if self.game.opponentMinionCount != 0 {
                 Thread.sleep(forTimeInterval: self.avengeDelay)
                 if self.game.opponentMinionCount - self._avengeDeathRattleCount > 0 {
-                    self.exclude(cardId: CardIds.Secrets.Paladin.Avenge)
+                    self.exclude(cardId: CardIds.Secrets.Paladin.Avenge, reason: .enemyMinionDied)
                 }
             }
             self._avengeDeathRattleCount = 0
@@ -711,14 +790,13 @@ class SecretsManager {
 
         if entity.isHero && entity.isControlled(by: game.opponent.id) {
             if !entity.has(tag: GameTag.immune) {
-                exclude(cardId: CardIds.Secrets.Paladin.EyeForAnEye)
-                exclude(cardId: CardIds.Secrets.Rogue.Evasion)
+                exclude(cardIds: [CardIds.Secrets.Paladin.EyeForAnEye, CardIds.Secrets.Rogue.Evasion], reason: .enemyHeroDamaged)
                 opponentTookDamageDuringTurns.append(game.turnNumber())
             }
         }
         
         if damage >= 3 && entity.isMinion && entity.isControlled(by: game.opponent.id) && entity[.zone] != Zone.graveyard.rawValue {
-            exclude(cardId: CardIds.Secrets.Paladin.Reckoning)
+            exclude(cardId: CardIds.Secrets.Paladin.Reckoning, reason: .minionDealtThreeDamage)
         }
     }
     
@@ -741,21 +819,21 @@ class SecretsManager {
         
         if isCurrentPlayer && (turn > _lastStartOfTurnCheck) {
             _lastStartOfTurnCheck = turn
-            exclude(cardId: CardIds.Secrets.Rogue.Perjury)
+            exclude(cardId: CardIds.Secrets.Rogue.Perjury, reason: .opponentTurnStarted)
             if game.opponentMinionCount >= 1 && freeSpaceOnBoard {
-                exclude(cardId: CardIds.Secrets.Mage.SummoningWard)
+                exclude(cardId: CardIds.Secrets.Mage.SummoningWard, reason: .opponentTurnStarted)
             }
             if game.playerMinionCount >= 1 {
-                exclude(cardId: CardIds.Secrets.Mage.FlamesOfInfinity)
+                exclude(cardId: CardIds.Secrets.Mage.FlamesOfInfinity, reason: .turnEndedWithMinion)
             }
         }
         
         if isCurrentPlayer && (turn > _lastStartOfTurnMinionCheck) {
             if entity.isMinion && entity.isControlled(by: game.opponent.id) {
                 _lastStartOfTurnMinionCheck = turn
-                exclude(cardId: CardIds.Secrets.Paladin.CompetitiveSpirit)
+                exclude(cardId: CardIds.Secrets.Paladin.CompetitiveSpirit, reason: .opponentTurnStarted)
                 if game.opponentMinionCount >= 2 && freeSpaceOnBoard {
-                    exclude(cardId: CardIds.Secrets.Hunter.OpenTheCages)
+                    exclude(cardId: CardIds.Secrets.Hunter.OpenTheCages, reason: .opponentTurnStarted)
                 }
             }
         }
@@ -763,7 +841,7 @@ class SecretsManager {
             _lastStartOfTurnDamageCheck = turn
             let turnToCheck = turn - (game.playerEntity?.has(tag: .first_player) ?? false ? 0 : 1)
             if !opponentTookDamageDuringTurns.contains(turnToCheck) {
-                exclude(cardId: CardIds.Secrets.Mage.RiggedFaireGame)
+                exclude(cardId: CardIds.Secrets.Mage.RiggedFaireGame, reason: .enemyHeroNotDamaged)
             }
         }
     }
@@ -774,19 +852,19 @@ class SecretsManager {
     
     func handleOpponentTurnStart() {
         if game.player.cardsPlayedThisTurn.count > 0 {
-            exclude(cardId: CardIds.Secrets.Rogue.Plagiarize)
+            exclude(cardId: CardIds.Secrets.Rogue.Plagiarize, reason: .cardsPlayedInTurn)
         }
     }
     
     func handlePlayerTurnEnded(mana: Int) {
         if mana == 0 {
-            exclude(cardId: CardIds.Secrets.Hunter.HiddenMeaning)
+            exclude(cardId: CardIds.Secrets.Hunter.HiddenMeaning, reason: .turnEndedNoMana)
         }
     }
     
     func handlePlayerManaRemaining(mana: Int) {
         if mana == 0 && freeSpaceInHand {
-            exclude(cardId: CardIds.Secrets.Rogue.DoubleCross)
+            exclude(cardId: CardIds.Secrets.Rogue.DoubleCross, reason: .allManaSpent)
         }
     }
     
@@ -799,23 +877,23 @@ class SecretsManager {
         
         savedSecrets.removeAll()
 
-        var exclude: [MultiIdCard] = []
+        var exclude: [(card: MultiIdCard, reason: SecretExclusionReason?)] = []
         
         if let player = game.playerEntity, player.has(tag: .num_cards_played_this_turn) && (player[.num_cards_played_this_turn] >= 3) {
-            exclude.append(CardIds.Secrets.Hunter.MotionDenied)
+            exclude.append((CardIds.Secrets.Hunter.MotionDenied, .threeCardsPlayed))
             if freeSpaceOnBoard {
-                exclude.append(CardIds.Secrets.Hunter.RatTrap)
-                exclude.append(CardIds.Secrets.Paladin.GallopingSavior)
+                exclude.append((CardIds.Secrets.Hunter.RatTrap, .threeCardsPlayed))
+                exclude.append((CardIds.Secrets.Paladin.GallopingSavior, .threeCardsPlayed))
             }
             
             if freeSpaceInHand {
-                exclude.append(CardIds.Secrets.Paladin.HiddenWisdom)
+                exclude.append((CardIds.Secrets.Paladin.HiddenWisdom, .threeCardsPlayed))
             }
         }
         
         if entity[.num_turns_in_hand] == 1 {
             if freeSpaceInHand {
-                exclude.append(CardIds.Secrets.Mage.AzeriteVein)
+                exclude.append((CardIds.Secrets.Mage.AzeriteVein, .cardFromThisTurnPlayed))
             }
         }
         
@@ -829,30 +907,30 @@ class SecretsManager {
             }
             // Counterspell/Ice trap order may matter in rare edge cases where both are in play.
             // This is currently not handled.
-            exclude.append(CardIds.Secrets.Mage.Counterspell)
+            var spellExclude: [MultiIdCard] = [CardIds.Secrets.Mage.Counterspell]
             
             if _triggeredSecrets.any({ x in CardIds.Secrets.Mage.Counterspell == x.cardId }) {
-                self.exclude(cardIds: [CardIds.Secrets.Mage.Counterspell])
+                self.exclude(cardIds: [CardIds.Secrets.Mage.Counterspell], reason: .spellCast)
                 return
             }
             
-            exclude.append(CardIds.Secrets.Hunter.IceTrap)
+            spellExclude.append(CardIds.Secrets.Hunter.IceTrap)
             if _triggeredSecrets.any({ x in CardIds.Secrets.Hunter.IceTrap == x.cardId }) {
-                self.exclude(cardIds: [CardIds.Secrets.Hunter.IceTrap])
+                self.exclude(cardIds: [CardIds.Secrets.Hunter.IceTrap], reason: .spellCast)
                 return
             }
             
-            exclude.append(CardIds.Secrets.Hunter.BargainBin)
+            spellExclude.append(CardIds.Secrets.Hunter.BargainBin)
 
-            exclude.append(CardIds.Secrets.Paladin.OhMyYogg)
+            spellExclude.append(CardIds.Secrets.Paladin.OhMyYogg)
             
             if game.opponentMinionCount > 0 {
-                exclude.append(CardIds.Secrets.Paladin.NeverSurrender)
+                spellExclude.append(CardIds.Secrets.Paladin.NeverSurrender)
             }
 
             if game.opponentHandCount < 10 {
-                exclude.append(CardIds.Secrets.Rogue.DirtyTricks)
-                exclude.append(CardIds.Secrets.Mage.ManaBind)
+                spellExclude.append(CardIds.Secrets.Rogue.DirtyTricks)
+                spellExclude.append(CardIds.Secrets.Mage.ManaBind)
             }
 
             if freeSpaceOnBoard {
@@ -861,24 +939,25 @@ class SecretsManager {
                 if let target = game.entities[entity[.card_target]],
                     entity.has(tag: .card_target),
                     target.isMinion {
-                    exclude.append(CardIds.Secrets.Mage.Spellbender)
+                    spellExclude.append(CardIds.Secrets.Mage.Spellbender)
                 }
-                exclude.append(CardIds.Secrets.Hunter.CatTrick)
-                exclude.append(CardIds.Secrets.Mage.NetherwindPortal)
-                exclude.append(CardIds.Secrets.Rogue.StickySituation)
+                spellExclude.append(CardIds.Secrets.Hunter.CatTrick)
+                spellExclude.append(CardIds.Secrets.Mage.NetherwindPortal)
+                spellExclude.append(CardIds.Secrets.Rogue.StickySituation)
             }
 
             if game.playerMinionCount > 0 {
-                exclude.append(CardIds.Secrets.Hunter.PressurePlate)
+                spellExclude.append(CardIds.Secrets.Hunter.PressurePlate)
             }
+            exclude.append(contentsOf: spellExclude.map { ($0, .spellCast) })
         } else if entity.isMinion && game.playerMinionCount > 3 {
-            exclude.append(CardIds.Secrets.Paladin.SacredTrial)
+            exclude.append((CardIds.Secrets.Paladin.SacredTrial, .minionPlayed))
         }
         
         if entity.isWeapon {
-            exclude.append(CardIds.Secrets.Hunter.BargainBin)
+            exclude.append((CardIds.Secrets.Hunter.BargainBin, .weaponPlayed))
         }
-        self.exclude(cardIds: exclude)
+        applyExclusions(exclude, secretIds: nil, turn: nil, invokeCallback: true)
     }
     
     func onNewSecret(secret: Secret) {
@@ -895,17 +974,17 @@ class SecretsManager {
             exclude.append(CardIds.Secrets.Rogue.Shenanigans)
         }
         
-        self.exclude(cardIds: exclude)
+        self.exclude(cardIds: exclude, reason: .secondCardDrawn)
     }
 
     func handleHeroPower() {
         guard handleAction else { return }
-        exclude(cardId: CardIds.Secrets.Hunter.DartTrap)
+        exclude(cardId: CardIds.Secrets.Hunter.DartTrap, reason: .heroPowerUsed)
     }
     
     func onEntityRevealedAsMinion(entity: Entity) {
         if entititesInHandOnMinionsPlayed.contains(entity) && entity.isMinion {
-            exclude(cardId: CardIds.Secrets.Hunter.HiddenCache)
+            exclude(cardId: CardIds.Secrets.Hunter.HiddenCache, reason: .minionPlayed)
         }
     }
     
@@ -917,8 +996,7 @@ class SecretsManager {
         DispatchQueue.global().async { [self] in
             if target.isHero && target.isControlled(by: game.opponent.id) {
                 if !target.has(tag: .immune) {
-                    exclude(cardId: CardIds.Secrets.Paladin.EyeForAnEye)
-                    exclude(cardId: CardIds.Secrets.Rogue.Evasion)
+                    exclude(cardIds: [CardIds.Secrets.Paladin.EyeForAnEye, CardIds.Secrets.Rogue.Evasion], reason: .enemyHeroDamaged)
                     opponentTookDamageDuringTurns.append(game.turnNumber())
                 }
             }
@@ -938,7 +1016,7 @@ class SecretsManager {
                 Thread.sleep(forTimeInterval: 0.1)
                 //We check both heaolth and zone because sometimes after the await the dealer's health will revert to that of the original card.
                 if damageDealt >= 3 && dealer.health > 0 && dealer[.zone] != Zone.graveyard.rawValue {
-                    exclude(cardId: CardIds.Secrets.Paladin.Reckoning)
+                    exclude(cardId: CardIds.Secrets.Paladin.Reckoning, reason: .minionDealtThreeDamage)
                 }
             }
         }

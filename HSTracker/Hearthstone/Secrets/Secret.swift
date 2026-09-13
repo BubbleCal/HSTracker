@@ -15,19 +15,64 @@ enum SecretError: Error {
     case entityHasInvalidClass(entity: Entity)
 }
 
+// Why a candidate was ruled out for a secret. Every case describes something the player did or
+// saw on the board, never anything about the hidden secret, so it is safe to show.
+enum SecretExclusionReason: String, CaseIterable {
+    case attackedHero, attackedMinion, minionAttacked, minionPlayed, spellCast, weaponPlayed,
+         threeCardsPlayed, cardFromThisTurnPlayed, enemyMinionDied, secondEnemyMinionDied,
+         enemyHeroDamaged, enemyHeroNotDamaged, minionDealtThreeDamage, secondCardDrawn,
+         heroPowerUsed, turnEndedNoMana, allManaSpent, cardsPlayedInTurn, turnEndedWithMinion,
+         opponentTurnStarted, copyRevealed
+
+    var localizationKey: String {
+        return "SecretReason_" + rawValue.prefix(1).uppercased() + rawValue.dropFirst()
+    }
+}
+
+struct SecretExclusion {
+    // nil for exclusions made through the reason-less HDT-style signatures
+    let reason: SecretExclusionReason?
+    let turn: Int
+}
+
+struct SecretExclusionEvent {
+    let secretEntityId: Int
+    let cardId: String
+    let exclusion: SecretExclusion
+    // true when a previous exclusion was taken back
+    let included: Bool
+}
+
 class Secret {
 
     private(set) var entity: Entity
-    var excluded: [MultiIdCard: Bool] = [:]
+    // Order in which the secrets entered play. Entity ids do not give it: deck cards get low ids at
+    // game start and created cards high ones.
+    let entryOrder: Int
 
-    init(entity: Entity) throws {
+    // The parser thread writes these while the main thread builds the secret list from them.
+    private let lock = UnfairLock()
+    private var _excluded: [MultiIdCard: Bool] = [:]
+    private var _exclusions: [MultiIdCard: SecretExclusion] = [:]
+
+    // Snapshot copies, so callers can iterate while the parser keeps excluding
+    var excluded: [MultiIdCard: Bool] {
+        return lock.around { _excluded }
+    }
+
+    var exclusions: [MultiIdCard: SecretExclusion] {
+        return lock.around { _exclusions }
+    }
+
+    init(entity: Entity, entryOrder: Int = 0) throws {
         guard entity.isSecret else { throw SecretError.entityIsNotSecret(entity: entity) }
         guard entity.has(tag: .class) else { throw SecretError.entityHasNoClass(entity: entity) }
         guard let tagClass = TagClass(rawValue: entity[.class]) else {
             throw SecretError.entityHasInvalidClass(entity: entity)
         }
         self.entity = entity
-        self.excluded = Secret.getAllSecrets(for: tagClass)
+        self.entryOrder = entryOrder
+        self._excluded = Secret.getAllSecrets(for: tagClass)
             .reduce([MultiIdCard: Bool]()) { dict, act in
                 var ret = dict
                 ret[act] = false
@@ -35,19 +80,37 @@ class Secret {
         }
     }
 
-    func exclude(cardId: MultiIdCard) {
-        if excluded.keys.contains(cardId) && !entity.has(tag: .secret_locked) {
-            excluded[cardId] = true
+    // Returns true only when the candidate was possible before, so callers can report each
+    // exclusion once. The first reason is kept.
+    @discardableResult
+    func exclude(cardId: MultiIdCard, reason: SecretExclusionReason? = nil, turn: Int = 0) -> Bool {
+        // A locked secret cannot trigger, so a condition met meanwhile says nothing about it
+        if entity.has(tag: .secret_locked) {
+            return false
+        }
+        return lock.around {
+            guard let isExcluded = _excluded[cardId], !isExcluded else { return false }
+            _excluded[cardId] = true
+            _exclusions[cardId] = SecretExclusion(reason: reason, turn: turn)
+            return true
         }
     }
 
     func isExcluded(cardId: MultiIdCard) -> Bool {
-        return excluded.keys.contains(cardId) && excluded[cardId]!
+        return lock.around { _excluded[cardId] ?? false }
     }
 
-    func include(cardId: MultiIdCard) {
-        if excluded.keys.contains(cardId) {
-            excluded[cardId] = false
+    func exclusion(for cardId: MultiIdCard) -> SecretExclusion? {
+        return lock.around { _exclusions[cardId] }
+    }
+
+    // Returns the exclusion that was taken back, if the candidate was excluded.
+    @discardableResult
+    func include(cardId: MultiIdCard) -> SecretExclusion? {
+        return lock.around {
+            guard _excluded[cardId] == true else { return nil }
+            _excluded[cardId] = false
+            return _exclusions.removeValue(forKey: cardId) ?? SecretExclusion(reason: nil, turn: 0)
         }
     }
 

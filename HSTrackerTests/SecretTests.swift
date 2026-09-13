@@ -427,6 +427,68 @@ class SecretTests: HSTrackerTests {
         XCTAssertFalse(arena.contains(snipe))
     }
 
+    func testNewSecrets_RecordEntryOrder() {
+        XCTAssertEqual(game.secretsManager?.secrets.array().map { $0.entryOrder }, [0, 1, 2, 3])
+    }
+
+    func testOnExclusionChanged_FiresOncePerTransition() {
+        var events = [SecretExclusionEvent]()
+        game.secretsManager?.onExclusionChanged = { events.append($0) }
+        heroPlayer[.health] = 10
+
+        game.secretsManager?.handleAttack(attacker: heroPlayer, defender: heroOpponent)
+        // Bear Trap, Explosive Trap, Wandering Monster, Ice Barrier and Noble Sacrifice
+        XCTAssertEqual(events.count, 5)
+        XCTAssertTrue(events.allSatisfy { !$0.included && $0.exclusion.reason == .attackedHero })
+        XCTAssertTrue(events.contains { $0.secretEntityId == secretHunter1.id && $0.cardId == CardIds.Secrets.Hunter.ExplosiveTrap.ids[0] })
+
+        game.secretsManager?.handleAttack(attacker: heroPlayer, defender: heroOpponent)
+        XCTAssertEqual(events.count, 5)
+    }
+
+    func testExcludedSecret_RecordsReasonAndTurn() {
+        gameEntity[.turn] = 9
+        playerMinion1[.zone] = Zone.play.rawValue
+        game.secretsManager?.handleAttack(attacker: playerMinion1, defender: heroOpponent)
+
+        let exclusion = game.secretsManager?.secrets[1].exclusion(for: CardIds.Secrets.Mage.MysticMisdirection)
+        XCTAssertEqual(exclusion?.reason, .minionAttacked)
+        XCTAssertEqual(exclusion?.turn, game.turnNumber())
+        XCTAssertEqual(game.secretsManager?.secrets[1].exclusion(for: CardIds.Secrets.Mage.IceBarrier)?.reason, .attackedHero)
+        XCTAssertNil(game.secretsManager?.secrets[1].exclusion(for: CardIds.Secrets.Mage.Counterspell))
+
+        let summary = game.secretsManager?.exclusionSummary(cardId: CardIds.Secrets.Mage.IceBarrier.ids[0])
+        XCTAssertNotNil(summary)
+        XCTAssertTrue(summary?.contains("\(game.turnNumber())") ?? false, summary ?? "")
+        XCTAssertFalse(summary?.contains("SecretHelper_") ?? true, summary ?? "")
+        XCTAssertFalse(summary?.contains("SecretReason_") ?? true, summary ?? "")
+        XCTAssertNil(game.secretsManager?.exclusionSummary(cardId: CardIds.Secrets.Mage.Counterspell.ids[0]))
+    }
+
+    func testEveryExclusionReasonIsLocalized() {
+        for reason in SecretExclusionReason.allCases {
+            XCTAssertNotEqual(String.localizedString(reason.localizationKey, comment: ""), reason.localizationKey)
+        }
+        XCTAssertNotEqual(String.localizedString("SecretReason_BothCopiesPlayed", comment: ""), "SecretReason_BothCopiesPlayed")
+        XCTAssertNotEqual(String.localizedString("SecretHelper_RuledOutFormat", comment: ""), "SecretHelper_RuledOutFormat")
+    }
+
+    func testIncludedSecret_ReportsTakenBackExclusion() {
+        var events = [SecretExclusionEvent]()
+        game.secretsManager?.onExclusionChanged = { events.append($0) }
+        game.secretsManager?.handleMinionPlayed(entity: playerMinion1)
+        let excludedCount = events.count
+        XCTAssertGreaterThan(excludedCount, 0)
+
+        // Toggling a card that is excluded somewhere includes it on every secret again
+        game.secretsManager?.toggle(cardId: CardIds.Secrets.Mage.MirrorEntity.ids[0])
+        XCTAssertEqual(events.count, excludedCount + 1)
+        XCTAssertEqual(events.last?.included, true)
+        XCTAssertEqual(events.last?.exclusion.reason, .minionPlayed)
+        XCTAssertNil(game.secretsManager?.secrets[1].exclusion(for: CardIds.Secrets.Mage.MirrorEntity))
+        XCTAssertEqual(game.secretsManager?.secrets[1].isExcluded(cardId: CardIds.Secrets.Mage.MirrorEntity), false)
+    }
+
     func testSingleSecret_OneMinionDied() {
         opponentMinion2[.zone] = Zone.play.rawValue
         game.opponentMinionDeath(entity: opponentMinion1, turn: 2)
