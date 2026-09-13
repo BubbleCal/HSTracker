@@ -128,6 +128,11 @@ class Tracker: OverWindowController, CardCellHover {
 
     // MARK: - Game
     func update(cards: [Card], top: [Card], bottom: [Card], sideboards: [Sideboard], relatedCards: [Card], reset: Bool = false) {
+        // Every row can be hovered the moment it is listed, so its render is read in ahead of
+        // time: a first hover that had to load it showed an empty popup until it arrived.
+        if Settings.showFloatingCard {
+            ImageUtils.preloadCardArt(cardIds: (cards + top + bottom + sideboards.flatMap { $0.cards } + relatedCards).map { $0.id })
+        }
         cardsView.update(cards: cards, reset: reset)
         playerBottom.update(cards: bottom, reset: reset)
         playerTop.update(cards: top, reset: reset)
@@ -487,8 +492,6 @@ class Tracker: OverWindowController, CardCellHover {
         }
     }
     
-    private var delayedTooltip: DelayedTooltip?
-    
     // MARK: - CardCellHover
     enum HoveredComponent {
         case playerTop,
@@ -584,12 +587,13 @@ class Tracker: OverWindowController, CardCellHover {
         if playerType == .player {
             highlightPlayerDeckCards(highlightSourceCardId: card.id)
         }
-        delayedTooltip?.cancel()
-        delayedTooltip = DelayedTooltip(handler: tooltipDisplay, 0.400, ["cell": cell, "card": card])
+        // Shown straight away. It used to wait 0.4 s first, which made the deck list feel slow to
+        // read; the popup and the related cards grid now come up on the mouseEntered itself.
+        showTooltip(cell: cell, card: card)
     }
-    
-    private func tooltipDisplay(_ userInfo: Any?) {
-        if let window, let dict = userInfo as? [String: Any?], let cell = dict["cell"] as? CardBar, let card = dict["card"] as? Card {
+
+    private func showTooltip(cell: CardBar, card: Card) {
+        if let window {
             let windowRect = window.frame
             
             let hoverFrame = NSRect(x: 0, y: 0, width: 256, height: 388)
@@ -604,7 +608,6 @@ class Tracker: OverWindowController, CardCellHover {
             
             let cellFrameRelativeToWindow = cell.convert(cell.bounds, to: nil)
             guard let cellFrameRelativeToScreen = cell.window?.convertToScreen(cellFrameRelativeToWindow) else {
-                delayedTooltip = nil
                 return
             }
             
@@ -615,7 +618,8 @@ class Tracker: OverWindowController, CardCellHover {
             let userinfo = [
                 "card": card,
                 "frame": frame,
-                "useFrame": true
+                "useFrame": true,
+                "source": cell
             ] as [String: Any]
             
             NotificationCenter.default
@@ -637,24 +641,26 @@ class Tracker: OverWindowController, CardCellHover {
                 break
             }
         }
-        delayedTooltip = nil
     }
 
-    func out(card: Card) {
+    func out(cell: CardBar, card: Card) {
+        let windowManager = AppDelegate.instance().coreManager.game.windowManager
+        // The row being entered already got here first and put up its own popup, grid and
+        // highlight; this exit must not clear them.
+        guard !windowManager.isFloatingCardOwned(byOtherThan: cell) else { return }
         if playerType == .player {
             highlightPlayerDeckCards(highlightSourceCardId: nil)
         }
-        delayedTooltip?.cancel()
-        delayedTooltip = nil
         let userinfo = [
-            "card": card
+            "card": card,
+            "source": cell
             ] as [String: Any]
         NotificationCenter.default.post(name: Notification.Name(rawValue: Events.hide_floating_card),
                                         object: nil,
                                         userInfo: userinfo)
         
         if #available(macOS 10.15, *) {
-            AppDelegate.instance().coreManager.game.windowManager.tooltipGridCards.hide()
+            windowManager.tooltipGridCards.hide()
         }
     }
 }

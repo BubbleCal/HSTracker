@@ -130,6 +130,10 @@ class CardList: OverWindowController {
     }
     
     func set(cards: [Card]) {
+        // Read the renders in before any hover, as the deck trackers do
+        if Settings.showFloatingCard {
+            ImageUtils.preloadCardArt(cardIds: cards.map { $0.id })
+        }
         if Thread.isMainThread {
             internalSet(cards: cards)
         } else {
@@ -229,7 +233,8 @@ extension CardList: CardCellHover {
         var userInfo: [String: Any] = [
             "card": card,
             "frame": frame,
-            "useFrame": true
+            "useFrame": true,
+            "source": cell
         ]
         // A dimmed secret row says why it was ruled out, under the card image. Overlay panels are
         // click-through or non-key, so an NSView tooltip would never show.
@@ -243,9 +248,10 @@ extension CardList: CardCellHover {
                                   userInfo: userInfo)
     }
 
-    func out(card: Card) {
+    func out(cell: CardBar, card: Card) {
         NotificationCenter.default
             .post(name: Notification.Name(rawValue: Events.hide_floating_card), object: nil, userInfo: [
-                "card": card ])
+                "card": card,
+                "source": cell ])
     }
 }

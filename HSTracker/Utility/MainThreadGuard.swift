@@ -68,3 +68,16 @@ func assertMainThread(_ context: @autoclosure () -> String = #function,
     }
     MainThreadGuard.violation(context(), file: "\(file)", line: line)
 }
+
+/// Runs `block` right away when already on the main thread, and otherwise on the main queue.
+///
+/// `DispatchQueue.main.async` from the main thread still waits for the current event to finish
+/// and for everything queued ahead of it, which UI answering the mouse - the card hover popup -
+/// cannot afford, and it reorders the work against anything done synchronously meanwhile.
+func performOnMainThread(_ block: @escaping () -> Void) {
+    if Thread.isMainThread {
+        block()
+    } else {
+        DispatchQueue.main.async(execute: block)
+    }
+}

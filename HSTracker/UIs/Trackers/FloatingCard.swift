@@ -114,21 +114,41 @@ class FloatingCard: OverWindowController {
         return (box, label)
     }
 
+    // Which render the image view is meant to be showing, so a load that finishes after the
+    // popup has moved on to another card cannot put its image under the newer one.
+    private var imageKey: String?
+
     private func reload() {
-        if showsImage, let cardId = self.card?.id, let baconTriple = card?.baconTriple {
-            if isBattlegrounds {
-                ImageUtils.cardArtBG(for: cardId, baconTriple: baconTriple, completion: { image in
-                    DispatchQueue.main.async {
-                        self.imageView.image = image
-                    }
-                })
+        if showsImage, let card {
+            let cardId = card.id
+            let isBattlegrounds = self.isBattlegrounds
+            let baconTriple = card.baconTriple
+            let key = "\(isBattlegrounds):\(baconTriple):\(cardId)"
+            imageKey = key
+            // A render already in memory goes in before the window is ordered in, so the popup
+            // appears complete on the same event as the hover - it used to be set a main-queue
+            // turn later, showing the previously hovered card first.
+            let cached = isBattlegrounds
+                ? ImageUtils.cachedCardArtBG(cardId: cardId, baconTriple: baconTriple)
+                : ImageUtils.cachedCardArt(cardId: cardId)
+            if let cached {
+                imageView.image = cached
             } else {
-                ImageUtils.cardArt(for: cardId, completion: { image in
-                    DispatchQueue.main.async {
-                        self.imageView.image = image
-                    }
-                })
+                // Blank until it loads, rather than the last card's render under the new card
+                imageView.image = nil
+                // ImageUtils delivers a load on the main queue, and this runs on it
+                let apply: (NSImage?) -> Void = { [weak self] image in
+                    guard let self, self.imageKey == key else { return }
+                    self.imageView.image = image
+                }
+                if isBattlegrounds {
+                    ImageUtils.cardArtBG(for: cardId, baconTriple: baconTriple, completion: apply)
+                } else {
+                    ImageUtils.cardArt(for: cardId, completion: apply)
+                }
             }
+        } else {
+            imageKey = nil
         }
 
         window?.backgroundColor = NSColor.clear

@@ -11,7 +11,9 @@ import TextAttributes
 
 protocol CardCellHover: AnyObject {
     func hover(cell: CardBar, card: Card)
-    func out(card: Card)
+    // The cell as well as its card: the next row's hover can arrive before this row's exit, and
+    // two rows can hold the same card, so the card alone cannot say whose popup to take down.
+    func out(cell: CardBar, card: Card)
 }
 
 protocol CardBarTheme {
@@ -995,8 +997,15 @@ class CardBar: NSView, CardBarTheme {
 
     override func mouseExited(with event: NSEvent) {
         isHovered = false
-        if let card = self.card {
-            delegate?.out(card: card)
+        guard let card = self.card else { return }
+        // Handed on a main-queue turn later. Crossing from one row to the next queues this exit
+        // and the next row's mouseEntered together, and AppKit delivers a queued event before it
+        // drains the main queue, so the next row takes the popup over first and it moves in
+        // place. Hiding it straight away ordered the window out and back in again, a visible
+        // blink now that the popup opens without a delay to hide it.
+        DispatchQueue.main.async {
+            guard !self.isHovered else { return }
+            self.delegate?.out(cell: self, card: card)
         }
     }
 
@@ -1015,7 +1024,7 @@ class CardBar: NSView, CardBarTheme {
         guard let card = self.card else { return }
         DispatchQueue.main.async { [weak self] in
             guard let self, self.window == nil else { return }
-            self.delegate?.out(card: card)
+            self.delegate?.out(cell: self, card: card)
         }
     }
 

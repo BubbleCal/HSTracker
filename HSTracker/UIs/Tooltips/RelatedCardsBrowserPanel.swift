@@ -339,7 +339,7 @@ private struct RelatedCardsBrowserTileListView: NSViewRepresentable {
             RelatedCardsBrowserTooltip.show(card: card, placement: .right, from: cell)
         }
 
-        func out(card: Card) {
+        func out(cell: CardBar, card: Card) {
             RelatedCardsBrowserTooltip.hide(card: card)
         }
     }

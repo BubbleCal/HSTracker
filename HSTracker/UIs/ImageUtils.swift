@@ -11,6 +11,7 @@
 import AppKit
 import Foundation
 import HearthMirror
+import ImageIO
 
 struct ImageUtils {
     enum ImageType: Int {
@@ -50,6 +51,9 @@ struct ImageUtils {
         cacheCardArt.removeAll()
         cacheCardArtBG.removeAll()
         cacheHero.removeAll()
+        pendingLock.around {
+            preloadRequested.removeAll()
+        }
         
         clearDirectory(path: Paths.cards)
         clearDirectory(path: Paths.cardsBG)
@@ -107,8 +111,50 @@ struct ImageUtils {
         loadImage(type: .cardArt, cardId: cardId, completion: completion)
     }
     
+    // The render the card hover popup shows, if it is already in memory. The popup puts a hit
+    // straight into its image view: cardArt(for:) hands even a hit over in a later main-queue
+    // turn once it has been wrapped for thread safety, which drew the window with the previous
+    // card's render (or nothing) for a frame.
+    static func cachedCardArt(cardId: String) -> NSImage? {
+        return cacheCardArt[cardId]
+    }
+
+    static func cachedCardArtBG(cardId: String, baconTriple: Bool) -> NSImage? {
+        return cacheCardArtBG[cardArtBGKey(cardId: cardId, baconTriple: baconTriple)]
+    }
+
+    private static func cardArtBGKey(cardId: String, baconTriple: Bool) -> String {
+        return "\(cardId)\(baconTriple ? "_triple" : "")"
+    }
+
+    // Keys already handed to preloadCardArt, so a render that cannot be had (a download error,
+    // or a card with no render) is asked for once rather than on every tracker refresh - the
+    // trackers refresh twice a second during a match. A hover still retries it the normal way.
+    private static var preloadRequested = Set<String>()
+
+    /// Reads the renders of the listed cards into memory ahead of any hover, from disk or else
+    /// from the art server, so the first hover over a row finds its image already decoded.
+    static func preloadCardArt(cardIds: [String]) {
+        // The unit tests fill the trackers from a bare Game; they must not download art into the
+        // user's own card cache on the way.
+        guard !AppDelegate.isRunningUnitTests else { return }
+        let wanted = pendingLock.around { () -> [String] in
+            var wanted = [String]()
+            for cardId in cardIds where !cardId.isEmpty {
+                let key = "\(ImageType.cardArt.rawValue):\(cardId)"
+                guard !preloadRequested.contains(key) else { continue }
+                preloadRequested.insert(key)
+                wanted.append(cardId)
+            }
+            return wanted
+        }
+        for cardId in wanted where cacheCardArt[cardId] == nil {
+            loadImage(type: .cardArt, cardId: cardId, completion: { _ in })
+        }
+    }
+
     static func cardArtBG(for cardId: String, baconTriple: Bool, completion: @escaping ((NSImage?) -> Void)) {
-        let finalCardId = "\(cardId)\(baconTriple ? "_triple" : "")"
+        let finalCardId = cardArtBGKey(cardId: cardId, baconTriple: baconTriple)
         let image = cacheCardArtBG[finalCardId]
         
         if let image = image {
@@ -136,7 +182,8 @@ struct ImageUtils {
         return res
     }
     
-    private static func store(_ image: NSImage, type: ImageType, cardId: String) {
+    // Internal rather than private so tests can seed the memory cache without the network
+    static func store(_ image: NSImage, type: ImageType, cardId: String) {
         switch type {
         case .tile:
             cache[cardId] = image
@@ -196,6 +243,40 @@ struct ImageUtils {
     private static let loadQueue = DispatchQueue(label: "net.hearthsim.hstracker.imageload",
                                                  qos: .userInitiated, attributes: .concurrent)
 
+    /// Decodes image data into an NSImage whose pixels are already decompressed.
+    ///
+    /// NSImage(data:) and NSImage(contentsOf:) only parse the file; the actual decode waits for
+    /// the first draw, which for the card renders is the main thread showing the hover popup -
+    /// exactly the moment that has to be instant. The size is worked out from the resolution the
+    /// file records, the way NSImage(data:) does, so an image does not change size on screen.
+    static func decodedImage(data: Data) -> NSImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              CGImageSourceGetCount(source) > 0,
+              let cgImage = CGImageSourceCreateImageAtIndex(
+                source, 0, [kCGImageSourceShouldCacheImmediately: true] as CFDictionary) else {
+            return NSImage(data: data)
+        }
+        let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
+        func dpi(_ key: CFString) -> CGFloat {
+            let value = (properties?[key] as? NSNumber)?.doubleValue ?? 72
+            return value > 0 ? CGFloat(value) : 72
+        }
+        let size = NSSize(width: CGFloat(cgImage.width) * 72 / dpi(kCGImagePropertyDPIWidth),
+                          height: CGFloat(cgImage.height) * 72 / dpi(kCGImagePropertyDPIHeight))
+        return NSImage(cgImage: cgImage, size: size)
+    }
+
+    // Only the card renders are decoded up front: they are what the hover popups draw, and the
+    // other kinds have callers that crop or otherwise process the image they get.
+    private static func makeImage(type: ImageType, data: Data) -> NSImage? {
+        switch type {
+        case .cardArt, .cardArtBG:
+            return decodedImage(data: data)
+        case .tile, .art, .hero:
+            return NSImage(data: data)
+        }
+    }
+
     private static func finish(key: String, type: ImageType, cardId: String, image: NSImage?) {
         if let image {
             store(image, type: type, cardId: cardId)
@@ -232,7 +313,7 @@ struct ImageUtils {
 
         loadQueue.async {
             // Check if the image has been downloaded
-            if let image = NSImage(contentsOf: path) {
+            if let data = try? Data(contentsOf: path), let image = makeImage(type: type, data: data) {
                 finish(key: key, type: type, cardId: cardId, image: image)
                 return
             }
@@ -248,7 +329,7 @@ struct ImageUtils {
                 if let error = error {
                     logger.error("download error \(error)")
                     finish(key: key, type: type, cardId: cardId, image: nil)
-                } else if let data = data, let image = NSImage(data: data) {
+                } else if let data = data, let image = makeImage(type: type, data: data) {
                     try? data.write(to: path, options: [.atomic])
                     finish(key: key, type: type, cardId: cardId, image: image)
                 } else {

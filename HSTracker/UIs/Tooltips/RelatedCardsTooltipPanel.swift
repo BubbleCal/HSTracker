@@ -124,9 +124,18 @@ private struct RelatedCardImageView: View {
         }
     }
 
+    // A render already in memory is drawn on the first pass. Waiting for .onAppear to hand it
+    // over a main-queue turn later flashed the loading placeholder in every slot of a grid that
+    // otherwise opens together with the card popup.
+    private var cachedImage: NSImage? {
+        card.baconCard
+            ? ImageUtils.cachedCardArtBG(cardId: card.id, baconTriple: false)
+            : ImageUtils.cachedCardArt(cardId: card.id)
+    }
+
     var body: some View {
         Group {
-            if let image {
+            if let image = image ?? cachedImage {
                 Image(nsImage: image).resizable().aspectRatio(contentMode: .fit)
             } else {
                 Image(loadingImageName).resizable().aspectRatio(contentMode: .fit)
@@ -139,6 +148,7 @@ private struct RelatedCardImageView: View {
     }
 
     private func loadImage() {
+        guard image == nil, cachedImage == nil else { return }
         let cardId = card.id
         if card.baconCard {
             ImageUtils.cardArtBG(for: cardId, baconTriple: false) { img in
