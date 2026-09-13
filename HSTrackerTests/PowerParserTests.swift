@@ -337,4 +337,90 @@ class PowerParserTests: HSTrackerTests {
         XCTAssertEqual(tracked?.isExcluded(cardId: CardIds.Secrets.Paladin.Avenge), false)
         XCTAssertEqual(tracked?.isExcluded(cardId: CardIds.Secrets.Paladin.Redemption), true)
     }
+
+    // MARK: - Damage and armor
+
+    private static func tagChange(_ entity: String, _ tag: String, _ value: Int) -> String {
+        return "D 15:46:29.6377190 PowerTaskList.DebugPrintPower() -     TAG_CHANGE Entity=\(entity) tag=\(tag) value=\(value) "
+    }
+
+    // From a real attack into an armored hero, with the players swapped so the player attacks
+    private static let armoredHero = "[entityName=克苏恩 id=72 zone=PLAY zonePos=0 cardId=HERO_06ah player=2]"
+    private static let attackingMinion = "[entityName=捉鬼专家 id=53 zone=PLAY zonePos=1 cardId=CAP_804 player=1]"
+    private static let attackLine = "D 15:46:29.6377190 PowerTaskList.DebugPrintPower() - BLOCK_START BlockType=ATTACK Entity=\(attackingMinion) EffectCardId=System.Collections.Generic.List`1[System.String] EffectIndex=0 Target=0 SubOption=-1 "
+
+    private func createArmoredOpponentHero(armor: Int) -> Entity {
+        game.playerEntity?[.current_player] = 1
+        let hero = createEntity(cardId: "HERO_06ah", id: 72)
+        hero[.cardtype] = CardType.hero.rawValue
+        hero[.controller] = game.opponent.id
+        hero[.zone] = Zone.play.rawValue
+        hero[.health] = 30
+        hero[.armor] = armor
+        let minion = createEntity(cardId: "CAP_804", id: 53)
+        minion[.cardtype] = CardType.minion.rawValue
+        minion[.controller] = game.player.id
+        minion[.zone] = Zone.play.rawValue
+        minion[.health] = 5
+        return hero
+    }
+
+    private func tracked(_ secret: Entity) -> Secret? {
+        return game.secretsManager?.secrets.first { $0.entity.id == secret.id }
+    }
+
+    func testAttackFullyAbsorbedByArmor_ExcludesEyeForAnEye() {
+        let paladin = createOpponentSecret(id: 96, cardClass: .paladin)
+        _ = createArmoredOpponentHero(armor: 7)
+
+        // PREDAMAGE is set and cleared twice, and back at 0 when ARMOR drops; no DAMAGE change follows
+        handle(PowerParserTests.attackLine)
+        handle(PowerParserTests.tagChange(PowerParserTests.armoredHero, "PREDAMAGE", 6))
+        handle(PowerParserTests.tagChange(PowerParserTests.armoredHero, "PREDAMAGE", 0))
+        handle(PowerParserTests.tagChange(PowerParserTests.armoredHero, "PREDAMAGE", 6))
+        handle(PowerParserTests.tagChange(PowerParserTests.armoredHero, "PREDAMAGE", 0))
+        handle(PowerParserTests.tagChange(PowerParserTests.armoredHero, "ARMOR", 1))
+        handle(PowerParserTests.tagChange(PowerParserTests.armoredHero, "LAST_AFFECTED_BY", 53))
+        handle(PowerParserTests.blockEndLine)
+
+        XCTAssertEqual(tracked(paladin)?.isExcluded(cardId: CardIds.Secrets.Paladin.EyeForAnEye), true)
+    }
+
+    func testAttackEmptiesArmorThenDamages_ReckoningCountsTheArmor() {
+        let paladin = createOpponentSecret(id: 96, cardClass: .paladin)
+        _ = createArmoredOpponentHero(armor: 1)
+
+        handle(PowerParserTests.attackLine)
+        handle(PowerParserTests.tagChange(PowerParserTests.armoredHero, "PREDAMAGE", 3))
+        handle(PowerParserTests.tagChange(PowerParserTests.armoredHero, "PREDAMAGE", 0))
+        handle(PowerParserTests.tagChange(PowerParserTests.armoredHero, "ARMOR", 0))
+        handle(PowerParserTests.tagChange(PowerParserTests.armoredHero, "LAST_AFFECTED_BY", 53))
+        handle(PowerParserTests.tagChange(PowerParserTests.armoredHero, "DAMAGE", 2))
+        handle(PowerParserTests.blockEndLine)
+        XCTAssertEqual(tracked(paladin)?.isExcluded(cardId: CardIds.Secrets.Paladin.EyeForAnEye), true)
+        XCTAssertEqual(tracked(paladin)?.isExcluded(cardId: CardIds.Secrets.Paladin.Reckoning), false)
+
+        // 1 armor and 2 damage make 3, and the minion is still alive at the next action
+        handle(PowerParserTests.playWithoutTargetLine)
+        XCTAssertEqual(tracked(paladin)?.isExcluded(cardId: CardIds.Secrets.Paladin.Reckoning), true)
+    }
+
+    func testDamageWithoutLastAffectedBy_ExcludesEyeForAnEye() {
+        let paladin = createOpponentSecret(id: 96, cardClass: .paladin)
+        _ = createArmoredOpponentHero(armor: 0)
+
+        handle(PowerParserTests.tagChange(PowerParserTests.armoredHero, "DAMAGE", 2))
+
+        XCTAssertEqual(tracked(paladin)?.isExcluded(cardId: CardIds.Secrets.Paladin.EyeForAnEye), true)
+    }
+
+    func testHeal_DoesNotExcludeEyeForAnEye() {
+        let paladin = createOpponentSecret(id: 96, cardClass: .paladin)
+        let hero = createArmoredOpponentHero(armor: 0)
+        hero[.damage] = 5
+
+        handle(PowerParserTests.tagChange(PowerParserTests.armoredHero, "DAMAGE", 2))
+
+        XCTAssertEqual(tracked(paladin)?.isExcluded(cardId: CardIds.Secrets.Paladin.EyeForAnEye), false)
+    }
 }

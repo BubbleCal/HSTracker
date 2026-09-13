@@ -56,6 +56,15 @@ private final class MinionPlaySnapshot {
     }
 }
 
+// The player's turn as it stood when it ended (STEP=MAIN_END), before any end-of-turn effect ran.
+// The end-of-turn secrets react to it, and only the secrets already in play then could.
+private struct PlayerTurnEnd {
+    let secretIds: Set<Int>
+    let turn: Int
+    // Player minions Flames of Infinity could hit; cleared once the opponent's turn checked them
+    var minionIds: Set<Int>
+}
+
 private enum PendingSecretCheck {
     case spellCast(SpellCastSnapshot)
     case threeCards(CardPlaySnapshot)
@@ -75,6 +84,13 @@ class SecretsManager {
     private var _lastStartOfTurnCheck = 0
     private var _lastStartOfTurnDamageCheck = 0
     private var _lastStartOfTurnMinionCheck = 0
+    // Guarded by pendingLock: the MAIN_END snapshot is read by the turn start, which Game runs off
+    // the log reader thread
+    private var playerTurnEnd: PlayerTurnEnd?
+    // Damage context of the current block, for hits that only armor absorbed. PREDAMAGE is back to
+    // 0 by the time ARMOR changes, so the ids are kept until the next block starts.
+    private var predamagedEntityIds = Set<Int>()
+    private var armorLostThisBlock = [Int: Int]()
     
     private var entititesInHandOnMinionsPlayed: Set<Entity>  = Set<Entity>()
     
@@ -224,6 +240,9 @@ class SecretsManager {
             pendingChecks.removeAll()
             triggeredSinceBoundary.removeAll()
             lastMinionPlay = nil
+            playerTurnEnd = nil
+            predamagedEntityIds.removeAll()
+            armorLostThisBlock.removeAll()
         }
         _lastPlayedMinionId = 0
         entityDamageDealtHistory.removeAll()
@@ -610,6 +629,9 @@ class SecretsManager {
 
     func handleAttack(attacker: Entity, defender: Entity, fastOnly: Bool = false) {
         guard handleAction else { return }
+        // Secrets only trigger on the opponent's turn. A player minion forced to attack during the
+        // opponent's own turn (their Hysteria) goes through here too and must not rule anything out.
+        guard game.playerEntity?.isCurrentPlayer == true else { return }
 
         if attacker[.controller] == defender[.controller] {
             return
@@ -673,10 +695,7 @@ class SecretsManager {
                 exclude.append(CardIds.Secrets.Hunter.PackTactics)
                 exclude.append(CardIds.Secrets.Hunter.SnakeTrap)
                 exclude.append(CardIds.Secrets.Hunter.VenomstrikeTrap)
-                //I think most of the secrets here could (and maybe should) check for this, but this one definitley does because of Hysteria.
-                if game.playerEntity?.isCurrentPlayer ?? false {
-                    exclude.append(CardIds.Secrets.Mage.OasisAlly)
-                }
+                exclude.append(CardIds.Secrets.Mage.OasisAlly)
             }
 
             if attacker.isMinion {
@@ -822,11 +841,6 @@ class SecretsManager {
             exclude.append(CardIds.Secrets.Rogue.CheatDeath)
         }
         
-        var secondDeathExclude: [MultiIdCard] = []
-        if let opponent_minions_died = game.opponentEntity?[.num_friendly_minions_that_died_this_turn], opponent_minions_died >= 1 {
-            secondDeathExclude.append(CardIds.Secrets.Paladin.HandOfSalvation)
-        }
-
         var numDeathrattleMinions = 0
         if entity.isActiveDeathrattle {
             if let count = CardIds.DeathrattleSummonCardIds[entity.cardId] {
@@ -857,15 +871,25 @@ class SecretsManager {
 
         // redemption never triggers if a deathrattle effect fills up the board
         // effigy can trigger ahead of the deathrattle effect, but only if effigy was played before the deathrattle minion
-        if game.opponentBoardCount < 7 - numDeathrattleMinions {
+        let freeSpaceAfterDeathrattles = game.opponentBoardCount < 7 - numDeathrattleMinions
+        if freeSpaceAfterDeathrattles {
             exclude.append(CardIds.Secrets.Paladin.Redemption)
+        }
+
+        // NUM_FRIENDLY_MINIONS_THAT_DIED_THIS_TURN is logged right after each ZONE=GRAVEYARD, so it
+        // still counts only the earlier deaths: 1 means this is the second one. Later deaths do not
+        // trigger it, and like Redemption it needs a slot to bring the minion back into.
+        var secondDeathExclude: [MultiIdCard] = []
+        if game.opponentEntity?[.num_friendly_minions_that_died_this_turn] == 1 && freeSpaceAfterDeathrattles {
+            secondDeathExclude.append(CardIds.Secrets.Paladin.HandOfSalvation)
         }
 
         // TODO: break ties when Effigy + Deathrattle played on the same turn
         exclude.append(CardIds.Secrets.Mage.Effigy)
         exclude.append(CardIds.Secrets.Hunter.EmergencyManeuvers)
         
-        if entity.info.turnPlayed == (game.gameEntity?[.turn] ?? 0) - 1 {
+        // Untimely Death resummons the minion, so a board the deathrattles fill keeps it possible
+        if entity.info.turnPlayed == (game.gameEntity?[.turn] ?? 0) - 1 && freeSpaceAfterDeathrattles {
             exclude.append(CardIds.Secrets.Hunter.UntimelyDeath)
         }
 
@@ -910,8 +934,11 @@ class SecretsManager {
             return state
         }
         guard let avenge = pending.pending else { return }
-        // Past the death phase the board also holds the deathrattle summons, which Avenge cannot see
-        let survivors = game.opponentMinionCount - (summonsResolved ? pending.deathrattles : 0)
+        // Past the death phase the board also holds the deathrattle summons, which Avenge cannot see.
+        // Dormant minions cannot be buffed either (opponentMinionCount already skips untouchable ones).
+        let dormant = game.entities.values.filter { $0.isInPlay && $0.isMinion && $0.has(tag: .dormant)
+            && !$0.has(tag: .untouchable) && $0.isControlled(by: game.opponent.id) }.count
+        let survivors = game.opponentMinionCount - dormant - (summonsResolved ? pending.deathrattles : 0)
         if survivors > 0 {
             applyExclusions([(CardIds.Secrets.Paladin.Avenge, .enemyMinionDied)], secretIds: avenge.secretIds, turn: avenge.turn, invokeCallback: true)
         }
@@ -936,8 +963,8 @@ class SecretsManager {
             case .minionPlayed(let snapshot):
                 resolveMinionPlayed(snapshot)
             case .reckoning(let dealerId, let secretIds, let turn):
-                // The dealer has to survive the hit for Reckoning to have had a target
-                if let dealer = game.entities[dealerId], dealer.health > 0 && dealer[.zone] != Zone.graveyard.rawValue {
+                // The dealer has to survive the exchange for Reckoning to have had a target
+                if let dealer = game.entities[dealerId], dealer.isInPlay && dealer.health > 0 && !dealer.has(tag: .to_be_destroyed) {
                     applyExclusions([(CardIds.Secrets.Paladin.Reckoning, .minionDealtThreeDamage)], secretIds: secretIds, turn: turn, invokeCallback: true)
                 }
             }
@@ -1032,63 +1059,91 @@ class SecretsManager {
         }
     }
 
-    func handleOpponentDamage(entity: Entity, damage: Int) {
-        guard handleAction else { return }
-
-        if entity.isHero && entity.isControlled(by: game.opponent.id) {
-            if !entity.has(tag: GameTag.immune) {
-                exclude(cardIds: [CardIds.Secrets.Paladin.EyeForAnEye, CardIds.Secrets.Rogue.Evasion], reason: .enemyHeroDamaged)
-                opponentTookDamageDuringTurns.append(game.turnNumber())
-            }
-        }
-        
-        if damage >= 3 && entity.isMinion && entity.isControlled(by: game.opponent.id) && entity[.zone] != Zone.graveyard.rawValue {
-            exclude(cardId: CardIds.Secrets.Paladin.Reckoning, reason: .minionDealtThreeDamage)
-        }
+    // PREDAMAGE > 0 marks the entity as being hit in this block
+    func handleEntityPredamage(entity: Entity) {
+        pendingLock.around { _ = predamagedEntityIds.insert(entity.id) }
     }
-    
+
+    // Called on the player's turn. A hit that armor absorbs entirely logs no DAMAGE change, only the
+    // ARMOR loss, and a hit that just empties the armor takes it to 0.
     func handleEntityLostArmor(entity: Entity, value: Int) {
-        if value <= 0 {
+        guard value > 0, entity.isHero && entity.isControlled(by: game.opponent.id), !entity.has(tag: .immune) else {
             return
         }
-        
-        if entity.isHero && entity.isControlled(by: game.opponent.id) {
-            if !entity.has(tag: .immune) {
-                opponentTookDamageDuringTurns.append(game.turnNumber())
-            }
+        opponentTookDamageDuringTurns.append(game.turnNumber())
+
+        // Armor also goes away without damage (effects that remove or swap it), so only a loss inside
+        // a damage context counts as the hero being damaged. Whether Evasion reacts to armor-only
+        // hits is unverified, so only Eye for an Eye is ruled out.
+        let damaged: Bool = pendingLock.around {
+            guard predamagedEntityIds.contains(entity.id) else { return false }
+            armorLostThisBlock[entity.id, default: 0] += value
+            return true
+        }
+        if damaged {
+            exclude(cardId: CardIds.Secrets.Paladin.EyeForAnEye, reason: .enemyHeroDamaged)
         }
     }
 
+    // NUM_TURNS_IN_PLAY of a non-hero entity. Every entity in play gets it at MAIN_READY of each
+    // turn, but revealed or created entities also carry it mid-turn, which must not count as a turn
+    // start.
     func handleTurnsInPlayChange(entity: Entity, turn: Int) {
+        guard game.opponentEntity?.isCurrentPlayer ?? false else { return }
+        let step = game.gameEntity?[.step]
+        guard step == Step.main_ready.rawValue || step == Step.main_start_triggers.rawValue else { return }
+
+        // The markers move even without secrets (HDT returns first): otherwise the first mid-turn
+        // change after a turn that started without secrets would rule out the start-of-turn
+        // secrets played since.
+        let startOfTurn = turn > _lastStartOfTurnCheck
+        if startOfTurn {
+            _lastStartOfTurnCheck = turn
+        }
+        let startOfTurnWithMinion = turn > _lastStartOfTurnMinionCheck && entity.isMinion && entity.isControlled(by: game.opponent.id)
+        if startOfTurnWithMinion {
+            _lastStartOfTurnMinionCheck = turn
+        }
+        let startOfTurnDamageCheck = turn > _lastStartOfTurnDamageCheck
+        if startOfTurnDamageCheck {
+            _lastStartOfTurnDamageCheck = turn
+        }
+        // Flames of Infinity looks at the minions once, whether or not there are secrets now
+        let turnEnd: PlayerTurnEnd? = startOfTurn ? pendingLock.around {
+            let snapshot = playerTurnEnd
+            playerTurnEnd?.minionIds.removeAll()
+            return snapshot
+        } : nil
+
         guard handleAction else { return }
 
-        let isCurrentPlayer = game.opponentEntity?.isCurrentPlayer ?? false
-        
-        if isCurrentPlayer && (turn > _lastStartOfTurnCheck) {
-            _lastStartOfTurnCheck = turn
+        if startOfTurn {
             exclude(cardId: CardIds.Secrets.Rogue.Perjury, reason: .opponentTurnStarted)
             if game.opponentMinionCount >= 1 && freeSpaceOnBoard {
                 exclude(cardId: CardIds.Secrets.Mage.SummoningWard, reason: .opponentTurnStarted)
             }
-            if game.playerMinionCount >= 1 {
-                exclude(cardId: CardIds.Secrets.Mage.FlamesOfInfinity, reason: .turnEndedWithMinion)
+            // A minion at MAIN_END that is still there now was on the board all through the
+            // end-of-turn effects. One that died to them, or was summoned by them, proves nothing.
+            if let turnEnd, turnEnd.minionIds.contains(where: { id in
+                game.entities[id].map { $0.isInPlay && $0.isControlled(by: game.player.id) } ?? false
+            }) {
+                applyExclusions([(CardIds.Secrets.Mage.FlamesOfInfinity, .turnEndedWithMinion)], secretIds: turnEnd.secretIds,
+                                turn: turnEnd.turn, invokeCallback: true)
             }
         }
-        
-        if isCurrentPlayer && (turn > _lastStartOfTurnMinionCheck) {
-            if entity.isMinion && entity.isControlled(by: game.opponent.id) {
-                _lastStartOfTurnMinionCheck = turn
-                exclude(cardId: CardIds.Secrets.Paladin.CompetitiveSpirit, reason: .opponentTurnStarted)
-                if game.opponentMinionCount >= 2 && freeSpaceOnBoard {
-                    exclude(cardId: CardIds.Secrets.Hunter.OpenTheCages, reason: .opponentTurnStarted)
-                }
+
+        if startOfTurnWithMinion {
+            exclude(cardId: CardIds.Secrets.Paladin.CompetitiveSpirit, reason: .opponentTurnStarted)
+            if game.opponentMinionCount >= 2 && freeSpaceOnBoard {
+                exclude(cardId: CardIds.Secrets.Hunter.OpenTheCages, reason: .opponentTurnStarted)
             }
         }
-        if isCurrentPlayer && (turn > _lastStartOfTurnDamageCheck) {
-            _lastStartOfTurnDamageCheck = turn
+        if startOfTurnDamageCheck {
+            // The player's turn that just ended: the same turn number when the player went first
             let turnToCheck = turn - (game.playerEntity?.has(tag: .first_player) ?? false ? 0 : 1)
             if !opponentTookDamageDuringTurns.contains(turnToCheck) {
-                exclude(cardId: CardIds.Secrets.Mage.RiggedFaireGame, reason: .enemyHeroNotDamaged)
+                applyExclusions([(CardIds.Secrets.Mage.RiggedFaireGame, .enemyHeroNotDamaged)], secretIds: nil,
+                                turn: max(turnToCheck, 0), invokeCallback: true)
             }
         }
     }
@@ -1096,16 +1151,31 @@ class SecretsManager {
     func handlePlayerTurnStart() {
         pendingLock.around { lastMinionPlay = nil }
     }
-    
-    func handleOpponentTurnStart() {
-        if game.player.cardsPlayedThisTurn.count > 0 {
-            exclude(cardId: CardIds.Secrets.Rogue.Plagiarize, reason: .cardsPlayedInTurn)
-        }
+
+    // STEP=MAIN_END on the player's turn, before the end-of-turn triggers
+    func handlePlayerTurnEnding() {
+        let minionIds = game.entities.values.filter { $0.isInPlay && $0.isMinion && $0.isControlled(by: game.player.id)
+            && !$0.has(tag: .dormant) && !$0.has(tag: .untouchable) }.map { $0.id }
+        let snapshot = PlayerTurnEnd(secretIds: activeSecretIds, turn: game.turnNumber(), minionIds: Set(minionIds))
+        pendingLock.around { playerTurnEnd = snapshot }
     }
-    
+
+    // Game runs this off the log reader thread, after Player.onTurnEnd moved the player's plays to
+    // cardsPlayedLastTurn (HDT reads the list it has just cleared, so Plagiarize was never ruled out).
+    func handleOpponentTurnStart() {
+        guard handleAction, game.player.cardsPlayedLastTurn.count > 0,
+              let turnEnd = pendingLock.around({ playerTurnEnd }) else { return }
+        // A secret that came into play after the player's turn ended never saw those cards
+        applyExclusions([(CardIds.Secrets.Rogue.Plagiarize, .cardsPlayedInTurn)], secretIds: turnEnd.secretIds,
+                        turn: turnEnd.turn, invokeCallback: true)
+    }
+
+    // STEP=MAIN_CLEANUP on the player's turn, after the end-of-turn triggers
     func handlePlayerTurnEnded(mana: Int) {
-        if mana == 0 {
-            exclude(cardId: CardIds.Secrets.Hunter.HiddenMeaning, reason: .turnEndedNoMana)
+        guard handleAction, let turnEnd = pendingLock.around({ playerTurnEnd }) else { return }
+        // Hidden Meaning summons, so a full board (or one an older end-of-turn summon filled) keeps it
+        if mana == 0 && freeSpaceOnBoard {
+            exclude(cardId: CardIds.Secrets.Hunter.HiddenMeaning, reason: .turnEndedNoMana, secretIds: turnEnd.secretIds)
         }
     }
     
@@ -1190,6 +1260,8 @@ class SecretsManager {
     
     func handleCardDrawn(entity: Entity) {
         guard handleAction else { return }
+        // Draws on the opponent's turn (their AoE on Acolyte of Pain) cannot trigger their secret
+        guard game.playerEntity?.isCurrentPlayer == true else { return }
 
         var exclude: [MultiIdCard] = []
         if let playerEntity = game.playerEntity, playerEntity[.num_cards_drawn_this_turn] >= 1 {
@@ -1223,26 +1295,37 @@ class SecretsManager {
     
     func onNewBlock() {
         entityDamageDealtHistory.removeAll()
+        pendingLock.around {
+            predamagedEntityIds.removeAll()
+            armorLostThisBlock.removeAll()
+        }
     }
     
-    func entityDamage(dealer: Entity, target: Entity, damage: Int) {
+    // A DAMAGE increase on the player's turn. The dealer is LAST_AFFECTED_BY, which HDT also allows
+    // to be unknown.
+    func entityDamage(dealer: Entity?, target: Entity, damage: Int) {
+        guard damage > 0 else { return }
         if target.isHero && target.isControlled(by: game.opponent.id) {
             if !target.has(tag: .immune) {
-                exclude(cardIds: [CardIds.Secrets.Paladin.EyeForAnEye, CardIds.Secrets.Rogue.Evasion], reason: .enemyHeroDamaged)
                 opponentTookDamageDuringTurns.append(game.turnNumber())
+                exclude(cardIds: [CardIds.Secrets.Paladin.EyeForAnEye, CardIds.Secrets.Rogue.Evasion], reason: .enemyHeroDamaged)
             }
         }
-        if dealer.isMinion && dealer.isControlled(by: game.player.id) {
+        if let dealer, dealer.isMinion && dealer.isControlled(by: game.player.id) {
+            // Armor the same hit took first counts toward the 3 damage (5 attack into 4 armor logs
+            // ARMOR -4 and DAMAGE +1)
+            let absorbed: Int = pendingLock.around { armorLostThisBlock.removeValue(forKey: target.id) ?? 0 }
+            let dealt = damage + absorbed
             if let dict = entityDamageDealtHistory[dealer.id] {
                 if let hist = dict[target.id] {
-                    dict[target.id] = hist + damage
+                    dict[target.id] = hist + dealt
                 } else {
-                    dict[target.id] = damage
+                    dict[target.id] = dealt
                 }
             } else {
                 let dict = SynchronizedDictionary<Int, Int>()
                 entityDamageDealtHistory[dealer.id] = dict
-                dict[target.id] = damage
+                dict[target.id] = dealt
             }
             let damageDealt = entityDamageDealtHistory[dealer.id]?[target.id] ?? 0
             guard damageDealt >= 3 && handleAction else { return }

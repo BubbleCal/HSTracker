@@ -194,6 +194,7 @@ class SecretTests: HSTrackerTests {
     }
 
     func testSingleSecret_HeroToHero_PlayerAttack() {
+        setPlayerAsCurrentPlayer()
         // without minions on board
         playerMinion1[.zone] = Zone.hand.rawValue
         heroPlayer[.health] = 10
@@ -227,6 +228,7 @@ class SecretTests: HSTrackerTests {
     }
 
     func testSingleSecret_MinionToHero_PlayerAttack() {
+        setPlayerAsCurrentPlayer()
         // with only one friendly minion on board
         playerMinion1[.zone] = Zone.play.rawValue
         playerMinion1[.health] = 1
@@ -431,6 +433,7 @@ class SecretTests: HSTrackerTests {
     func testOnExclusionChanged_FiresOncePerTransition() {
         var events = [SecretExclusionEvent]()
         game.secretsManager?.onExclusionChanged = { events.append($0) }
+        setPlayerAsCurrentPlayer()
         heroPlayer[.health] = 10
 
         game.secretsManager?.handleAttack(attacker: heroPlayer, defender: heroOpponent)
@@ -445,6 +448,7 @@ class SecretTests: HSTrackerTests {
 
     func testExcludedSecret_RecordsReasonAndTurn() {
         gameEntity[.turn] = 9
+        setPlayerAsCurrentPlayer()
         playerMinion1[.zone] = Zone.play.rawValue
         game.secretsManager?.handleAttack(attacker: playerMinion1, defender: heroOpponent)
 
@@ -1075,6 +1079,7 @@ class SecretTests: HSTrackerTests {
     func testSingleSecret_MinionOpponentDamage_ReckoningTriggered() {
         setPlayerAsCurrentPlayer()
         playerMinion1[.health] = 1
+        playerMinion1[.zone] = Zone.play.rawValue
         game.entityDamage(dealer: playerMinion1, entity: opponentMinion1, damage: 3)
         resolve()
         verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All)
@@ -1145,6 +1150,7 @@ class SecretTests: HSTrackerTests {
 
     func testSingleSecret_MinionInPlay_OpponentTurnStart() {
         opponentEntity[.current_player] = 1
+        gameEntity[.step] = Step.main_ready.rawValue
         game.turnsInPlayChange(entity: opponentMinion1, turn: 1)
         verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All)
         verifySecrets(secretIndex: 1, allSecrets: CardIds.Secrets.Mage.All, triggered: [CardIds.Secrets.Mage.RiggedFaireGame])
@@ -1163,6 +1169,7 @@ class SecretTests: HSTrackerTests {
     
     func testSingleSecret_OpponentTurnStart() {
         game.opponentEntity?[.current_player] = 1
+        gameEntity[.step] = Step.main_ready.rawValue
         game.turnsInPlayChange(entity: opponentMinion1, turn: 1)
         verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All)
         verifySecrets(secretIndex: 1, allSecrets: CardIds.Secrets.Mage.All, triggered: [CardIds.Secrets.Mage.RiggedFaireGame])
@@ -1171,6 +1178,7 @@ class SecretTests: HSTrackerTests {
     }
     
     func testSingleSecret_Retarget_FriendlyHitsFriendly() {
+        setPlayerAsCurrentPlayer()
         game.secretsManager?.handleAttack(attacker: playerMinion1, defender: heroPlayer)
         verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All)
         verifySecrets(secretIndex: 1, allSecrets: CardIds.Secrets.Mage.All)
@@ -1185,6 +1193,7 @@ class SecretTests: HSTrackerTests {
     }
     
     func testSingleSecret_OpponentAttack_Retarget_OpponentHitsOpponent() {
+        setPlayerAsCurrentPlayer()
         game.secretsManager?.handleAttack(attacker: opponentMinion1, defender: heroOpponent)
         verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All)
         verifySecrets(secretIndex: 1, allSecrets: CardIds.Secrets.Mage.All)
@@ -1199,7 +1208,11 @@ class SecretTests: HSTrackerTests {
     }
     
     func testSingleSecret_PlayerTurnStart_OpponentPlayedCards_PlagerizeTriggered() {
-        game.player.play(entity: opponentMinion1, turn: 1)
+        setPlayerAsCurrentPlayer()
+        game.player.play(entity: playerMinion1, turn: 1)
+        // Game.handleTurnStart: the player's plays move to last turn before the opponent's turn starts
+        game.secretsManager?.handlePlayerTurnEnding()
+        game.player.onTurnEnd()
         game.secretsManager?.handleOpponentTurnStart()
         verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All)
         verifySecrets(secretIndex: 1, allSecrets: CardIds.Secrets.Mage.All)
@@ -1208,8 +1221,9 @@ class SecretTests: HSTrackerTests {
     }
     
     func testSingleSecret_PlayerTurnStart_OpponentPlayedNoCards_PlagerizeNotTriggered() {
-        game.player.play(entity: opponentMinion1, turn: 1)
-        game.player.onTurnStart()
+        setPlayerAsCurrentPlayer()
+        game.secretsManager?.handlePlayerTurnEnding()
+        game.player.onTurnEnd()
         game.secretsManager?.handleOpponentTurnStart()
         verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All)
         verifySecrets(secretIndex: 1, allSecrets: CardIds.Secrets.Mage.All)
@@ -1218,6 +1232,7 @@ class SecretTests: HSTrackerTests {
     }
     
     func testSingleSecret_OpponentDrawsTwoCards_ShenanigansTriggered() {
+        setPlayerAsCurrentPlayer()
         game.secretsManager?.handleOpponentTurnStart()
         game.player.onTurnStart()
         //Set to 1 because the tag hasn't been incremented by the time the check is being made in normal course
@@ -1251,6 +1266,7 @@ class SecretTests: HSTrackerTests {
 
 
     func testSingleSecret_MinionToHero_PlayerImmune_PlayerAttackTest() {
+        setPlayerAsCurrentPlayer()
         playerMinion1[.zone] = Zone.play.rawValue
         playerMinion1[.immune] = 1
         game.secretsManager?.handleAttack(attacker: playerMinion1, defender: heroOpponent)
@@ -1258,6 +1274,7 @@ class SecretTests: HSTrackerTests {
     }
 
     func testSingleSecret_HeroToHero_MinionImmune_PlayerAttackTest() {
+        setPlayerAsCurrentPlayer()
         playerMinion1[.zone] = Zone.play.rawValue
         playerMinion1[.immune] = 1
         game.secretsManager?.handleAttack(attacker: heroPlayer, defender: heroOpponent)
@@ -1265,6 +1282,7 @@ class SecretTests: HSTrackerTests {
     }
     
     func testMultipleSecrets_MinionToHero_ExplosiveTrapTriggered_MinionDied_PlayerAttackTest() {
+        setPlayerAsCurrentPlayer()
         playerMinion1[.zone] = Zone.play.rawValue
         playerMinion1[.health] = -1
         game.secretsManager?.handleAttack(attacker: playerMinion1, defender: heroOpponent)
@@ -1448,6 +1466,293 @@ class SecretTests: HSTrackerTests {
         verifySecrets(secretIndex: 3, allSecrets: CardIds.Secrets.Rogue.All)
     }
     
+    // MARK: - Attacks, deaths, damage and turns
+
+    private func setOpponentAsCurrentPlayer() {
+        heroPlayer[.current_player] = 0
+        opponentEntity[.current_player] = 1
+    }
+
+    private func secret(_ entity: Entity) -> Secret? {
+        return game.secretsManager?.secrets.first { $0.entity.id == entity.id }
+    }
+
+    func testForcedAttackOnOpponentTurn_NothingExcluded() {
+        // The opponent's Hysteria makes a player minion attack on the opponent's own turn
+        setOpponentAsCurrentPlayer()
+        playerMinion1[.zone] = Zone.play.rawValue
+        playerMinion1[.health] = 3
+        opponentMinion1[.zone] = Zone.play.rawValue
+        game.secretsManager?.handleAttack(attacker: playerMinion1, defender: opponentMinion1)
+        game.secretsManager?.handleAttack(attacker: playerMinion1, defender: heroOpponent)
+
+        verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All)
+        verifySecrets(secretIndex: 1, allSecrets: CardIds.Secrets.Mage.All)
+        verifySecrets(secretIndex: 2, allSecrets: CardIds.Secrets.Paladin.All)
+        verifySecrets(secretIndex: 3, allSecrets: CardIds.Secrets.Rogue.All)
+    }
+
+    func testTwoDeaths_OneSurvivor_AvengeExcluded() {
+        let dying1 = createOpponentMinion(cardId: "EX1_020", zone: .graveyard)
+        let dying2 = createOpponentMinion(cardId: "EX1_020", zone: .graveyard)
+        _ = createOpponentMinion(cardId: "EX1_020", zone: .play)
+        game.opponentMinionDeath(entity: dying1, turn: 2)
+        game.opponentMinionDeath(entity: dying2, turn: 2)
+        game.secretsManager?.resolvePendingAvenge()
+
+        XCTAssertEqual(secret(secretPaladin1)?.isExcluded(cardId: CardIds.Secrets.Paladin.Avenge), true)
+    }
+
+    func testAvenge_OnlyDormantMinionLeft_NotExcluded() {
+        let dying = createOpponentMinion(cardId: "EX1_020", zone: .graveyard)
+        let dormant = createOpponentMinion(cardId: "EX1_020", zone: .play)
+        dormant[.dormant] = 1
+        game.opponentMinionDeath(entity: dying, turn: 2)
+        game.secretsManager?.resolvePendingAvenge()
+
+        XCTAssertEqual(secret(secretPaladin1)?.isExcluded(cardId: CardIds.Secrets.Paladin.Avenge), false)
+    }
+
+    func testHandOfSalvation_OnlyTheSecondDeathOfTheTurnExcludes() {
+        let dying = createOpponentMinion(cardId: "EX1_020", zone: .graveyard)
+        // The tag still counts the earlier deaths when the ZONE change is handled
+        opponentEntity[.num_friendly_minions_that_died_this_turn] = 0
+        game.opponentMinionDeath(entity: dying, turn: 2)
+        XCTAssertEqual(secret(secretPaladin1)?.isExcluded(cardId: CardIds.Secrets.Paladin.HandOfSalvation), false)
+
+        // A third death proves nothing when the second could not trigger it
+        opponentEntity[.num_friendly_minions_that_died_this_turn] = 2
+        game.opponentMinionDeath(entity: dying, turn: 2)
+        XCTAssertEqual(secret(secretPaladin1)?.isExcluded(cardId: CardIds.Secrets.Paladin.HandOfSalvation), false)
+
+        opponentEntity[.num_friendly_minions_that_died_this_turn] = 1
+        game.opponentMinionDeath(entity: dying, turn: 2)
+        XCTAssertEqual(secret(secretPaladin1)?.exclusion(for: CardIds.Secrets.Paladin.HandOfSalvation)?.reason, .secondEnemyMinionDied)
+    }
+
+    func testHandOfSalvation_SecondDeathDeathrattleFillsBoard_NotExcluded() {
+        _ = fillOpponentBoard(upTo: 6)
+        let golem = createOpponentMinion(cardId: CardIds.Collectible.Neutral.HarvestGolem, zone: .graveyard)
+        golem[.deathrattle] = 1
+        opponentEntity[.num_friendly_minions_that_died_this_turn] = 1
+        game.opponentMinionDeath(entity: golem, turn: 2)
+
+        XCTAssertEqual(secret(secretPaladin1)?.isExcluded(cardId: CardIds.Secrets.Paladin.HandOfSalvation), false)
+        XCTAssertEqual(secret(secretPaladin1)?.isExcluded(cardId: CardIds.Secrets.Paladin.Redemption), false)
+    }
+
+    func testUntimelyDeath_DeathrattleFillsBoard_NotExcluded() {
+        _ = fillOpponentBoard(upTo: 6)
+        let golem = createOpponentMinion(cardId: CardIds.Collectible.Neutral.HarvestGolem, zone: .graveyard)
+        golem[.deathrattle] = 1
+        golem.info.turnPlayed = 1
+        gameEntity[.turn] = 2
+        game.opponentMinionDeath(entity: golem, turn: 2)
+
+        XCTAssertEqual(secret(secretHunter1)?.isExcluded(cardId: CardIds.Secrets.Hunter.UntimelyDeath), false)
+        XCTAssertEqual(secret(secretHunter1)?.isExcluded(cardId: CardIds.Secrets.Hunter.EmergencyManeuvers), true)
+    }
+
+    func testDamageWithoutKnownDealer_ExcludesEyeForAnEyeAndEvasion() {
+        setPlayerAsCurrentPlayer()
+        game.entityDamage(dealer: nil, entity: heroOpponent, damage: 2)
+
+        verifySecrets(secretIndex: 2, allSecrets: CardIds.Secrets.Paladin.All, triggered: [CardIds.Secrets.Paladin.EyeForAnEye])
+        verifySecrets(secretIndex: 3, allSecrets: CardIds.Secrets.Rogue.All, triggered: [CardIds.Secrets.Rogue.Evasion])
+    }
+
+    func testArmorLostWithoutDamage_EyeForAnEyeNotExcluded() {
+        setPlayerAsCurrentPlayer()
+        game.handleEntityLostArmor(entity: heroOpponent, value: 3)
+
+        verifySecrets(secretIndex: 2, allSecrets: CardIds.Secrets.Paladin.All)
+        verifySecrets(secretIndex: 3, allSecrets: CardIds.Secrets.Rogue.All)
+    }
+
+    func testArmorAbsorbedHitWithPredamage_ExcludesEyeForAnEyeOnly() {
+        setPlayerAsCurrentPlayer()
+        game.entityPredamage(entity: heroOpponent, damage: 6)
+        game.handleEntityLostArmor(entity: heroOpponent, value: 6)
+
+        verifySecrets(secretIndex: 2, allSecrets: CardIds.Secrets.Paladin.All, triggered: [CardIds.Secrets.Paladin.EyeForAnEye])
+        // Whether Evasion reacts when only armor was lost is unverified
+        verifySecrets(secretIndex: 3, allSecrets: CardIds.Secrets.Rogue.All)
+    }
+
+    func testPredamageFromAnEarlierBlock_ArmorLossDoesNotExcludeEyeForAnEye() {
+        setPlayerAsCurrentPlayer()
+        game.entityPredamage(entity: heroOpponent, damage: 2)
+        game.secretsManager?.onNewBlock()
+        game.handleEntityLostArmor(entity: heroOpponent, value: 2)
+
+        XCTAssertEqual(secret(secretPaladin1)?.isExcluded(cardId: CardIds.Secrets.Paladin.EyeForAnEye), false)
+    }
+
+    func testMinionHitsArmoredHeroFor5With4Armor_ExcludesReckoningAtBoundary() {
+        setPlayerAsCurrentPlayer()
+        playerMinion1[.zone] = Zone.play.rawValue
+        playerMinion1[.health] = 5
+        game.entityPredamage(entity: heroOpponent, damage: 5)
+        game.handleEntityLostArmor(entity: heroOpponent, value: 4)
+        game.entityDamage(dealer: playerMinion1, entity: heroOpponent, damage: 1)
+        XCTAssertEqual(secret(secretPaladin1)?.isExcluded(cardId: CardIds.Secrets.Paladin.Reckoning), false)
+
+        resolve()
+        XCTAssertEqual(secret(secretPaladin1)?.isExcluded(cardId: CardIds.Secrets.Paladin.Reckoning), true)
+    }
+
+    func testReckoning_DealerToBeDestroyed_NotExcluded() {
+        setPlayerAsCurrentPlayer()
+        playerMinion1[.zone] = Zone.play.rawValue
+        playerMinion1[.health] = 4
+        game.entityDamage(dealer: playerMinion1, entity: opponentMinion1, damage: 4)
+        playerMinion1[.to_be_destroyed] = 1
+        resolve()
+
+        XCTAssertEqual(secret(secretPaladin1)?.isExcluded(cardId: CardIds.Secrets.Paladin.Reckoning), false)
+    }
+
+    func testArmorStrippedOnPlayersTurn_RiggedFaireGameNotExcludedAtOpponentTurnStart() {
+        heroPlayer[.first_player] = 1
+        gameEntity[.turn] = 1
+        setPlayerAsCurrentPlayer()
+        game.entityPredamage(entity: heroOpponent, damage: 2)
+        game.handleEntityLostArmor(entity: heroOpponent, value: 2)
+
+        gameEntity[.turn] = 2
+        gameEntity[.step] = Step.main_ready.rawValue
+        setOpponentAsCurrentPlayer()
+        game.turnsInPlayChange(entity: opponentMinion1, turn: game.turnNumber())
+
+        XCTAssertEqual(secret(secretMage1)?.isExcluded(cardId: CardIds.Secrets.Mage.RiggedFaireGame), false)
+        XCTAssertEqual(secret(secretRogue1)?.isExcluded(cardId: CardIds.Secrets.Rogue.Perjury), true)
+    }
+
+    func testOpponentTurnStartWithoutDamage_RiggedFaireGameRecordsThePlayersTurn() {
+        // The player goes second: the opponent's turn 3 follows the player's turn 2
+        gameEntity[.turn] = 5
+        gameEntity[.step] = Step.main_ready.rawValue
+        setOpponentAsCurrentPlayer()
+        game.turnsInPlayChange(entity: opponentMinion1, turn: game.turnNumber())
+
+        XCTAssertEqual(secret(secretMage1)?.exclusion(for: CardIds.Secrets.Mage.RiggedFaireGame)?.turn, 2)
+    }
+
+    func testPlagiarize_SecretPlayedAfterThePlayersTurnEnded_NotExcluded() {
+        setPlayerAsCurrentPlayer()
+        game.player.play(entity: playerMinion1, turn: 1)
+        game.secretsManager?.handlePlayerTurnEnding()
+        // Cast by an end-of-turn effect, after MAIN_END
+        addOpponentSecret(secretRogue2)
+        game.player.onTurnEnd()
+        game.secretsManager?.handleOpponentTurnStart()
+
+        XCTAssertEqual(secret(secretRogue1)?.isExcluded(cardId: CardIds.Secrets.Rogue.Plagiarize), true)
+        XCTAssertEqual(secret(secretRogue2)?.isExcluded(cardId: CardIds.Secrets.Rogue.Plagiarize), false)
+    }
+
+    func testHiddenMeaning_ZeroMana_Excluded() {
+        setPlayerAsCurrentPlayer()
+        game.secretsManager?.handlePlayerTurnEnding()
+        game.secretsManager?.handlePlayerTurnEnded(mana: 0)
+
+        verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All, triggered: [CardIds.Secrets.Hunter.HiddenMeaning])
+    }
+
+    func testHiddenMeaning_ZeroManaFullOpponentBoard_NotExcluded() {
+        setPlayerAsCurrentPlayer()
+        game.secretsManager?.handlePlayerTurnEnding()
+        // An older end-of-turn secret took the last slot during MAIN_END
+        _ = fillOpponentBoard(upTo: 7)
+        game.secretsManager?.handlePlayerTurnEnded(mana: 0)
+
+        verifySecrets(secretIndex: 0, allSecrets: CardIds.Secrets.Hunter.All)
+    }
+
+    private func startOpponentTurn() {
+        gameEntity[.turn] = 2
+        gameEntity[.step] = Step.main_ready.rawValue
+        setOpponentAsCurrentPlayer()
+        game.turnsInPlayChange(entity: playerMinion2, turn: game.turnNumber())
+    }
+
+    func testFlames_MinionSurvivesTheEndOfTurn_Excluded() {
+        gameEntity[.turn] = 1
+        setPlayerAsCurrentPlayer()
+        playerMinion1[.zone] = Zone.play.rawValue
+        game.secretsManager?.handlePlayerTurnEnding()
+        startOpponentTurn()
+
+        XCTAssertEqual(secret(secretMage1)?.exclusion(for: CardIds.Secrets.Mage.FlamesOfInfinity)?.reason, .turnEndedWithMinion)
+        XCTAssertEqual(secret(secretMage1)?.exclusion(for: CardIds.Secrets.Mage.FlamesOfInfinity)?.turn, 1)
+    }
+
+    func testFlames_MinionAtMainEndDiesToEndOfTurnEffect_NotExcluded() {
+        setPlayerAsCurrentPlayer()
+        playerMinion1[.zone] = Zone.play.rawValue
+        game.secretsManager?.handlePlayerTurnEnding()
+        playerMinion1[.zone] = Zone.graveyard.rawValue
+        startOpponentTurn()
+
+        XCTAssertEqual(secret(secretMage1)?.isExcluded(cardId: CardIds.Secrets.Mage.FlamesOfInfinity), false)
+    }
+
+    func testFlames_MinionSummonedByEndOfTurnEffect_NotExcluded() {
+        setPlayerAsCurrentPlayer()
+        game.secretsManager?.handlePlayerTurnEnding()
+        playerMinion1[.zone] = Zone.play.rawValue
+        startOpponentTurn()
+
+        XCTAssertEqual(secret(secretMage1)?.isExcluded(cardId: CardIds.Secrets.Mage.FlamesOfInfinity), false)
+    }
+
+    func testFlames_OnlyDormantMinion_NotExcluded() {
+        setPlayerAsCurrentPlayer()
+        playerMinion1[.zone] = Zone.play.rawValue
+        playerMinion1[.dormant] = 1
+        game.secretsManager?.handlePlayerTurnEnding()
+        startOpponentTurn()
+
+        XCTAssertEqual(secret(secretMage1)?.isExcluded(cardId: CardIds.Secrets.Mage.FlamesOfInfinity), false)
+    }
+
+    func testSecretCastAfterATurnStartWithoutSecrets_PerjuryNotExcluded() {
+        for tracked in [secretHunter1, secretMage1, secretPaladin1, secretRogue1] {
+            game.secretsManager?.removeSecret(entity: tracked!)
+        }
+        gameEntity[.turn] = 2
+        gameEntity[.step] = Step.main_ready.rawValue
+        setOpponentAsCurrentPlayer()
+        game.turnsInPlayChange(entity: opponentMinion1, turn: game.turnNumber())
+
+        // A start-of-turn effect casts a secret, then another entity's NUM_TURNS_IN_PLAY comes in
+        gameEntity[.step] = Step.main_start_triggers.rawValue
+        addOpponentSecret(secretRogue2)
+        game.turnsInPlayChange(entity: opponentMinion2, turn: game.turnNumber())
+
+        XCTAssertEqual(secret(secretRogue2)?.isExcluded(cardId: CardIds.Secrets.Rogue.Perjury), false)
+    }
+
+    func testTurnsInPlayChangeDuringMainAction_IsNoTurnStart() {
+        gameEntity[.turn] = 2
+        gameEntity[.step] = Step.main_action.rawValue
+        setOpponentAsCurrentPlayer()
+        // A card revealed mid-turn carries NUM_TURNS_IN_PLAY as a creation tag
+        game.turnsInPlayChange(entity: opponentMinion1, turn: game.turnNumber())
+
+        verifySecrets(secretIndex: 1, allSecrets: CardIds.Secrets.Mage.All)
+        verifySecrets(secretIndex: 2, allSecrets: CardIds.Secrets.Paladin.All)
+        verifySecrets(secretIndex: 3, allSecrets: CardIds.Secrets.Rogue.All)
+    }
+
+    func testShenanigans_SecondDrawOnOpponentTurn_NotExcluded() {
+        setOpponentAsCurrentPlayer()
+        heroPlayer[.num_cards_drawn_this_turn] = 1
+        game.secretsManager?.handleCardDrawn(entity: playerCardInHand2)
+
+        XCTAssertEqual(secret(secretRogue1)?.isExcluded(cardId: CardIds.Secrets.Rogue.Shenanigans), false)
+    }
+
     func setPlayerAsCurrentPlayer() {
         heroPlayer[.current_player] = 1
     }

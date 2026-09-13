@@ -562,10 +562,15 @@ struct TagChangeActions {
             eventHandler.handleBeginMulligan()
         }
         eventHandler.handleMercenariesStateChange()
-        if let playerEntity = eventHandler.playerEntity, playerEntity.has(tag: .current_player) && value == Step.main_cleanup.rawValue {
-            let remainingMana = playerEntity[.resources] + playerEntity[.temp_resources] - playerEntity[.resources_used]
-            
-            AppDelegate.instance().coreManager.game.secretsManager?.handlePlayerTurnEnded(mana: remainingMana)
+        if let playerEntity = eventHandler.playerEntity, playerEntity.has(tag: .current_player) {
+            // MAIN_END comes before the end-of-turn triggers and MAIN_CLEANUP after them; CURRENT_PLAYER
+            // only moves at MAIN_NEXT
+            if value == Step.main_end.rawValue {
+                (eventHandler as? Game)?.secretsManager?.handlePlayerTurnEnding()
+            } else if value == Step.main_cleanup.rawValue {
+                let remainingMana = playerEntity[.resources] + playerEntity[.temp_resources] - playerEntity[.resources_used]
+                (eventHandler as? Game)?.secretsManager?.handlePlayerTurnEnded(mana: remainingMana)
+            }
         }
         guard !eventHandler.setupDone && eventHandler.entities.first?.1.name == "GameEntity" else { return }
 
@@ -626,9 +631,8 @@ struct TagChangeActions {
     }
     
     private func armorChange(eventHandler: PowerEventHandler, id: Int, value: Int, previous: Int) {
-        if value <= 0 {
-            return
-        }
+        // A hit that takes the last armor goes to 0, which counts too (HDT skips it)
+        guard previous > value else { return }
         
         if let entity = eventHandler.entities[id] {
             //We do prevValue - value because armor gets smaller as you lose it and damage gets bigger as you lose life.
@@ -882,11 +886,11 @@ struct TagChangeActions {
     }
     
     private func damageChange(eventHandler: PowerEventHandler, id: Int, value: Int, previous: Int) {
-        if value <= 0 {
-            return
-        }
-        if let entity = eventHandler.entities[id], let dealer = eventHandler.entities[entity[.last_affected_by]] {
-            eventHandler.entityDamage(dealer: dealer, entity: entity, damage: value - previous)
+        // DAMAGE going down is a heal; DAMAGE going to 0 a full heal or a reset
+        guard value > 0 && value > previous else { return }
+        if let entity = eventHandler.entities[id] {
+            // Like HDT, the damage counts even when LAST_AFFECTED_BY names no known entity
+            eventHandler.entityDamage(dealer: eventHandler.entities[entity[.last_affected_by]], entity: entity, damage: value - previous)
         }
     }
     

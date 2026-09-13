@@ -3795,9 +3795,12 @@ class Game: NSObject, PowerEventHandler {
     }
     
     func entityPredamage(entity: Entity, damage: Int) {
+        if player.entity?.isCurrentPlayer ?? false {
+            secretsManager?.handleEntityPredamage(entity: entity)
+        }
     }
     
-    func entityDamage(dealer: Entity, entity: Entity, damage: Int) {
+    func entityDamage(dealer: Entity?, entity: Entity, damage: Int) {
         if player.entity?.isCurrentPlayer ?? false {
             secretsManager?.entityDamage(dealer: dealer, target: entity, damage: damage)
         }

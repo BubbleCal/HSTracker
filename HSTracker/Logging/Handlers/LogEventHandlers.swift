@@ -100,7 +100,7 @@ protocol PowerEventHandler: AnyObject {
     
     func entityPredamage(entity: Entity, damage: Int)
     
-    func entityDamage(dealer: Entity, entity: Entity, damage: Int)
+    func entityDamage(dealer: Entity?, entity: Entity, damage: Int)
     
     func handleChameleosReveal(cardId: String)
     
