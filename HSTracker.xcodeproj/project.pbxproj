@@ -14,6 +14,7 @@
 		B455CADDFD89FB0BD792512E /* ActionHistoryLineParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = C41C8136755257495048D738 /* ActionHistoryLineParser.swift */; };
 		37484050B853DC35C7EBE1CE /* ActionHistoryVisibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0ABACE823F2CE9F42FE8C50B /* ActionHistoryVisibility.swift */; };
 		4EE31E63414BF94560B1520C /* ActionHistoryRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01AF303551DAC01F4B90F883 /* ActionHistoryRecorder.swift */; };
+		7061A608209D38D4D8A2AFF4 /* ActionHistoryViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA28E67F86E4FC69A9830BC0 /* ActionHistoryViewModel.swift */; };
 		4142FD5EA176D4723926F589 /* ActionHistoryLineParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3204CFFAF449B0F253E1040F /* ActionHistoryLineParserTests.swift */; };
 		7F2C43A935A0A68DA5952807 /* ActionHistoryVisibilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37A3ED54ACAAD229494B4681 /* ActionHistoryVisibilityTests.swift */; };
 		D263D38AEBD00222F3207171 /* ActionHistoryRecorderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 452016FCC727689B4E19D163 /* ActionHistoryRecorderTests.swift */; };
@@ -1873,6 +1874,7 @@
 		C41C8136755257495048D738 /* ActionHistoryLineParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionHistoryLineParser.swift; sourceTree = "<group>"; };
 		0ABACE823F2CE9F42FE8C50B /* ActionHistoryVisibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionHistoryVisibility.swift; sourceTree = "<group>"; };
 		01AF303551DAC01F4B90F883 /* ActionHistoryRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionHistoryRecorder.swift; sourceTree = "<group>"; };
+		FA28E67F86E4FC69A9830BC0 /* ActionHistoryViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionHistoryViewModel.swift; sourceTree = "<group>"; };
 		3204CFFAF449B0F253E1040F /* ActionHistoryLineParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionHistoryLineParserTests.swift; sourceTree = "<group>"; };
 		37A3ED54ACAAD229494B4681 /* ActionHistoryVisibilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionHistoryVisibilityTests.swift; sourceTree = "<group>"; };
 		452016FCC727689B4E19D163 /* ActionHistoryRecorderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionHistoryRecorderTests.swift; sourceTree = "<group>"; };
@@ -4501,6 +4503,7 @@
 			isa = PBXGroup;
 			children = (
 				AC96C3692BDC46AEE4F7540D /* Root */,
+				0937B8BF391B59D789835F80 /* ActionHistory */,
 				CC53180EA9D9AC06BCBFED7F /* GuideTooltip.swift */,
 				981DE23C2336148B1CE4DD38 /* OutlinedText.swift */,
 				6810D90CA28C2EB85EDE584F /* RoundedCorners.swift */,
@@ -4519,6 +4522,14 @@
 				B8C0A1102CCD500000F74CD9 /* CountersOverlayViewModel.swift */,
 			);
 			path = Counters;
+			sourceTree = "<group>";
+		};
+		0937B8BF391B59D789835F80 /* ActionHistory */ = {
+			isa = PBXGroup;
+			children = (
+				FA28E67F86E4FC69A9830BC0 /* ActionHistoryViewModel.swift */,
+			);
+			path = ActionHistory;
 			sourceTree = "<group>";
 		};
 		AC96C3692BDC46AEE4F7540D /* Root */ = {
@@ -6891,6 +6902,7 @@
 				B455CADDFD89FB0BD792512E /* ActionHistoryLineParser.swift in Sources */,
 				37484050B853DC35C7EBE1CE /* ActionHistoryVisibility.swift in Sources */,
 				4EE31E63414BF94560B1520C /* ActionHistoryRecorder.swift in Sources */,
+				7061A608209D38D4D8A2AFF4 /* ActionHistoryViewModel.swift in Sources */,
 				B8956CFD25509B3F0073D70C /* BattlegroundsMinionView.swift in Sources */,
 				B86D89E62D95EC4D00AB65A5 /* FerociousFelbat.swift in Sources */,
 				B85462142CDEB9FF0083BB31 /* CrewmateGenerator.swift in Sources */,

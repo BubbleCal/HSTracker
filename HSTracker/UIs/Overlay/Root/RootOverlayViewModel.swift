@@ -55,6 +55,9 @@ class RootOverlayViewModel: ObservableObject {
     let playerCounters = CountersOverlayViewModel(isPlayer: true)
     let opponentCounters = CountersOverlayViewModel(isPlayer: false)
 
+    // The current match's action history panel, fed by Game.actionHistory
+    let actionHistory = ActionHistoryViewModel()
+
     init() {
         // HDT wires the same reference in OverlayWindow's constructor
         // (BattlegroundsMinionPinningViewModel.CompsGuidesVM = ...): the key

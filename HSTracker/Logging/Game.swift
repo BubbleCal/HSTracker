@@ -232,6 +232,7 @@ class Game: NSObject, PowerEventHandler {
             self.updateRootOverlay()
         }
         self.updateCounters()
+        self.updateActionHistory()
 	}
 	
     // MARK: - GUI calls
@@ -573,6 +574,22 @@ class Game: NSObject, PowerEventHandler {
                     viewModel.playerCounters.isShown = Settings.showPlayerCounters
                     viewModel.opponentCounters.isShown = Settings.showOpponentCounters
                 }
+            }
+        }
+    }
+
+    // The action history panel is a RootOverlay child too. Battlegrounds and
+    // Mercenaries have no history (the recorder skips them), and the panel stays
+    // up on the end screen until the next game resets it.
+    var shouldShowActionHistory: Bool {
+        return Settings.showActionHistory && !isInMenu && isTraditionalHearthstoneMatch && shouldShowGUIElement && shouldShowTracker
+    }
+
+    func updateActionHistory() {
+        if #available(macOS 10.15, *) {
+            DispatchQueue.main.async { [self] in
+                guard let viewModel = windowManager.rootOverlay?.viewModel else { return }
+                viewModel.actionHistory.isShown = shouldShowActionHistory
             }
         }
     }
@@ -1491,6 +1508,14 @@ class Game: NSObject, PowerEventHandler {
         actionHistory.gameTypeProvider = { [weak self] in
             return self?.currentGameType ?? .gt_unknown
         }
+        // Already on the main thread and coalesced by the recorder
+        actionHistory.onChanged = { [weak self] in
+            guard let self else { return }
+            if #available(macOS 10.15, *) {
+                let snapshot = self.actionHistory.snapshot()
+                self.onMainOverlay { $0.actionHistory.apply(snapshot) }
+            }
+        }
         _battlegroundsBoardState = BattlegroundsBoardState(game: self)
 		player = Player(local: true, game: self)
         opponent = Player(local: false, game: self)
@@ -1528,7 +1553,7 @@ class Game: NSObject, PowerEventHandler {
 		                              Events.space_changed, Events.hearthstone_closed, Events.hearthstone_running,
 		                              Events.hearthstone_active, Events.hearthstone_deactived, Settings.can_join_fullscreen,
 		                              Settings.hide_all_trackers_when_not_in_game, Settings.hide_all_trackers_when_game_in_background,
-		                              Settings.card_size, Settings.theme_token]
+		                              Settings.card_size, Settings.theme_token, Settings.show_action_history]
         
         // Toggling Show secret helper used to wait for the next secret change to take effect
         for option in [Settings.show_secret_helper, Settings.auto_grayout_secrets, Settings.remove_secrets_from_list] {
@@ -2108,6 +2133,7 @@ class Game: NSObject, PowerEventHandler {
         turnTimer.stop()
 
         isInMenu = true
+        updateActionHistory()
         
         DispatchQueue.main.async {
             self.updateMulliganGuidePreLobby()

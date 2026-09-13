@@ -488,6 +488,9 @@ final class Settings {
     // whenever they are known to have a Death Knight tourist.
     @UserDefault(key: Settings.opponent_corpses_counter, defaultValue: true)
     static var showOpponentCorpsesCounter: Bool
+    // The action history panel on the overlay, for the current constructed match
+    @UserDefault(key: Settings.show_action_history, defaultValue: true)
+    static var showActionHistory: Bool
     @UserDefault(key: Settings.remove_cards_from_deck, defaultValue: false)
     static var removeCardsFromDeck: Bool
     @UserDefault(key: Settings.highlight_last_drawn, defaultValue: true)
@@ -829,6 +832,7 @@ extension Settings {
     static let opponent_graveyard_details_frame = "opponent_graveyard_details_frame"
     static let opponent_counters = "opponent_counters"
     static let opponent_corpses_counter = "opponent_corpses_counter"
+    static let show_action_history = "show_action_history"
     static let interacted_with_link_opponentDeck = "interacted_with_link_opponentDeck"
     static let enable_link_opponent_deck = "enable_link_opponent_deck"
     static let opponent_related_cards = "opponent_related_cards"
