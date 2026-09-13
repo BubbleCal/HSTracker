@@ -23,6 +23,7 @@ class PlayerTrackersPreferences: PreferencePaneController, PreferencePane {
     @IBOutlet var showDeathrattleCounter: NSButton!
     @IBOutlet var flashOnDraw: NSButton!
     @IBOutlet var showRecord: NSButton!
+    @IBOutlet var showMatchupWinRate: NSButton!
     @IBOutlet var inHandColor: NSColorWell!
     @IBOutlet var showBoardDamage: NSButton!
     @IBOutlet var showDeckName: NSButton!
@@ -52,6 +53,7 @@ class PlayerTrackersPreferences: PreferencePaneController, PreferencePane {
         showDeathrattleCounter.state = Settings.showPlayerDeathrattle ? .on : .off
         flashOnDraw.state = Settings.flashOnDraw ? .on : .off
         showRecord.state = Settings.showWinLossRatio ? .on : .off
+        showMatchupWinRate.state = Settings.showMatchupWinRate ? .on : .off
         inHandColor.color = Settings.playerInHandColor
         showBoardDamage.state = Settings.playerBoardDamage ? .on : .off
         showDeckName.state = Settings.showDeckNameInTracker ? .on : .off
@@ -90,6 +92,8 @@ class PlayerTrackersPreferences: PreferencePaneController, PreferencePane {
             Settings.flashOnDraw = flashOnDraw.state == .on
         } else if sender == showRecord {
             Settings.showWinLossRatio = showRecord.state == .on
+        } else if sender == showMatchupWinRate {
+            Settings.showMatchupWinRate = showMatchupWinRate.state == .on
         } else if sender == showBoardDamage {
             Settings.playerBoardDamage = showBoardDamage.state == .on
         } else if sender == showDeckName {

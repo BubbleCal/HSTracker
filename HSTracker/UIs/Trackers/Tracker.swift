@@ -44,6 +44,16 @@ class Tracker: OverWindowController, CardCellHover {
     var currentFormat: Format = .unknown
     var matchInfo: MatchInfo?
     var recordTrackerMessage: String = ""
+    /// "VS <class>: W-L (x%)" under the W-L line; empty hides it.
+    var matchupTrackerMessage: String = ""
+    /// Built in code rather than in Tracker.xib: it is the same frame as the W-L
+    /// line, only with its own text and setting.
+    private let matchupTracker: StringTracker = {
+        let tracker = StringTracker()
+        tracker.shrinksToFit = true
+        tracker.isHidden = true
+        return tracker
+    }()
     var observer: NSObjectProtocol?
     
     private func getTrackingArea() -> NSTrackingArea {
@@ -68,6 +78,7 @@ class Tracker: OverWindowController, CardCellHover {
             playerSideboards.setPlayerType(playerType: playerType)
             opponentRelatedCards.setPlayerType(playerType: playerType)
         }
+        window?.contentView?.addSubview(matchupTracker)
         cardsView.delegate = self
         playerBottom.setDelegate(delegate: self)
         playerTop.setDelegate(delegate: self)
@@ -146,12 +157,14 @@ class Tracker: OverWindowController, CardCellHover {
             playerDrawChance.isHidden = true
             playerClass.isHidden = !Settings.showOpponentClassInTracker
             recordTracker.isHidden = true
+            matchupTracker.isHidden = true
         } else {
             cardCounter.isHidden = !Settings.showPlayerCardCount
             opponentDrawChance.isHidden = true
             playerDrawChance.isHidden = !Settings.showPlayerDrawChance
             playerClass.isHidden = !Settings.showDeckNameInTracker
             recordTracker.isHidden = !Settings.showWinLossRatio
+            matchupTracker.isHidden = !Settings.showMatchupWinRate || matchupTrackerMessage.isEmpty
         }
         
         graveyardCounter.isHidden = !showGraveyard
@@ -161,6 +174,11 @@ class Tracker: OverWindowController, CardCellHover {
         }
         
         recordTracker.message = recordTrackerMessage
+
+        matchupTracker.message = matchupTrackerMessage
+        if !matchupTracker.isHidden {
+            matchupTracker.needsDisplay = true
+        }
                 
         // map entitiy to card [count]
         var minionmap: [Card: Int] = [:]
@@ -265,6 +283,9 @@ class Tracker: OverWindowController, CardCellHover {
             offsetFrames += smallFrameHeight
         }
         if !recordTracker.isHidden {
+            offsetFrames += smallFrameHeight
+        }
+        if !matchupTracker.isHidden {
             offsetFrames += smallFrameHeight
         }
 
@@ -393,6 +414,13 @@ class Tracker: OverWindowController, CardCellHover {
                                          y: y,
                                          width: windowWidth,
                                          height: smallFrameHeight)
+        }
+        if !matchupTracker.isHidden {
+            y -= smallFrameHeight
+            matchupTracker.frame = NSRect(x: 0,
+                                          y: y,
+                                          width: windowWidth,
+                                          height: smallFrameHeight)
         }
         
         bottomY = y

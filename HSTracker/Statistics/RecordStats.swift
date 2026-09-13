@@ -526,3 +526,45 @@ extension StatsHelper {
         }
     }
 }
+
+// MARK: - Tracker matchup line
+
+extension StatsHelper {
+    /// The deck's ladder record against one class, for the player tracker's
+    /// "VS <class>" line (HDT's LblWinRateAgainst in OverlayWindow.Update.cs).
+    ///
+    /// Only Ranked and Casual games count, the same scope as the Win/Loss Record
+    /// window, so the tracker and the window's matchup table agree. Returns nil when
+    /// the line should stay hidden: the opponent's class is not known yet (or is not
+    /// a real class, like an adventure boss), or the deck is an Arena deck, which by
+    /// definition never has ladder games and would always read 0-0.
+    static func matchupTrackerRecord(deck: Deck, opponentClass: CardClass?) -> StatsDeckRecord? {
+        guard let opponentClass = opponentClass, Cards.classes.contains(opponentClass), !deck.isArena else {
+            return nil
+        }
+        var wins = 0
+        var losses = 0
+        var draws = 0
+        for stat in deck.gameStats where stat.opponentHero == opponentClass && recordModes.contains(stat.gameMode) {
+            switch stat.result {
+            case .win: wins += 1
+            case .loss: losses += 1
+            case .draw: draws += 1
+            case .unknown: break
+            }
+        }
+        return StatsDeckRecord(wins: wins, losses: losses, draws: draws, total: wins + losses + draws)
+    }
+
+    /// "VS <class>: W-L (x%)". The percentage is left out until a game was won or
+    /// lost, where HDT prints "-%".
+    static func matchupTrackerLabel(opponentClass: CardClass, record: StatsDeckRecord) -> String {
+        var score = "\(record.wins)-\(record.losses)"
+        let winRate = getDeckWinRate(record: record)
+        if winRate >= 0 {
+            score += " (\(Int((winRate * 100).rounded()))%)"
+        }
+        return String(format: String.localizedString("Tracker_MatchupWinRate", comment: ""),
+                      String.localizedString(opponentClass.rawValue, comment: ""), score)
+    }
+}

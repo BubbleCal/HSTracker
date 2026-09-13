@@ -29615,6 +29615,29 @@
         }
       }
     },
+    "Tracker_MatchupWinRate" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VS %1$@: %2$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "对阵%1$@：%2$@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "對陣%1$@：%2$@"
+          }
+        }
+      }
+    },
     "Trackers" : {
       "extractionState" : "manual",
       "localizations" : {

@@ -382,6 +382,89 @@ class RecordStatsTests: HSTrackerTests {
         XCTAssertFalse(RealmHelper.deleteGameStat(statId: deckGameId))
     }
 
+    // MARK: - Tracker matchup line
+
+    private func makeStat(_ result: GameResult, mode: GameMode, against opponent: CardClass) -> GameStats {
+        let stat = makeStat(result, mode: mode)
+        stat.opponentHero = opponent
+        return stat
+    }
+
+    func testMatchupTrackerRecordCountsLadderGamesAgainstTheClass() throws {
+        let realm = try Realm()
+        let deck = try makeDeck(.rogue, games: [
+            makeStat(.win, mode: .ranked, against: .mage),
+            makeStat(.win, mode: .ranked, against: .mage),
+            makeStat(.loss, mode: .casual, against: .mage),
+            makeStat(.draw, mode: .ranked, against: .mage),
+            makeStat(.unknown, mode: .ranked, against: .mage),
+            // Not ladder: the tracker agrees with the Win/Loss Record window.
+            makeStat(.win, mode: .arena, against: .mage),
+            makeStat(.win, mode: .friendly, against: .mage),
+            makeStat(.win, mode: .brawl, against: .mage),
+            makeStat(.loss, mode: .practice, against: .mage),
+            // Another class.
+            makeStat(.loss, mode: .ranked, against: .druid)
+        ], in: realm)
+
+        let mage = try XCTUnwrap(StatsHelper.matchupTrackerRecord(deck: deck, opponentClass: .mage))
+        XCTAssertEqual(mage.wins, 2)
+        XCTAssertEqual(mage.losses, 1)
+        XCTAssertEqual(mage.draws, 1)
+        XCTAssertEqual(mage.total, 4)
+
+        let druid = try XCTUnwrap(StatsHelper.matchupTrackerRecord(deck: deck, opponentClass: .druid))
+        XCTAssertEqual(druid.wins, 0)
+        XCTAssertEqual(druid.losses, 1)
+
+        // A class the deck never met still shows, as 0-0.
+        let hunter = try XCTUnwrap(StatsHelper.matchupTrackerRecord(deck: deck, opponentClass: .hunter))
+        XCTAssertEqual(hunter.total, 0)
+    }
+
+    func testMatchupTrackerRecordHiddenWithoutClassOrForArenaDecks() throws {
+        let realm = try Realm()
+        let deck = try makeDeck(.rogue, games: [makeStat(.win, mode: .ranked, against: .neutral)], in: realm)
+        XCTAssertNil(StatsHelper.matchupTrackerRecord(deck: deck, opponentClass: nil))
+        XCTAssertNil(StatsHelper.matchupTrackerRecord(deck: deck, opponentClass: .neutral))
+        XCTAssertNil(StatsHelper.matchupTrackerRecord(deck: deck, opponentClass: .invalid))
+
+        let arena = try makeDeck(.mage, games: [makeStat(.win, mode: .arena, against: .mage)], in: realm)
+        try realm.write {
+            arena.isArena = true
+        }
+        XCTAssertNil(StatsHelper.matchupTrackerRecord(deck: arena, opponentClass: .mage))
+    }
+
+    func testMatchupTrackerRecordFollowsNewGames() throws {
+        let realm = try Realm()
+        let deck = try makeDeck(.warlock, games: [makeStat(.loss, mode: .ranked, against: .priest)], in: realm)
+        XCTAssertEqual(StatsHelper.matchupTrackerRecord(deck: deck, opponentClass: .priest)?.wins, 0)
+
+        RealmHelper.addStatistics(to: deck, stats: makeStat(.win, mode: .ranked, against: .priest))
+
+        let record = try XCTUnwrap(StatsHelper.matchupTrackerRecord(deck: deck, opponentClass: .priest))
+        XCTAssertEqual(record.wins, 1)
+        XCTAssertEqual(record.losses, 1)
+    }
+
+    func testMatchupTrackerLabelScore() {
+        // The words around the score are localized (the test host runs in the
+        // machine's language), so only the score at the end is checked.
+        let label = StatsHelper.matchupTrackerLabel(opponentClass: .mage,
+                                                    record: StatsDeckRecord(wins: 2, losses: 1, draws: 1, total: 4))
+        XCTAssertTrue(label.hasSuffix("2-1 (67%)"), label)
+        XCTAssertTrue(label.contains(String.localizedString(CardClass.mage.rawValue, comment: "")), label)
+
+        let empty = StatsHelper.matchupTrackerLabel(opponentClass: .druid, record: StatsDeckRecord())
+        XCTAssertTrue(empty.hasSuffix("0-0"), empty)
+        XCTAssertFalse(empty.contains("%"), empty)
+
+        let drawsOnly = StatsHelper.matchupTrackerLabel(opponentClass: .druid,
+                                                        record: StatsDeckRecord(wins: 0, losses: 0, draws: 2, total: 2))
+        XCTAssertTrue(drawsOnly.hasSuffix("0-0"), drawsOnly)
+    }
+
     // MARK: - Migration
 
     func testMigrationFromSchema8KeepsGames() throws {

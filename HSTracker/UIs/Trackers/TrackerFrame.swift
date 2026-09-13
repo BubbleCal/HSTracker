@@ -76,15 +76,38 @@ class TextFrame: NSView {
         add(string: String(format: format, val), rect: rect)
     }
 
-    func add(string val: String, rect: NSRect, alignment: NSTextAlignment = .left) {
-        let attributes = TextAttributes()
-            .font(NSFont(name: "ChunkFive", size: round(18 / ratioHeight)))
-            .foregroundColor(.white)
-            .strokeColor(.black)
-            .strokeWidth(-2)
-            .alignment(alignment)
+    /// - Parameter shrinkToFit: lower the font size until the text fits on one line
+    ///   instead of wrapping out of the frame, for text whose length is not bounded
+    ///   (class names, other languages).
+    func add(string val: String, rect: NSRect, alignment: NSTextAlignment = .left,
+             shrinkToFit: Bool = false) {
+        let drawRect = ratio(rect)
+        let fullSize = round(18 / ratioHeight)
+        func attributes(size: CGFloat) -> TextAttributes {
+            return TextAttributes()
+                .font(NSFont(name: "ChunkFive", size: size))
+                .foregroundColor(.white)
+                .strokeColor(.black)
+                .strokeWidth(-2)
+                .alignment(alignment)
+        }
 
-        NSAttributedString(string: val, attributes: attributes)
-            .draw(in: ratio(rect))
+        var size = fullSize
+        var string = NSAttributedString(string: val, attributes: attributes(size: size))
+        if shrinkToFit {
+            let minimumSize = max(8, round(fullSize * 0.5))
+            while size > minimumSize && string.size().width > drawRect.width {
+                size -= 1
+                string = NSAttributedString(string: val, attributes: attributes(size: size))
+            }
+        }
+        // Text is drawn from the top of the rect, so lower a shrunk line by half of
+        // the height it lost to keep it centred in the frame.
+        var target = drawRect
+        if size < fullSize {
+            let fullHeight = NSAttributedString(string: val, attributes: attributes(size: fullSize)).size().height
+            target.size.height -= max(0, (fullHeight - string.size().height) / 2)
+        }
+        string.draw(in: target)
     }
 }

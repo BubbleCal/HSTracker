@@ -372,10 +372,24 @@ class Game: NSObject, PowerEventHandler {
                         tracker.recordTrackerMessage = StatsHelper
                             .getDeckManagerRecordLabel(deck: deck,
                                                        mode: .all)
+                        // HDT's LblWinRateAgainst. The opponent's class stays set
+                        // until the next game resets it, so the line is still there
+                        // on the end screen, already counting the game just played
+                        // (game_stats_changed refreshes this tracker).
+                        if Settings.showMatchupWinRate,
+                           let opponentClass = self.opponent.originalClass,
+                           let record = StatsHelper.matchupTrackerRecord(deck: deck,
+                                                                         opponentClass: opponentClass) {
+                            tracker.matchupTrackerMessage = StatsHelper
+                                .matchupTrackerLabel(opponentClass: opponentClass, record: record)
+                        } else {
+                            tracker.matchupTrackerMessage = ""
+                        }
                     } else {
                         // An unsaved deck has no record; without this the line kept
                         // showing the previous deck's W-L.
                         tracker.recordTrackerMessage = ""
+                        tracker.matchupTrackerMessage = ""
                     }
                     tracker.playerName = currentDeck.name
                     if !currentDeck.heroId.isEmpty {
@@ -385,6 +399,7 @@ class Game: NSObject, PowerEventHandler {
                     }
                 } else {
                     tracker.recordTrackerMessage = ""
+                    tracker.matchupTrackerMessage = ""
                     tracker.playerName = player.name
                     tracker.playerClassId = playerHeroId
                 }
@@ -1492,7 +1507,8 @@ class Game: NSObject, PowerEventHandler {
 		                                 Settings.show_win_loss_ratio, Settings.player_in_hand_color, Settings.show_deck_name,
 		                                 Settings.player_graveyard_details_frame, Settings.player_graveyard_frame,
                                          Settings.player_cards_top, Settings.player_cards_bottom, Settings.player_cards_top,
-                                         Settings.player_cards_bottom, Settings.hide_player_sideboards]
+                                         Settings.player_cards_bottom, Settings.hide_player_sideboards,
+                                         Settings.show_matchup_win_rate, Events.game_stats_changed]
 		
 		// events that should update the opponent's tracker
 		let opponentTrackerUpdateEvents = [Settings.show_opponent_tracker, Settings.opponent_card_count, Settings.opponent_draw_chance,

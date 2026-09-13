@@ -13,11 +13,14 @@ class StringTracker: TextFrame {
     private let textRect = NSRect(x: 10, y: 1, width: CGFloat(kFrameWidth) - 20, height: 25)
 
     var message: String = ""
+    /// Shrink a message that is wider than the frame instead of letting it wrap
+    /// out of view.
+    var shrinksToFit = false
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
 
         add(image: "text-frame.png", rect: frameRect)
-        add(string: message, rect: textRect, alignment: .center)
+        add(string: message, rect: textRect, alignment: .center, shrinkToFit: shrinksToFit)
     }
 }

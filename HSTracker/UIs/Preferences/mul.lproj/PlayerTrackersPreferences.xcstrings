@@ -1207,6 +1207,30 @@
         }
       }
     },
+    "Vsw-rT-3kP.title" : {
+      "comment" : "Class = \"NSButtonCell\"; title = \"Show win rate against the opponent's class\"; ObjectID = \"Vsw-rT-3kP\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Show win rate against the opponent's class"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示对阵当前对手职业的胜率"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "顯示對陣當前對手職業的勝率"
+          }
+        }
+      }
+    },
     "Zrq-qH-h4q.title" : {
       "comment" : "Class = \"NSButtonCell\"; title = \"Show active effects\"; ObjectID = \"Zrq-qH-h4q\";",
       "extractionState" : "extracted_with_value",
