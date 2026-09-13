@@ -22,9 +22,17 @@ struct RealmHelper {
 	Initializes the realm database. Calls migration if current database's version differs from the latest one
 	*/
 	static func initRealm(destination: URL) {
-		let config = Realm.Configuration(
-			fileURL: destination.appendingPathComponent("hstracker.realm"),
-			schemaVersion: 8,
+		Realm.Configuration.defaultConfiguration = configuration(fileURL: destination.appendingPathComponent("hstracker.realm"))
+	}
+
+	static let schemaVersion: UInt64 = 9
+
+	/// The app's Realm configuration for a given file; tests open a schema-8 file with it
+	/// to exercise the real migration.
+	static func configuration(fileURL: URL) -> Realm.Configuration {
+		return Realm.Configuration(
+			fileURL: fileURL,
+			schemaVersion: schemaVersion,
 			migrationBlock: { migration, oldSchemaVersion in
 				// version == 1 : add hearthstoneId in Deck,
 				// automatically managed by realm, nothing to do here
@@ -68,8 +76,13 @@ struct RealmHelper {
                         newObject!["lastEdited"] = Date()
                     }
                 }
+                // version == 9 : the DefaultDeckStats class (games without a saved
+                // deck) and GameStats' coinKnown, recordVersion and rank before/after
+                // fields. All additive: Realm adds the columns filled with zero/false
+                // and nothing is backfilled. coinKnown=false and recordVersion=0 mark
+                // the old rows' coin and duration as unknown, and starLevel=0 their
+                // rank. Existing GameStats are never rewritten.
 		})
-		Realm.Configuration.defaultConfiguration = config
 	}
 	
 	// MARK: - Deck operations
@@ -487,7 +500,10 @@ struct RealmHelper {
 		}
 	}
 	
-	static func delete(deck: Deck) {
+	/// Deletes a deck. With `keepStats` its games move into the class's
+	/// DefaultDeckStats bucket first, in the same write, like HDT does when
+	/// Config.KeepStatsWhenDeletingDeck is on (its default).
+	static func delete(deck: Deck, keepStats: Bool = Settings.keepStatsWhenDeletingDeck) {
 		guard let realm = try? Realm() else {
 			logger.error("Error accessing Realm database")
 			return
@@ -496,6 +512,13 @@ struct RealmHelper {
 		do {
 			try realm.write {
                 Influx.breadcrumb(eventName: "realm_delete_deck", withProperties: ["name": deck.name, "id": deck.deckId])
+				if keepStats && !deck.gameStats.isEmpty {
+					let bucket = defaultDeckStats(for: deck.playerClass, in: realm)
+					for stat in deck.gameStats {
+						bucket.gameStats.append(stat.detachedCopy())
+					}
+					logger.info("Kept \(deck.gameStats.count) games of deleted deck \(deck.name) in the \(deck.playerClass) bucket")
+				}
 				realm.delete(deck)
 			}
 		} catch {
@@ -567,6 +590,97 @@ struct RealmHelper {
 		}
 	}
     
+    /// Files a game played without a saved deck under its class, like HDT's
+    /// DefaultDeckStats.Instance.GetDeckStats(class).Games.Add.
+    static func addStatistics(toDefaultDeckFor playerClass: CardClass, stats: GameStats) {
+        guard let realm = try? Realm() else {
+            logger.error("Error accessing Realm database")
+            return
+        }
+
+        do {
+            try realm.write {
+                defaultDeckStats(for: playerClass, in: realm).gameStats.append(stats)
+            }
+        } catch {
+            logger.error("Can't save statistic : \(error)")
+        }
+    }
+
+    /// Gets or creates the bucket for a class. Must be called inside a write.
+    private static func defaultDeckStats(for playerClass: CardClass, in realm: Realm) -> DefaultDeckStats {
+        if let existing = realm.object(ofType: DefaultDeckStats.self, forPrimaryKey: playerClass.rawValue) {
+            return existing
+        }
+        let bucket = DefaultDeckStats()
+        bucket.playerClassRaw = playerClass.rawValue
+        realm.add(bucket)
+        return bucket
+    }
+
+    static func getDefaultDeckStats() -> [DefaultDeckStats] {
+        guard let realm = try? Realm() else {
+            logger.error("Error accessing Realm database")
+            return []
+        }
+        return Array(realm.objects(DefaultDeckStats.self))
+    }
+
+    /// Deletes one game, wherever it is stored (a deck or a No-deck bucket).
+    /// Removing an embedded object from its list deletes it.
+    @discardableResult
+    static func deleteGameStat(statId: String) -> Bool {
+        guard let realm = try? Realm() else {
+            logger.error("Error accessing Realm database")
+            return false
+        }
+
+        let lists: [List<GameStats>] = realm.objects(Deck.self).map { $0.gameStats }
+            + realm.objects(DefaultDeckStats.self).map { $0.gameStats }
+        for list in lists {
+            guard let index = list.firstIndex(where: { $0.statId == statId }) else {
+                continue
+            }
+            do {
+                try realm.write {
+                    list.remove(at: index)
+                }
+                return true
+            } catch {
+                logger.error("Can't delete statistic : \(error)")
+                return false
+            }
+        }
+        return false
+    }
+
+    /// Stores a post-game ladder position read after the game was saved, for when
+    /// Hearthstone had not updated its MedalInfo yet at the end of the game.
+    static func updateRankAfter(statId: String, after: RankSnapshot) {
+        guard let realm = try? Realm() else {
+            logger.error("Error accessing Realm database")
+            return
+        }
+        // Called from a background queue, whose cached Realm does not auto-refresh
+        // and may predate the game being saved.
+        realm.refresh()
+
+        let lists: [List<GameStats>] = realm.objects(Deck.self).map { $0.gameStats }
+            + realm.objects(DefaultDeckStats.self).map { $0.gameStats }
+        guard let stat = lists.lazy.compactMap({ list in list.first(where: { $0.statId == statId }) }).first else {
+            return
+        }
+        do {
+            try realm.write {
+                stat.starLevelAfter = after.starLevel
+                stat.starsAfter = after.stars
+                stat.legendRankAfter = after.legendRank
+            }
+        } catch {
+            logger.error("Can't update statistic : \(error)")
+        }
+    }
+
     static func removeAllGameStats(from deck: Deck) {
         guard let realm = try? Realm() else {
             logger.error("Error accessing Realm database")

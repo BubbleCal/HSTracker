@@ -199,6 +199,22 @@ final class Settings {
     static var deckSortOrder: String
     @UserDefault(key: Settings.archive_arena_deck, defaultValue: true)
     static var autoArchiveArenaDeck: Bool
+    /// HDT Config.KeepStatsWhenDeletingDeck: a deleted deck's games move into its
+    /// class's "No deck" bucket instead of being deleted with it.
+    @UserDefault(key: Settings.keep_stats_when_deleting_deck, defaultValue: true)
+    static var keepStatsWhenDeletingDeck: Bool
+    // Win/Loss Record window filters, remembered between openings (not in Preferences).
+    // Mode: GameMode.all means every ladder mode (Ranked and Casual).
+    @UserDefault(key: Settings.record_filter_mode, defaultValue: GameMode.all.rawValue)
+    static var recordFilterMode: Int
+    @UserDefault(key: Settings.record_filter_format, defaultValue: Format.all.rawValue)
+    static var recordFilterFormat: String
+    @UserDefault(key: Settings.record_filter_time_frame, defaultValue: 0)
+    static var recordFilterTimeFrame: Int
+    @UserDefault(key: Settings.record_include_archived, defaultValue: true)
+    static var recordIncludeArchived: Bool
+    @UserDefault(key: Settings.record_include_no_deck, defaultValue: true)
+    static var recordIncludeNoDeck: Bool
     @UserDefault(key: Settings.hearthstone_log_path, defaultValue: "/Applications/Hearthstone")
     static var hearthstonePath: String
     static var hearthstoneLanguage: Language.Hearthstone? {
@@ -522,6 +538,9 @@ final class Settings {
     static var removeSecretsFromList: Bool
     @UserDefault(key: Settings.show_win_loss_ratio, defaultValue: false)
     static var showWinLossRatio: Bool
+    /// HDT LblWinRateAgainst: the active deck's ladder record against the opponent's class.
+    @UserDefault(key: Settings.show_matchup_win_rate, defaultValue: true)
+    static var showMatchupWinRate: Bool
     static var playerInHandColor: NSColor {
         get {
             if let hexColor = get(name: Settings.player_in_hand_color) as? [CGFloat], hexColor.count == 3 {
@@ -701,6 +720,12 @@ extension Settings {
     static let card_size = "card_size"
     
     static let deck_sort_criteria = "deck_sort_criteria"
+    static let keep_stats_when_deleting_deck = "keep_stats_when_deleting_deck"
+    static let record_filter_mode = "record_filter_mode"
+    static let record_filter_format = "record_filter_format"
+    static let record_filter_time_frame = "record_filter_time_frame"
+    static let record_include_archived = "record_include_archived"
+    static let record_include_no_deck = "record_include_no_deck"
     static let deck_sort_order = "deck_sort_order"
     
     static let hearthstone_log_path = "hearthstone_log_path"
@@ -826,6 +851,7 @@ extension Settings {
     static let auto_grayout_secrets = "auto_grayout_secrets"
     static let remove_secrets_from_list = "remove_secrets_from_list"
     static let show_win_loss_ratio = "show_win_loss_ratio"
+    static let show_matchup_win_rate = "show_matchup_win_rate"
     static let player_in_hand_color = "player_in_hand_color"
     static let show_apphealth = "show_apphealth"
     static let player_tracker_frame = "player_tracker_frame"

@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		14029F20A64FB3E4BB7CD009 /* RecordStatsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C38F2226D77177A24038CA24 /* RecordStatsTests.swift */; };
+		D58D46CB44DCA34BF2293EB9 /* RecordStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3850E6EE079AE2B92940A82B /* RecordStats.swift */; };
+		8B3037838F49193872700E7D /* DefaultDeckStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BA72A1B9DC53C87BAA265D0 /* DefaultDeckStats.swift */; };
 		BB5E553A0000000000000064 /* BattlegroundsSessionOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB5E553A0000000000000001 /* BattlegroundsSessionOverlayView.swift */; };
 		BB5E551A0000000000000002 /* BattlegroundsSessionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB5E551A0000000000000001 /* BattlegroundsSessionViewModel.swift */; };
 		BB5E551A0000000000000005 /* BattlegroundsSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB5E551A0000000000000004 /* BattlegroundsSessionView.swift */; };
@@ -1853,6 +1856,9 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		C38F2226D77177A24038CA24 /* RecordStatsTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = RecordStatsTests.swift; sourceTree = "<group>"; };
+		3850E6EE079AE2B92940A82B /* RecordStats.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = RecordStats.swift; path = Statistics/RecordStats.swift; sourceTree = "<group>"; };
+		8BA72A1B9DC53C87BAA265D0 /* DefaultDeckStats.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DefaultDeckStats.swift; sourceTree = "<group>"; };
 		BB5E553A0000000000000001 /* BattlegroundsSessionOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BattlegroundsSessionOverlayView.swift; sourceTree = "<group>"; };
 		BB5E551A0000000000000001 /* BattlegroundsSessionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BattlegroundsSessionViewModel.swift; sourceTree = "<group>"; };
 		BB5E551A0000000000000004 /* BattlegroundsSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BattlegroundsSessionView.swift; sourceTree = "<group>"; };
@@ -4050,6 +4056,7 @@
 				439C7E601C7772C100D29859 /* HSTrackerTests.swift */,
 				1CF1B58B1E815810007DCBF2 /* LogReaderTests.swift */,
 				C94596811D174FBA008CD47A /* StatsTests.swift */,
+				C38F2226D77177A24038CA24 /* RecordStatsTests.swift */,
 				439C7E621C7772C100D29859 /* Info.plist */,
 				439B1DF51E86CC280098BBBC /* DatabaseTests.swift */,
 				1CCB4AE71E8A41E3003FD1AD /* PowerParserTests.swift */,
@@ -4080,6 +4087,7 @@
 				439C7E811C777CFC00D29859 /* Card.swift */,
 				43E7BEB01DBB81B10057DC0C /* RealmCard.swift */,
 				435CD9081E1E3AB4000AF3DE /* GameStats.swift */,
+				8BA72A1B9DC53C87BAA265D0 /* DefaultDeckStats.swift */,
 				435CD90A1E1E4447000AF3DE /* ServerInfo.swift */,
 				B87765CA2BB717CD003BE49D /* TrackedCard.swift */,
 			);
@@ -6354,6 +6362,7 @@
 			isa = PBXGroup;
 			children = (
 				C99C0C9C1D0A608C000DD6FB /* StatsHelper.swift */,
+				3850E6EE079AE2B92940A82B /* RecordStats.swift */,
 				C92C68171D1F74CE009030DC /* LadderGrid.swift */,
 				C92C68191D1F8E27009030DC /* Ranks.swift */,
 			);
@@ -6836,6 +6845,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D58D46CB44DCA34BF2293EB9 /* RecordStats.swift in Sources */,
+				8B3037838F49193872700E7D /* DefaultDeckStats.swift in Sources */,
 				B8956CFD25509B3F0073D70C /* BattlegroundsMinionView.swift in Sources */,
 				B86D89E62D95EC4D00AB65A5 /* FerociousFelbat.swift in Sources */,
 				B85462142CDEB9FF0083BB31 /* CrewmateGenerator.swift in Sources */,
@@ -8578,6 +8589,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				14029F20A64FB3E4BB7CD009 /* RecordStatsTests.swift in Sources */,
 				439BD8C91EBCD40200959F69 /* EnumTests.swift in Sources */,
 				43C1C9F61E96CCDB008C20B1 /* SecretTests.swift in Sources */,
 				43C1C9FB1E96CCE9008C20B1 /* StatsTests.swift in Sources */,

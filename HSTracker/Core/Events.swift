@@ -11,6 +11,11 @@ import Foundation
 class Events {
     
     static let reload_decks = "reload_decks"
+
+    // A game was recorded, deleted or moved (e.g. into a No-deck bucket). Separate
+    // from reload_decks so a game end does not rebuild the Decks menu or refresh
+    // every tracker.
+    static let game_stats_changed = "game_stats_changed"
     
     static let space_changed = "space_changed"
     

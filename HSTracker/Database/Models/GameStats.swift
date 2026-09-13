@@ -15,6 +15,9 @@ class InternalGameStats {
     var playerHero: CardClass = .neutral
     var opponentHero: CardClass = .neutral
     var coin = false
+    /// Whether `coin` was read from a FIRST_PLAYER tag. `coin` alone cannot tell
+    /// "went first" from "never found the player entities" (both leave it false).
+    var coinKnown = false
     var gameMode: GameMode = .none
     var result: GameResult = .unknown
     var turns = -1
@@ -160,6 +163,32 @@ class InternalGameStats {
         gameStats.format = format
         gameStats.hsReplayId = hsReplayId
         gameStats.result = result
+        // These existed on GameStats from the start but were never copied, so every
+        // stored game had coin=false, playerHero=neutral and a zero duration.
+        gameStats.playerHero = playerHero
+        gameStats.coin = coin
+        gameStats.coinKnown = coinKnown
+        gameStats.startTime = startTime
+        gameStats.endTime = endTime
+        gameStats.note = note
+        // rank/opponentRank stay at GameStats' -1 ("unknown"): InternalGameStats
+        // defaults them to 0, which StatsHelper.guessRank would read as a real rank.
+        if gameMode == .ranked && starLevel > 0 {
+            gameStats.leagueId = leagueId
+            gameStats.starLevel = starLevel
+            gameStats.starMultiplier = starMultiplier
+            if opponentStarLevel > 0 {
+                gameStats.opponentStarLevel = opponentStarLevel
+            }
+            // Only filled when the post-game medal read succeeded (HDT
+            // UpdatePostGameRanks); otherwise the "after" side stays unknown.
+            if starLevelAfter > 0 {
+                gameStats.starLevelAfter = starLevelAfter
+                gameStats.starsAfter = starsAfter
+                gameStats.legendRankAfter = legendRankAfter
+            }
+        }
+        gameStats.recordVersion = GameStats.currentRecordVersion
         for c in opponentCards {
             if let id = c.id {
                 let card = RealmCard(id: id, count: c.count)
@@ -179,6 +208,7 @@ extension InternalGameStats: CustomStringConvertible {
         return "playerHero: \(playerHero), " +
             "opponentHero: \(opponentHero), " +
             "coin: \(coin), " +
+            "coinKnown: \(coinKnown), " +
             "gameMode: \(gameMode), " +
             "result: \(result), " +
             "turns: \(turns), " +
@@ -203,6 +233,13 @@ extension InternalGameStats: CustomStringConvertible {
             "arenaLosses: \(arenaLosses), " +
             "brawlWins: \(brawlWins), " +
             "brawlLosses: \(brawlLosses), " +
+            "leagueId: \(leagueId), " +
+            "starLevel: \(starLevel), " +
+            "stars: \(stars), " +
+            "legendRank: \(legendRank), " +
+            "starLevelAfter: \(starLevelAfter), " +
+            "starsAfter: \(starsAfter), " +
+            "legendRankAfter: \(legendRankAfter), " +
             "format: \(String(describing: format)), " +
             "hsReplayId: \(String(describing: hsReplayId)), " +
             "opponentCards: \(opponentCards), " +
@@ -210,7 +247,32 @@ extension InternalGameStats: CustomStringConvertible {
     }
 }
 
+/// A player's ladder position as Hearthstone's MedalInfo reports it.
+struct RankSnapshot: Equatable {
+    /// NetCache league id (5 = the current star-level ladder).
+    let leagueId: Int
+    /// 1 = Bronze 10 ... 50 = Diamond 1, 51 = Legend.
+    let starLevel: Int
+    /// Stars inside the current star level.
+    let stars: Int
+    /// Legend position, 0 when not in Legend.
+    let legendRank: Int
+
+    var isLegend: Bool { return legendRank > 0 }
+}
+
+/// One recorded game. GameStats is embedded in either `Deck.gameStats` or
+/// `DefaultDeckStats.gameStats`.
+///
+/// When adding a persisted property, also copy it in `detachedCopy()`: that copy is
+/// how a deleted deck's games move into the per-class bucket, and a field missing
+/// there is silently lost.
 class GameStats: EmbeddedObject {
+    /// Bumped when the recording code starts storing something older rows lack.
+    /// 1: playerHero, coin/coinKnown, start and end time, note and the rank
+    ///    before/after fields are copied from InternalGameStats.
+    static let currentRecordVersion = 1
+
     @objc dynamic var statId = ""
 
     @objc private dynamic var _playerHero = CardClass.neutral.rawValue
@@ -226,6 +288,9 @@ class GameStats: EmbeddedObject {
     }
 
     @objc dynamic var coin = false
+    /// False for games whose turn order was never read, including every game recorded
+    /// before recordVersion 1: their `coin` is a meaningless false.
+    @objc dynamic var coinKnown = false
 
     @objc private dynamic var _gameMode = GameMode.none.rawValue
     var gameMode: GameMode {
@@ -251,6 +316,18 @@ class GameStats: EmbeddedObject {
     @objc dynamic var legendRank = -1
     @objc dynamic var opponentLegendRank = -1
     @objc dynamic var opponentRank = -1
+    // Ladder position before and after the game, ranked only. `stars` and `legendRank`
+    // above are the "before" values of the same MedalInfo. A side is unknown unless its
+    // star level is above zero: new games default to -1, but rows that existed before
+    // schema 9 read 0 because Realm fills migrated columns with zero.
+    @objc dynamic var leagueId = -1
+    @objc dynamic var starLevel = -1
+    @objc dynamic var starMultiplier = -1
+    @objc dynamic var starLevelAfter = -1
+    @objc dynamic var starsAfter = -1
+    @objc dynamic var legendRankAfter = -1
+    @objc dynamic var opponentStarLevel = -1
+    @objc dynamic var recordVersion = 0
     var hearthstoneBuild = RealmProperty<Int?>()
     @objc dynamic var playerCardbackId = -1
     @objc dynamic var opponentCardbackId = -1
@@ -298,4 +375,100 @@ class GameStats: EmbeddedObject {
     let revealedCards = List<RealmCard>()
 
     let deck = LinkingObjects(fromType: Deck.self, property: "gameStats")
+    let defaultDeckStats = LinkingObjects(fromType: DefaultDeckStats.self, property: "gameStats")
+
+    /// Whether `coin` can be trusted.
+    var coinIfKnown: Bool? {
+        return coinKnown ? coin : nil
+    }
+
+    /// Game length, or nil for rows recorded before start/end time were stored.
+    var duration: TimeInterval? {
+        guard recordVersion >= 1 else { return nil }
+        let value = endTime.timeIntervalSince(startTime)
+        return value > 0 ? value : nil
+    }
+
+    var rankBefore: RankSnapshot? {
+        guard gameMode == .ranked, starLevel > 0 else { return nil }
+        return RankSnapshot(leagueId: leagueId, starLevel: starLevel,
+                            stars: max(stars, 0), legendRank: max(legendRank, 0))
+    }
+
+    var rankAfter: RankSnapshot? {
+        guard gameMode == .ranked, starLevelAfter > 0 else { return nil }
+        return RankSnapshot(leagueId: leagueId, starLevel: starLevelAfter,
+                            stars: max(starsAfter, 0), legendRank: max(legendRankAfter, 0))
+    }
+
+    /// An unmanaged copy of every persisted field. Realm cannot move an embedded
+    /// object to another parent, so moving a game (e.g. out of a deck being
+    /// deleted) means appending a copy and letting the original go with its owner.
+    func detachedCopy() -> GameStats {
+        let copy = GameStats()
+        copy.statId = statId
+        copy._playerHero = _playerHero
+        copy._opponentHero = _opponentHero
+        copy.coin = coin
+        copy.coinKnown = coinKnown
+        copy._gameMode = _gameMode
+        copy._result = _result
+        copy.turns = turns
+        copy.startTime = startTime
+        copy.endTime = endTime
+        copy.note = note
+        copy.playerName = playerName
+        copy.opponentName = opponentName
+        copy.wasConceded = wasConceded
+        copy.rank = rank
+        copy.stars = stars
+        copy.legendRank = legendRank
+        copy.opponentLegendRank = opponentLegendRank
+        copy.opponentRank = opponentRank
+        copy.leagueId = leagueId
+        copy.starLevel = starLevel
+        copy.starMultiplier = starMultiplier
+        copy.starLevelAfter = starLevelAfter
+        copy.starsAfter = starsAfter
+        copy.legendRankAfter = legendRankAfter
+        copy.opponentStarLevel = opponentStarLevel
+        copy.recordVersion = recordVersion
+        copy.hearthstoneBuild.value = hearthstoneBuild.value
+        copy.playerCardbackId = playerCardbackId
+        copy.opponentCardbackId = opponentCardbackId
+        copy.friendlyPlayerId = friendlyPlayerId
+        copy.scenarioId = scenarioId
+        if let serverInfo = serverInfo {
+            let info = ServerInfo()
+            info.address = serverInfo.address
+            info.auroraPassword = serverInfo.auroraPassword
+            info.clientHandle = serverInfo.clientHandle
+            info.gameHandle = serverInfo.gameHandle
+            info.mission = serverInfo.mission
+            info.port = serverInfo.port
+            info.resumable = serverInfo.resumable
+            info.spectatorMode = serverInfo.spectatorMode
+            info.spectatorPassword = serverInfo.spectatorPassword
+            info.version = serverInfo.version
+            copy.serverInfo = info
+        }
+        copy.season = season
+        copy._gameType = _gameType
+        copy.hsDeckId.value = hsDeckId.value
+        copy.brawlSeasonId = brawlSeasonId
+        copy.rankedSeasonId = rankedSeasonId
+        copy.arenaWins = arenaWins
+        copy.arenaLosses = arenaLosses
+        copy.brawlWins = brawlWins
+        copy.brawlLosses = brawlLosses
+        copy.__format = __format
+        copy.hsReplayId = hsReplayId
+        for card in opponentCards {
+            copy.opponentCards.append(RealmCard(id: card.id, count: card.count))
+        }
+        for card in revealedCards {
+            copy.revealedCards.append(RealmCard(id: card.id, count: card.count))
+        }
+        return copy
+    }
 }

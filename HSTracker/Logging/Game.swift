@@ -2098,8 +2098,14 @@ class Game: NSObject, PowerEventHandler {
 		if let name = self.player.name {
 			result.playerName = name
 		}
-		if let _player = self.entities.values.filter({ $0.isPlayer(eventHandler: self) }).sorted(by: { $0.id < $1.id }).first {
-			result.coin = !_player.has(tag: .first_player)
+		// HDT sets Coin = !player.HasTag(FIRST_PLAYER). When the player entity is not
+		// found, or neither player carries the tag, the turn order is unknown rather
+		// than "went first". opponentEntity is only trustworthy once playerEntity is.
+		let playerIsFirst = playerEntity.map { $0.has(tag: .first_player) }
+		let opponentIsFirst = playerIsFirst == nil ? nil : opponentEntity.map { $0.has(tag: .first_player) }
+		if let coin = StatsHelper.coin(playerIsFirst: playerIsFirst, opponentIsFirst: opponentIsFirst) {
+			result.coin = coin
+			result.coinKnown = true
 		}
 		
 		if let name = self.opponent.name {
@@ -2258,6 +2264,9 @@ class Game: NSObject, PowerEventHandler {
         DispatchQueue.main.async {
             self.windowManager.forceHideFloatingCard()
         }
+        if currentGameStats.gameMode == .ranked {
+            updatePostGameRanks(gameStats: currentGameStats)
+        }
         logger.verbose("End game: \(currentGameStats)")
         let stats = currentGameStats.toGameStats()
         invalidateMatchInfoCache()
@@ -2327,24 +2336,7 @@ class Game: NSObject, PowerEventHandler {
             Player.knownOpponentDeck = nil
         }
 
-        if let currentDeck = self.currentDeck {
-            var skip = false
-            if previousMode == Mode.adventure {
-                let heroId = adventureOpponentId
-                // don't add the result to statistics for Bob encounters
-                if heroId == CardIds.NonCollectible.Neutral.BartenderBob || heroId == CardIds.NonCollectible.Neutral.BazaarBob {
-                    skip = true
-                }
-            }
-            if !skip, let deck = RealmHelper.getDeck(with: currentDeck.id) {
-                
-                RealmHelper.addStatistics(to: deck, stats: stats)
-                if Settings.autoArchiveArenaDeck &&
-                    self.currentGameMode == .arena && deck.isArena && deck.arenaFinished() {
-                    RealmHelper.set(deck: deck, active: false)
-                }
-            }
-        }
+        recordGame(stats: stats, gameStats: currentGameStats)
 		
         if currentGameMode == .spectator && currentGameStats.result == .unknown {
             logger.info("Game was spectator mode without a game result."
@@ -2365,6 +2357,106 @@ class Game: NSObject, PowerEventHandler {
         counterManager.reset()
     }
     
+    private func recordGame(stats: GameStats, gameStats: InternalGameStats) {
+        var skip = false
+        if previousMode == Mode.adventure {
+            let heroId = adventureOpponentId
+            // don't add the result to statistics for Bob encounters
+            if heroId == CardIds.NonCollectible.Neutral.BartenderBob || heroId == CardIds.NonCollectible.Neutral.BazaarBob {
+                skip = true
+            }
+        }
+        // The game type is the reliable signal for Battlegrounds and Mercenaries; the
+        // mode also covers spectating.
+        let mode: GameMode = isBattlegroundsMatch() ? .battlegrounds : isMercenariesMatch() ? .mercenaries : gameStats.gameMode
+        let persisted = currentDeck.flatMap { RealmHelper.getDeck(with: $0.id) }
+
+        switch StatsHelper.recordDestination(mode: mode, isBobEncounter: skip,
+                                             persistedDeckId: persisted?.deckId,
+                                             playerClass: stats.playerHero) {
+        case .deck:
+            guard let deck = persisted else { return }
+            RealmHelper.addStatistics(to: deck, stats: stats)
+            if Settings.autoArchiveArenaDeck &&
+                self.currentGameMode == .arena && deck.isArena && deck.arenaFinished() {
+                RealmHelper.set(deck: deck, active: false)
+            }
+        case .defaultDeck(let playerClass):
+            // HDT GameEventHandler: no deck assigned -> DefaultDeckStats of the class.
+            RealmHelper.addStatistics(toDefaultDeckFor: playerClass, stats: stats)
+            logger.info("Recorded game without a saved deck as \(playerClass)")
+        case .none:
+            logger.info("Not recording game (mode \(mode), Bob encounter \(skip), class \(stats.playerHero))")
+            return
+        }
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: Notification.Name(rawValue: Events.game_stats_changed), object: nil)
+        }
+
+        if StatsHelper.postGameRankLooksStale(result: stats.result, before: stats.rankBefore, after: stats.rankAfter) {
+            recheckPostGameRank(statId: stats.statId, result: stats.result, format: gameStats.format,
+                                before: stats.rankBefore)
+        }
+    }
+
+    /// HDT UpdatePostGameRanks: once the game is over (STATE COMPLETE, where
+    /// handleEndGame runs) Hearthstone's MedalInfo holds the post-game position.
+    private func updatePostGameRanks(gameStats: InternalGameStats) {
+        guard let after = readPostGameRank(format: gameStats.format) else {
+            logger.warning("Could not get MedalInfo")
+            return
+        }
+        gameStats.starLevelAfter = after.starLevel
+        gameStats.starsAfter = after.stars
+        gameStats.legendRankAfter = after.legendRank
+    }
+
+    private func readPostGameRank(format: Format?) -> RankSnapshot? {
+        guard let medalData = UploadMetaData.retryWhileNull(f: MirrorHelper.getMedalData) else {
+            return nil
+        }
+        let mirrorInfo: MirrorMedalInfo
+        switch format {
+        case .wild: mirrorInfo = medalData.wild
+        case .classic: mirrorInfo = medalData.classic
+        case .twist: mirrorInfo = medalData.twist
+        default: mirrorInfo = medalData.standard
+        }
+        let info = MatchInfo.MedalInfo(mirrorMedalInfo: mirrorInfo)
+        guard info.starLevel > 0 else {
+            return nil
+        }
+        return RankSnapshot(leagueId: info.leagueId, starLevel: info.starLevel,
+                            stars: info.stars, legendRank: info.legendRank)
+    }
+
+    /// The read in updatePostGameRanks can come back before the server's MedalInfo
+    /// update has arrived. Keep reading for a few seconds off the log-reader queue
+    /// and fix the stored game once the position moves, instead of holding up the
+    /// end of the game.
+    private func recheckPostGameRank(statId: String, result: GameResult, format: Format?, before: RankSnapshot?) {
+        DispatchQueue.global(qos: .utility).async {
+            var latest: RankSnapshot?
+            for _ in 0 ..< 8 {
+                Thread.sleep(forTimeInterval: 0.5)
+                if let after = self.readPostGameRank(format: format) {
+                    latest = after
+                    if !StatsHelper.postGameRankLooksStale(result: result, before: before, after: after) {
+                        break
+                    }
+                }
+            }
+            guard let after = latest else {
+                return
+            }
+            logger.info("Post-game rank re-read: \(after)")
+            RealmHelper.updateRankAfter(statId: statId, after: after)
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: Notification.Name(rawValue: Events.game_stats_changed), object: nil)
+            }
+        }
+    }
+
     private func updatePostGameBattlegroundsRating(gameStats: InternalGameStats) {
         if let data = UploadMetaData.retryWhileNull(f: MirrorHelper.getBattlegroundsRatingChange, tries: 5, delay: 500) {
             gameStats.battlegroundsRatingAfter = data.ratingNew.intValue
