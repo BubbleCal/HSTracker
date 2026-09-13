@@ -2266,12 +2266,12 @@ class BobsBuddyInvoker {
     private var _pendingCrabDeathrattleSources = [Int: (triggerMultiplier: Int, summonedIsPremium: [Bool])]()
 
     func observeGrantedCrabDeathrattles(_ sourceEntityId: Int, _ extraDeathrattles: Int, _ isGolden: Bool) {
-        var observation = _pendingCrabDeathrattleSources[sourceEntityId]
-        if observation == nil {
-            observation = (1 + extraDeathrattles, [Bool]())
-            _pendingCrabDeathrattleSources[sourceEntityId] = observation
+        // Mutate through the subscript: the tuple and its array are value types, so appending to a local
+        // copy (HDT appends to a shared List<bool>) would leave the stored entry empty.
+        if _pendingCrabDeathrattleSources[sourceEntityId] == nil {
+            _pendingCrabDeathrattleSources[sourceEntityId] = (1 + extraDeathrattles, [Bool]())
         }
-        observation?.summonedIsPremium.append(isGolden)
+        _pendingCrabDeathrattleSources[sourceEntityId]?.summonedIsPremium.append(isGolden)
         BobsBuddyInvoker.currentCombatHasPendingCrabObservations = true
     }
 
