@@ -64,6 +64,9 @@ final class CardHoverNSView: NSView {
     // is a 200 - so a golden minion whose id is requested bare renders nothing.
     private(set) var baconTriple: Bool = false
     private(set) var placement: CardTooltipPlacement = .right
+    // HDT's Card.BaconCard, when the element knows it - see CardTooltipPanel.show. nil tries the
+    // Battlegrounds art first and falls back to the standard render.
+    private(set) var baconCard: Bool?
 
     // Match NSHostingView's own flip so NSView.convert() coordinate conversions
     // are consistent with SwiftUI's Y-down coordinate space throughout the tree.
@@ -77,13 +80,15 @@ final class CardHoverNSView: NSView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func update(cardId: String, showTriple: Bool, baconTriple: Bool, placement: CardTooltipPlacement) {
+    func update(cardId: String, showTriple: Bool, baconTriple: Bool, placement: CardTooltipPlacement, baconCard: Bool? = nil) {
         guard cardId != self.cardId || showTriple != self.showTriple
-                || baconTriple != self.baconTriple || placement != self.placement else { return }
+                || baconTriple != self.baconTriple || placement != self.placement
+                || baconCard != self.baconCard else { return }
         self.cardId = cardId
         self.showTriple = showTriple
         self.baconTriple = baconTriple
         self.placement = placement
+        self.baconCard = baconCard
         if window != nil {
             CardHoverRegistry.shared.register(self)
         }
@@ -113,6 +118,7 @@ class CardHoverRegistry {
         let showTriple: Bool
         let baconTriple: Bool
         let placement: CardTooltipPlacement
+        let baconCard: Bool?
         weak var view: CardHoverNSView?
     }
 
@@ -122,7 +128,8 @@ class CardHoverRegistry {
         entries.removeAll { $0.view == nil || $0.view === view }
         guard !view.cardId.isEmpty else { return }
         entries.append(Entry(cardId: view.cardId, showTriple: view.showTriple,
-                             baconTriple: view.baconTriple, placement: view.placement, view: view))
+                             baconTriple: view.baconTriple, placement: view.placement,
+                             baconCard: view.baconCard, view: view))
     }
 
     func unregister(_ view: CardHoverNSView) {
@@ -136,13 +143,14 @@ private struct CardHoverRepresentable: NSViewRepresentable {
     let showTriple: Bool
     let baconTriple: Bool
     let placement: CardTooltipPlacement
+    let baconCard: Bool?
 
     func makeNSView(context: Context) -> CardHoverNSView {
         CardHoverNSView()
     }
 
     func updateNSView(_ nsView: CardHoverNSView, context: Context) {
-        nsView.update(cardId: cardId, showTriple: showTriple, baconTriple: baconTriple, placement: placement)
+        nsView.update(cardId: cardId, showTriple: showTriple, baconTriple: baconTriple, placement: placement, baconCard: baconCard)
     }
 }
 
@@ -602,11 +610,13 @@ private struct CardImageTooltipModifier: ViewModifier {
     let showTriple: Bool
     let baconTriple: Bool
     let placement: CardTooltipPlacement
+    let baconCard: Bool?
 
     func body(content: Content) -> some View {
         if let cardId = cardId {
             content.background(CardHoverRepresentable(cardId: cardId, showTriple: showTriple,
-                                                      baconTriple: baconTriple, placement: placement))
+                                                      baconTriple: baconTriple, placement: placement,
+                                                      baconCard: baconCard))
         } else {
             content
         }
@@ -615,9 +625,12 @@ private struct CardImageTooltipModifier: ViewModifier {
 
 @available(macOS 10.15, *)
 extension View {
+    // baconCard: pass false for constructed cards (the action history), which have no
+    // Battlegrounds art, to save the 404 the tooltip would otherwise try first on every hover.
     func cardImageTooltip(cardId: String?, showTriple: Bool = true, baconTriple: Bool = false,
-                          placement: CardTooltipPlacement = .right) -> some View {
+                          baconCard: Bool? = nil, placement: CardTooltipPlacement = .right) -> some View {
         modifier(CardImageTooltipModifier(cardId: cardId, showTriple: showTriple,
-                                          baconTriple: baconTriple, placement: placement))
+                                          baconTriple: baconTriple, placement: placement,
+                                          baconCard: baconCard))
     }
 }

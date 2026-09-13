@@ -190,7 +190,7 @@ class RootOverlayWindow: OverWindowController {
             // window bottom, flips handled by AppKit automatically).
             // convertToScreen → screen coordinates (same Y-up convention).
             // NSEvent.mouseLocation is also Y-up screen coordinates.
-            let rectInWindow = nsView.convert(nsView.bounds, to: nil)
+            guard let rectInWindow = Self.visibleRectInWindow(nsView) else { return false }
             let screenRect = overlayWindow.convertToScreen(rectInWindow)
             return screenRect.contains(screenLocation)
         }
@@ -208,13 +208,14 @@ class RootOverlayWindow: OverWindowController {
                 // the overlay window (its ActualWidth/ActualHeight), not to the
                 // screen - so both rects are handed over here, in the screen
                 // coordinates the panel positions itself in.
-                let anchor = match.view.map {
-                    overlayWindow.convertToScreen($0.convert($0.bounds, to: nil))
+                let anchor = match.view.flatMap(Self.visibleRectInWindow).map {
+                    overlayWindow.convertToScreen($0)
                 }
                 CardTooltipPanel.shared.show(cardId: match.cardId, showTriple: match.showTriple,
                                              baconTriple: match.baconTriple,
                                              placement: match.placement,
-                                             anchor: anchor, bounds: overlayWindow.frame)
+                                             anchor: anchor, bounds: overlayWindow.frame,
+                                             baconCard: match.baconCard)
             }
         } else {
             if hoveredCardId != nil {
@@ -240,5 +241,27 @@ class RootOverlayWindow: OverWindowController {
                 CardTooltipPanel.shared.hide(from: .registry)
             }
         }
+    }
+
+    // The part of a hover view the player can actually see, in window coordinates, or nil when none
+    // of it is. A card name scrolled out of the action history's list keeps its frame under the
+    // clip view, so matching its full bounds would pop the tooltip over the board below the panel.
+    //
+    // Only the enclosing clip views are applied, not NSView.visibleRect: SwiftUI's intermediate
+    // platform views are not guaranteed to have bounds that contain their children, and a view
+    // outside any scroll view must keep matching exactly as before.
+    private static func visibleRectInWindow(_ view: NSView) -> NSRect? {
+        var rect = view.convert(view.bounds, to: nil)
+        var ancestor = view.superview
+        while let current = ancestor {
+            if let clipView = current as? NSClipView {
+                rect = rect.intersection(clipView.convert(clipView.bounds, to: nil))
+                if rect.isEmpty {
+                    return nil
+                }
+            }
+            ancestor = current.superview
+        }
+        return rect
     }
 }
