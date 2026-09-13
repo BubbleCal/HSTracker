@@ -86,7 +86,8 @@ enum MulliganGuideUnavailableReason: Equatable, CustomStringConvertible {
         case .disabledRemotely:
             return "disabled by HSReplay remote config"
         case .notPremiumNoTrials(let signedIn, let remainingTrials, let hoursUntilReset):
-            return "not premium and remainingTrials=\(remainingTrials.map(String.init) ?? "nil") hoursUntilReset=\(hoursUntilReset.map(String.init) ?? "nil") signedIn=\(signedIn)"
+            let stale = remainingTrials == 0 && hoursUntilReset == 0 ? " (status is at or past its reset and could not be refreshed)" : ""
+            return "not premium and remainingTrials=\(remainingTrials.map(String.init) ?? "nil") hoursUntilReset=\(hoursUntilReset.map(String.init) ?? "nil") signedIn=\(signedIn)\(stale)"
         case .noParams:
             return "mulligan params were not cached"
         case .deckNotAvailable(let gameType, let state):
@@ -101,10 +102,13 @@ enum MulliganGuideUnavailableReason: Equatable, CustomStringConvertible {
     }
 
     // Only a known zero is worth telling the player about: a status that could
-    // not be read is a network problem, not a used-up allowance.
+    // not be read is a network problem, not a used-up allowance. A zero whose
+    // reset time has already counted down to 0 is not known either - the
+    // trials have most likely reset and only the refresh failed - and saying
+    // "used up, resets in 0d 0h" there would be wrong twice over.
     var isTrialsExhausted: Bool {
-        if case .notPremiumNoTrials(_, let remainingTrials, _) = self {
-            return remainingTrials == 0
+        if case .notPremiumNoTrials(_, let remainingTrials, let hoursUntilReset) = self {
+            return remainingTrials == 0 && hoursUntilReset != 0
         }
         return false
     }
@@ -223,14 +227,18 @@ final class MulliganGuideTrialState {
     }
 
     // HDT's premium-or-trials gate at the top of GetMulliganGuideData and
-    // GetMulliganV2Data, with one addition: when no status has been read yet
-    // (the app started mid-match, or the lobby refresh failed) it is fetched
-    // once here instead of silently skipping a game that has trials left.
+    // GetMulliganV2Data, with one addition: the status is brought up to date
+    // here first. update() makes no request for a fresh status, but it does
+    // fetch one that is missing (the app started mid-match, or the lobby
+    // refresh failed) or close to its reset, and because it is serialized it
+    // also waits for a lobby refresh already in flight. Reading the cache
+    // as-is let the first game after the weekly reset see last week's zero
+    // and skip a game that had trials again.
     func premiumOrTrialGate(isPremium: Bool, signedIn: Bool, hi: Int64?, lo: Int64?) async -> MulliganGuideUnavailableReason? {
         if isPremium {
             return nil
         }
-        if statusCache.status == nil, let hi, let lo {
+        if let hi, let lo {
             await statusCache.update(hi: hi, lo: lo)
         }
         let remaining = statusCache.remainingTrials

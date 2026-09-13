@@ -319,6 +319,53 @@ class MulliganGuideTrialTests: XCTestCase {
         XCTAssertFalse(reason?.isTrialsExhausted ?? true)
     }
 
+    // The first game after the weekly reset: the lobby last read a zero close
+    // to its reset, so the gate must refresh it instead of trusting it.
+    func testGateRefreshesAStatusCloseToItsReset() async {
+        let cache = makeCache()
+        nextStatus = PlayerTrialStatus(trials_remaining: 0, hours_til_next_reset: 1)
+        await cache.update(hi: 1, lo: 2)
+        let trial = makeTrial(cache: cache)
+        nextStatus = PlayerTrialStatus(trials_remaining: 3, hours_til_next_reset: nil)
+
+        let reason = await trial.premiumOrTrialGate(isPremium: false, signedIn: false, hi: 1, lo: 2)
+
+        XCTAssertNil(reason)
+        XCTAssertEqual(fetchCount.value, 2)
+        XCTAssertEqual(cache.remainingTrials, 3)
+    }
+
+    func testGateWaitsForARefreshInFlight() async {
+        let cache = makeCache()
+        nextStatus = PlayerTrialStatus(trials_remaining: 0, hours_til_next_reset: 1)
+        await cache.update(hi: 1, lo: 2)
+        let trial = makeTrial(cache: cache)
+        nextStatus = PlayerTrialStatus(trials_remaining: 3, hours_til_next_reset: nil)
+        fetchDelay = 100_000_000
+
+        let lobbyRefresh = Task { await cache.update(hi: 1, lo: 2) }
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        let reason = await trial.premiumOrTrialGate(isPremium: false, signedIn: false, hi: 1, lo: 2)
+        await lobbyRefresh.value
+
+        XCTAssertNil(reason)
+        XCTAssertEqual(fetchCount.value, 2)
+    }
+
+    func testZeroPastItsResetIsNotReportedAsExhausted() async {
+        let cache = makeCache()
+        nextStatus = PlayerTrialStatus(trials_remaining: 0, hours_til_next_reset: 1)
+        await cache.update(hi: 1, lo: 2)
+        let trial = makeTrial(cache: cache)
+        clock.now = clock.now.addingTimeInterval(2 * 3600)
+        nextStatus = nil
+
+        let reason = await trial.premiumOrTrialGate(isPremium: false, signedIn: false, hi: 1, lo: 2)
+
+        XCTAssertEqual(reason, .notPremiumNoTrials(signedIn: false, remainingTrials: 0, hoursUntilReset: 0))
+        XCTAssertFalse(reason?.isTrialsExhausted ?? true)
+    }
+
     func testPremiumSkipsTheTrialStatus() async {
         let trial = makeTrial(cache: makeCache())
 
@@ -336,6 +383,90 @@ class MulliganGuideTrialTests: XCTestCase {
         XCTAssertFalse(Game.isV2MulliganMatch(gameType: .gt_ranked, formatType: .ft_wild))
         XCTAssertFalse(Game.isV2MulliganMatch(gameType: .gt_ranked, formatType: .ft_twist))
         XCTAssertFalse(Game.isV2MulliganMatch(gameType: .gt_casual, formatType: .ft_standard))
+    }
+
+    // MARK: - Mulligan phase presentation
+
+    func testPastTheMulliganChoice() {
+        let input = Mulligan.input.rawValue
+        let beginMulligan = Step.begin_mulligan.rawValue
+        XCTAssertFalse(Game.isPastMulliganChoice(inMenu: false, step: beginMulligan, playerMulliganState: input))
+        XCTAssertFalse(Game.isPastMulliganChoice(inMenu: false, step: beginMulligan, playerMulliganState: Mulligan.waiting.rawValue))
+        XCTAssertTrue(Game.isPastMulliganChoice(inMenu: false, step: beginMulligan, playerMulliganState: Mulligan.done.rawValue))
+        XCTAssertTrue(Game.isPastMulliganChoice(inMenu: false, step: Step.main_ready.rawValue, playerMulliganState: input))
+        XCTAssertTrue(Game.isPastMulliganChoice(inMenu: true, step: beginMulligan, playerMulliganState: input))
+    }
+
+    func testV2GuideWithoutDataKeepsTheToast() {
+        let failures: [MulliganGuideUnavailableReason] = [
+            .requestFailed,
+            .deckNotAvailable(gameType: 2, state: "no_data"),
+            .trialNotActivated(.requestFailed),
+            .notPremiumNoTrials(signedIn: false, remainingTrials: nil, hoursUntilReset: nil),
+            .noAccountId,
+            .disabledBySetting
+        ]
+        for reason in failures {
+            XCTAssertEqual(Game.mulliganV2Presentation(hasData: false, unavailable: reason, showToast: true),
+                           Game.MulliganV2Presentation(showTrialsExhausted: false, showLocalToast: true, pollLiveState: false), "\(reason)")
+            XCTAssertFalse(Game.mulliganV2Presentation(hasData: false, unavailable: reason, showToast: false).showLocalToast, "\(reason)")
+        }
+
+        XCTAssertEqual(Game.mulliganV2Presentation(hasData: false, unavailable: .notPremiumNoTrials(signedIn: false, remainingTrials: 0, hoursUntilReset: 8), showToast: true),
+                       Game.MulliganV2Presentation(showTrialsExhausted: true, showLocalToast: true, pollLiveState: false))
+        XCTAssertEqual(Game.mulliganV2Presentation(hasData: true, unavailable: nil, showToast: true),
+                       Game.MulliganV2Presentation(showTrialsExhausted: false, showLocalToast: false, pollLiveState: true))
+    }
+
+    // MARK: - Deck status
+
+    func testFailedDeckStatusRequestIsAskedAgainNextGame() async {
+        let viewModel = ConstructedMulliganGuidePreLobbyViewModel()
+        let calls = Counter()
+        var answer: [String: SingleDeckState]?
+        viewModel.statusLoader = { _, _, _ in
+            calls.increment()
+            return answer
+        }
+
+        let first = await viewModel.deckStatusForMulliganGuide(gameType: .bgt_ranked_standard, deckstring: "AAEC", dbfIds: [1, 2], starLevel: nil)
+        XCTAssertNil(first)
+        answer = ["AAEC": .v2_ready]
+        let second = await viewModel.deckStatusForMulliganGuide(gameType: .bgt_ranked_standard, deckstring: "AAEC", dbfIds: [1, 2], starLevel: nil)
+        let third = await viewModel.deckStatusForMulliganGuide(gameType: .bgt_ranked_standard, deckstring: "AAEC", dbfIds: [1, 2], starLevel: nil)
+
+        XCTAssertEqual(second, .v2_ready)
+        XCTAssertEqual(third, .v2_ready)
+        XCTAssertEqual(calls.value, 2)
+        XCTAssertTrue(viewModel.isDeckAvailableForMulliganGuide(gameType: .bgt_ranked_standard, deckstring: "AAEC"))
+    }
+
+    func testFailedLobbyStatusRequestLeavesDecksUnknown() async {
+        let viewModel = ConstructedMulliganGuidePreLobbyViewModel()
+        viewModel.now = { [unowned self] in self.clock.now }
+        let deck = ConstructedMulliganGuidePreLobbyViewModel.DeckData(deckstring: "AAEC", hasRunes: false, dbfIds: [1, 2])
+
+        let claimed = viewModel.claimDecksToLoad(gameType: .bgt_ranked_wild, candidates: [deck])
+        XCTAssertEqual(claimed.map { $0.deckstring }, ["AAEC"])
+        viewModel.finishLoading(gameType: .bgt_ranked_wild, claimed: claimed, results: nil)
+
+        // Not recorded as no data, so the game still asks for it on demand
+        var loaderCalls = 0
+        viewModel.statusLoader = { _, _, _ in
+            loaderCalls += 1
+            return ["AAEC": .v1_ready]
+        }
+        XCTAssertFalse(viewModel.isDeckAvailableForMulliganGuide(gameType: .bgt_ranked_wild, deckstring: "AAEC"))
+        // The lobby waits before asking again after a failure
+        XCTAssertTrue(viewModel.claimDecksToLoad(gameType: .bgt_ranked_wild, candidates: [deck]).isEmpty)
+        clock.now = clock.now.addingTimeInterval(ConstructedMulliganGuidePreLobbyViewModel.statusRetryDelay + 1)
+        let retried = viewModel.claimDecksToLoad(gameType: .bgt_ranked_wild, candidates: [deck])
+        XCTAssertEqual(retried.map { $0.deckstring }, ["AAEC"])
+        viewModel.finishLoading(gameType: .bgt_ranked_wild, claimed: retried, results: ["AAEC": .v1_ready])
+
+        let state = await viewModel.deckStatusForMulliganGuide(gameType: .bgt_ranked_wild, deckstring: "AAEC", dbfIds: [1, 2], starLevel: nil)
+        XCTAssertEqual(state, .v1_ready)
+        XCTAssertEqual(loaderCalls, 0)
     }
 
     func testDeckStatusesThatAllowATrial() {

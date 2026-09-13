@@ -119,7 +119,7 @@ final class PlayerTrialStatusCache {
         if let fetched {
             logger.info("\(name) trial status: trials_remaining=\(fetched.trials_remaining) hours_til_next_reset=\(String(describing: fetched.hours_til_next_reset)) (replaced stale=\(stale))")
         } else {
-            logger.warning("\(name) trial status request failed, keeping \(cached.map { "trials_remaining=\($0.trials_remaining)" } ?? "no status")")
+            logger.warning("\(name) trial status request failed, keeping \(cached.map { "trials_remaining=\($0.trials_remaining)" } ?? "no status")\(stale ? " although it is close to or past its reset" : "")")
         }
     }
 

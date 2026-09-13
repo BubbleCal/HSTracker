@@ -4643,8 +4643,44 @@ class Game: NSObject, PowerEventHandler {
         updatePlayerTracker()
     }
     
+    // Whether the player has finished choosing, so a guide result that only
+    // arrives now has nothing left to explain. waitForMulliganStart returns
+    // early in exactly these cases, and handlePlayerMulliganDone, which
+    // clears the overlay, runs once the player's MULLIGAN_STATE is DONE -
+    // anything applied after that would stay on the board (or over the menu)
+    // until the game ends.
+    static func isPastMulliganChoice(inMenu: Bool, step: Int, playerMulliganState: Int) -> Bool {
+        return inMenu || step > Step.begin_mulligan.rawValue || playerMulliganState >= Mulligan.done.rawValue
+    }
+
+    private var isPastMulliganChoice: Bool {
+        return Game.isPastMulliganChoice(inMenu: isInMenu, step: gameEntity?[.step] ?? 0, playerMulliganState: playerEntity?[.mulligan_state] ?? 0)
+    }
+
+    struct MulliganV2Presentation: Equatable {
+        var showTrialsExhausted: Bool
+        var showLocalToast: Bool
+        var pollLiveState: Bool
+    }
+
+    // What the V2 branch shows for a guide result. HDT's V2 branch never shows
+    // the "What should I keep?" toast, and neither does HSTracker once the V2
+    // stats are on screen. Without data, though, HDT leaves the player with
+    // nothing at all, while HSTracker used to show the toast on every
+    // Standard game; it stays as the fallback so a request that failed (a
+    // hsreplay.net timeout, a deck without coverage, an unreadable trial
+    // status) still leaves a way to the deck's mulligan page. It is shown
+    // alongside the used-up trials notice too, since the website is then the
+    // only place the guide can still be looked at.
+    static func mulliganV2Presentation(hasData: Bool, unavailable: MulliganGuideUnavailableReason?, showToast: Bool) -> MulliganV2Presentation {
+        return MulliganV2Presentation(showTrialsExhausted: !hasData && (unavailable?.isTrialsExhausted ?? false),
+                                      showLocalToast: showToast && !hasData,
+                                      pollLiveState: hasData)
+    }
+
     @available(macOS 10.15.0, *) @MainActor
     func handleHearthstoneMulliganPhase() async {
+        var sawStep = false
         for _ in 0 ..< 10 {
             do {
                 try await Task.sleep(nanoseconds: 500_000_000)
@@ -4655,7 +4691,9 @@ class Game: NSObject, PowerEventHandler {
             if step == 0 {
                 continue
             }
+            sawStep = true
             if step > Step.begin_mulligan.rawValue {
+                logger.info("Mulligan: STEP already past BEGIN_MULLIGAN (step=\(step)), guide skipped")
                 break
             }
             
@@ -4680,7 +4718,6 @@ class Game: NSObject, PowerEventHandler {
                     let shortId = currentDeck.shortid
                     if !shortId.isEmpty {
                         if isV2 {
-                            // No toast on this branch: HDT's V2 guide replaces it.
                             var result = MulliganGuideResult<MulliganV2Data>(unavailable: .disabledBySetting)
                             if Settings.enableMulliganGV2 {
                                 result = await getMulliganV2Data()
@@ -4688,25 +4725,40 @@ class Game: NSObject, PowerEventHandler {
 
                             await waitForMulliganStart()
 
+                            // The trial status, deck status and activation
+                            // are all awaited above, and hsreplay.net can be
+                            // slow to answer from some regions.
+                            if isPastMulliganChoice {
+                                logger.info("MulliganV2: result arrived after the mulligan or in the menu, not shown")
+                                break
+                            }
+
                             let opponentClass = opponent.playerEntities.first { x in x.isHero && x.isInPlay }?.card.playerClass ?? CardClass.invalid
                             let isFirst = playerEntity?[.first_player] == 1
                             // HDT draws nothing when there is no data. When the
                             // reason is a used-up weekly allowance, say so over
                             // the cards instead: an empty overlay looks exactly
                             // like a tracker that stopped working.
-                            let trialsExhausted = result.data == nil && (result.unavailable?.isTrialsExhausted ?? false)
+                            let presentation = Game.mulliganV2Presentation(hasData: result.data != nil, unavailable: result.unavailable, showToast: showToast)
                             let timeRemaining = MulliganGuideTrial.timeRemaining
 
                             DispatchQueue.main.async {
+                                if self.isPastMulliganChoice {
+                                    logger.info("MulliganV2: mulligan ended before the result was applied, not shown")
+                                    return
+                                }
                                 let guideV2 = self.windowManager.rootOverlay?.viewModel.mulliganGuideV2
                                 guideV2?.scopeMessage(opponentClass: opponentClass, isFirst: isFirst)
                                 guideV2?.setMulliganData(result.data, isFirst: isFirst)
-                                if trialsExhausted {
+                                if presentation.showTrialsExhausted {
                                     guideV2?.showTrialsExhausted(timeRemaining: timeRemaining)
                                 }
-                            }
-                            if result.data != nil {
-                                startMulliganLivePolling()
+                                if presentation.showLocalToast {
+                                    self.showMulliganToast(shortId, dbfIds, self.localMulliganToastParameters(opponentClass: opponentClass, isFirst: isFirst))
+                                }
+                                if presentation.pollLiveState {
+                                    self.startMulliganLivePolling()
+                                }
                             }
                         } else {
                             var result = MulliganGuideResult<MulliganGuideData>(unavailable: .disabledBySetting)
@@ -4723,6 +4775,11 @@ class Game: NSObject, PowerEventHandler {
                                 }
 
                                 await waitForMulliganStart()
+
+                                if isPastMulliganChoice {
+                                    logger.info("MulliganV1: result arrived after the mulligan or in the menu, not shown")
+                                    break
+                                }
 
                                 var cardStats: [Int: SingleCardStats]?
                                 // GroupBy before ToDictionary to deal with (unsupported) dbfId duplicates from the server
@@ -4744,22 +4801,12 @@ class Game: NSObject, PowerEventHandler {
                                 // Something went wrong generating the card stats, continue to locally generated toast (if enabled)
                             }
 
-                            if showToast {
+                            if showToast && isPastMulliganChoice {
+                                logger.info("MulliganV1: mulligan ended before the toast, not shown")
+                            } else if showToast {
                                 let opponentClass = opponent.playerEntities.first { x in x.isHero && x.isInPlay }?.card.playerClass ?? CardClass.invalid
                                 let isFirst = playerEntity?[.first_player] == 1
-                                // Show mulligan toast with locally sourced parameters
-                                var parameters: [String: String] = [
-                                    "opponentClasses": opponentClass.rawValue.uppercased(),
-                                    "playerInitiative": isFirst ? "FIRST" : "COIN"
-                                ]
-
-                                let playerStarLevel = playerMedalInfo?.starLevel ?? 0
-                                if playerStarLevel > 0 {
-                                    parameters["mulliganPlayerStarLevel"] = String(playerStarLevel)
-                                }
-                                // Let the website do it's thing and fallback for non-Premium users
-                                parameters["mulliganAutoFilter"] = "yes"
-                                showMulliganToast(shortId, dbfIds, parameters)
+                                showMulliganToast(shortId, dbfIds, localMulliganToastParameters(opponentClass: opponentClass, isFirst: isFirst))
                             }
                         }
                     }
@@ -4769,6 +4816,24 @@ class Game: NSObject, PowerEventHandler {
             }
             break
         }
+        if !sawStep {
+            logger.info("Mulligan: STEP never set within 5 s, guide skipped")
+        }
+    }
+
+    // The toast's own parameters when no guide chose them: the website
+    // filters by them itself, and falls back for players without Premium.
+    private func localMulliganToastParameters(opponentClass: CardClass, isFirst: Bool) -> [String: String] {
+        var parameters: [String: String] = [
+            "opponentClasses": opponentClass.rawValue.uppercased(),
+            "playerInitiative": isFirst ? "FIRST" : "COIN"
+        ]
+        let playerStarLevel = playerMedalInfo?.starLevel ?? 0
+        if playerStarLevel > 0 {
+            parameters["mulliganPlayerStarLevel"] = String(playerStarLevel)
+        }
+        parameters["mulliganAutoFilter"] = "yes"
+        return parameters
     }
     
     func getMulliganSwappedCards() -> [Entity]? {
