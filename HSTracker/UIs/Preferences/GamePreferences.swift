@@ -23,6 +23,7 @@ class GamePreferences: PreferencePaneController, PreferencePane {
     @IBOutlet var checkImage: NSImageView!
     @IBOutlet var autoArchiveArenaDeck: NSButton!
     @IBOutlet var autoSelectDecks: NSButton!
+    @IBOutlet var keepStatsWhenDeletingDeck: NSButton!
 
     override func viewWillAppear() {
         super.viewWillAppear()
@@ -66,6 +67,7 @@ class GamePreferences: PreferencePaneController, PreferencePane {
 
         autoArchiveArenaDeck.state = Settings.autoArchiveArenaDeck ? .on : .off
         autoSelectDecks.state = Settings.autoDeckDetection ? .on : .off
+        keepStatsWhenDeletingDeck.state = Settings.keepStatsWhenDeletingDeck ? .on : .off
     }
 
     @IBAction func choosePath(_ sender: NSButton) {
@@ -97,6 +99,8 @@ class GamePreferences: PreferencePaneController, PreferencePane {
             Settings.autoArchiveArenaDeck = autoArchiveArenaDeck.state == .on
         } else if sender == autoSelectDecks {
             Settings.autoDeckDetection = autoSelectDecks.state == .on
+        } else if sender == keepStatsWhenDeletingDeck {
+            Settings.keepStatsWhenDeletingDeck = keepStatsWhenDeletingDeck.state == .on
         }
     }
 }

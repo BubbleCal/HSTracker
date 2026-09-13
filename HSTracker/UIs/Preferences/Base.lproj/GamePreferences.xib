@@ -15,17 +15,18 @@
                 <outlet property="hearthstoneLanguage" destination="aGA-sR-AWM" id="cT7-zO-ow3"/>
                 <outlet property="hearthstonePath" destination="O8a-FA-pQF" id="6An-Bm-Gwe"/>
                 <outlet property="hstrackerLanguage" destination="7in-D6-SFv" id="4TA-T6-cXk"/>
+                <outlet property="keepStatsWhenDeletingDeck" destination="kSd-Dl-6aB" id="kSo-Ut-3wE"/>
                 <outlet property="view" destination="c22-O7-iKe" id="Wh1-yn-M5b"/>
             </connections>
         </customObject>
         <customObject id="-1" userLabel="First Responder" customClass="FirstResponder"/>
         <customObject id="-3" userLabel="Application" customClass="NSObject"/>
         <stackView distribution="fill" orientation="vertical" alignment="leading" spacing="10" horizontalStackHuggingPriority="250" verticalStackHuggingPriority="249.99998474121094" detachesHiddenViews="YES" id="c22-O7-iKe">
-            <rect key="frame" x="0.0" y="0.0" width="467" height="194"/>
+            <rect key="frame" x="0.0" y="0.0" width="467" height="220"/>
             <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
             <subviews>
                 <stackView distribution="fill" orientation="horizontal" alignment="centerY" horizontalStackHuggingPriority="249.99998474121094" verticalStackHuggingPriority="249.99998474121094" detachesHiddenViews="YES" translatesAutoresizingMaskIntoConstraints="NO" id="gm1-row-pth" userLabel="PathRow">
-                    <rect key="frame" x="20" y="142" width="427" height="32"/>
+                    <rect key="frame" x="20" y="168" width="427" height="32"/>
                     <subviews>
                         <textField focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" allowsCharacterPickerTouchBarItem="YES" translatesAutoresizingMaskIntoConstraints="NO" id="ya6-7I-GEB">
                             <rect key="frame" x="-2" y="8" width="137" height="16"/>
@@ -75,7 +76,7 @@
                     </customSpacing>
                 </stackView>
                 <stackView distribution="fill" orientation="horizontal" alignment="centerY" horizontalStackHuggingPriority="249.99998474121094" verticalStackHuggingPriority="249.99998474121094" ambiguous="YES" detachesHiddenViews="YES" translatesAutoresizingMaskIntoConstraints="NO" id="gm2-row-hst" userLabel="HSTrackerLanguageRow">
-                    <rect key="frame" x="20" y="106" width="427" height="26"/>
+                    <rect key="frame" x="20" y="132" width="427" height="26"/>
                     <subviews>
                         <textField focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" ambiguous="YES" allowsCharacterPickerTouchBarItem="YES" translatesAutoresizingMaskIntoConstraints="NO" id="HgM-aY-crX">
                             <rect key="frame" x="-2" y="5" width="173" height="16"/>
@@ -111,7 +112,7 @@
                     </customSpacing>
                 </stackView>
                 <stackView distribution="fill" orientation="horizontal" alignment="firstBaseline" horizontalStackHuggingPriority="249.99998474121094" verticalStackHuggingPriority="249.99998474121094" ambiguous="YES" detachesHiddenViews="YES" translatesAutoresizingMaskIntoConstraints="NO" id="gm3-row-hs" userLabel="HearthstoneLanguageRow">
-                    <rect key="frame" x="20" y="72" width="427" height="24"/>
+                    <rect key="frame" x="20" y="98" width="427" height="24"/>
                     <subviews>
                         <textField focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" ambiguous="YES" allowsCharacterPickerTouchBarItem="YES" translatesAutoresizingMaskIntoConstraints="NO" id="SP4-ge-wIF">
                             <rect key="frame" x="-2" y="7" width="173" height="16"/>
@@ -147,7 +148,7 @@
                     </customSpacing>
                 </stackView>
                 <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="Tn5-ef-XSB">
-                    <rect key="frame" x="20" y="46" width="427" height="16"/>
+                    <rect key="frame" x="20" y="72" width="427" height="16"/>
                     <buttonCell key="cell" type="check" title="Auto archive Arena deck on run end" bezelStyle="regularSquare" imagePosition="left" state="on" inset="2" id="hMe-FU-CjR">
                         <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
                         <font key="font" metaFont="system"/>
@@ -157,13 +158,23 @@
                     </connections>
                 </button>
                 <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="2mA-uh-1cv">
-                    <rect key="frame" x="20" y="20" width="427" height="16"/>
+                    <rect key="frame" x="20" y="46" width="427" height="16"/>
                     <buttonCell key="cell" type="check" title="Auto import and select decks" bezelStyle="regularSquare" imagePosition="left" state="on" inset="2" id="mhj-j8-OPU">
                         <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
                         <font key="font" metaFont="system"/>
                     </buttonCell>
                     <connections>
                         <action selector="checkboxClicked:" target="-2" id="tse-HE-xB5"/>
+                    </connections>
+                </button>
+                <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="kSd-Dl-6aB">
+                    <rect key="frame" x="20" y="20" width="427" height="16"/>
+                    <buttonCell key="cell" type="check" title="Keep a deleted deck's games in the win/loss record" bezelStyle="regularSquare" imagePosition="left" state="on" inset="2" id="Ksd-cL-8pQ">
+                        <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
+                        <font key="font" metaFont="system"/>
+                    </buttonCell>
+                    <connections>
+                        <action selector="checkboxClicked:" target="-2" id="kSa-Ct-1rT"/>
                     </connections>
                 </button>
             </subviews>
@@ -174,11 +185,13 @@
                 <constraint firstItem="gm3-row-hs" firstAttribute="leading" secondItem="c22-O7-iKe" secondAttribute="leading" constant="20" symbolic="YES" id="gm-l2-hs"/>
                 <constraint firstItem="Tn5-ef-XSB" firstAttribute="leading" secondItem="c22-O7-iKe" secondAttribute="leading" constant="20" symbolic="YES" id="gm-l3-Tn5"/>
                 <constraint firstItem="2mA-uh-1cv" firstAttribute="leading" secondItem="c22-O7-iKe" secondAttribute="leading" constant="20" symbolic="YES" id="gm-l4-2mA"/>
+                <constraint firstItem="kSd-Dl-6aB" firstAttribute="leading" secondItem="c22-O7-iKe" secondAttribute="leading" constant="20" symbolic="YES" id="gm-l5-kSd"/>
                 <constraint firstAttribute="trailing" secondItem="gm1-row-pth" secondAttribute="trailing" constant="20" symbolic="YES" id="gm-t0-pth"/>
                 <constraint firstAttribute="trailing" secondItem="gm2-row-hst" secondAttribute="trailing" constant="20" symbolic="YES" id="gm-t1-hst"/>
                 <constraint firstAttribute="trailing" secondItem="gm3-row-hs" secondAttribute="trailing" constant="20" symbolic="YES" id="gm-t2-hs"/>
                 <constraint firstAttribute="trailing" secondItem="Tn5-ef-XSB" secondAttribute="trailing" constant="20" symbolic="YES" id="gm-t3-Tn5"/>
                 <constraint firstAttribute="trailing" secondItem="2mA-uh-1cv" secondAttribute="trailing" constant="20" symbolic="YES" id="gm-t4-2mA"/>
+                <constraint firstAttribute="trailing" secondItem="kSd-Dl-6aB" secondAttribute="trailing" constant="20" symbolic="YES" id="gm-t5-kSd"/>
             </constraints>
             <visibilityPriorities>
                 <integer value="1000"/>
@@ -186,8 +199,10 @@
                 <integer value="1000"/>
                 <integer value="1000"/>
                 <integer value="1000"/>
+                <integer value="1000"/>
             </visibilityPriorities>
             <customSpacing>
+                <real value="3.4028234663852886e+38"/>
                 <real value="3.4028234663852886e+38"/>
                 <real value="3.4028234663852886e+38"/>
                 <real value="3.4028234663852886e+38"/>

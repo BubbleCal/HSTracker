@@ -23051,19 +23051,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Its games will be deleted too (can be changed in Preferences)."
+            "value" : "Its games will be deleted too (can be changed in Preferences > Game)."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "其对局也会一并删除（可在偏好设置中更改）。"
+            "value" : "其对局也会一并删除（可在设置 > 游戏中更改）。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "其對局也會一併刪除（可在偏好設定中更改）。"
+            "value" : "其對局也會一併刪除（可在設定 > 遊戲中更改）。"
           }
         }
       }
@@ -23074,19 +23074,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Its games stay in the win/loss record (can be changed in Preferences)."
+            "value" : "Its games stay in the win/loss record (can be changed in Preferences > Game)."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "其对局会保留在胜负战绩中（可在偏好设置中更改）。"
+            "value" : "其对局会保留在胜负战绩中（可在设置 > 游戏中更改）。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "其對局會保留在勝負戰績中（可在偏好設定中更改）。"
+            "value" : "其對局會保留在勝負戰績中（可在設定 > 遊戲中更改）。"
           }
         }
       }

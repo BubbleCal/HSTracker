@@ -157,6 +157,30 @@
         }
       }
     },
+    "Ksd-cL-8pQ.title" : {
+      "comment" : "Class = \"NSButtonCell\"; title = \"Keep a deleted deck's games in the win/loss record\"; ObjectID = \"Ksd-cL-8pQ\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Keep a deleted deck's games in the win/loss record"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除卡组时在胜负战绩中保留其对局"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "刪除牌組時在勝負戰績中保留其對局"
+          }
+        }
+      }
+    },
     "L10-Eu-Nrc.title" : {
       "comment" : "Class = \"NSButtonCell\"; title = \"Choose\"; ObjectID = \"L10-Eu-Nrc\";",
       "extractionState" : "extracted_with_value",
