@@ -1,5 +1,6 @@
 # 3.6.11
 ## Hearthstone
+- Fixed HSTracker quitting when a deck was deleted in the deck manager while its record was being refreshed.
 - Fixed HSTracker quitting when a deck was deleted in the deck manager.
 
 # 3.6.10
