@@ -1,5 +1,6 @@
 # 3.6.10
 ## Hearthstone
+- Fixed HSTracker quitting when a mulligan guide tooltip was shown in Korean, Japanese, Simplified Chinese or Traditional Chinese, and those tooltips now put the card name and the percentage where the translation puts them.
 - Added the Aberration minion type.
 - Added the Reign of the Black Empire card set, so its cards are recognized instead of being ignored.
 - This build no longer checks for or offers updates: the Check for Updates menu item and the update notification are gone, so it is never replaced by an official release.
