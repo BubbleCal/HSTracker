@@ -1439,6 +1439,17 @@
         }
       }
     },
+    "aberration" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aberration"
+          }
+        }
+      }
+    },
     "Add Card" : {
       "extractionState" : "manual",
       "localizations" : {

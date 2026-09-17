@@ -1,5 +1,6 @@
 # 3.6.10
 ## Hearthstone
+- Added the Aberration minion type.
 - Added the Reign of the Black Empire card set, so its cards are recognized instead of being ignored.
 - This build no longer checks for or offers updates: the Check for Updates menu item and the update notification are gone, so it is never replaced by an official release.
 - Fixed HSTracker crashing whenever Hearthstone entered a screen this build has no name for, which a game patch can add at any time: the scene is treated as unknown and noted in the log instead. A card rarity, class or race added by a patch is ignored the same way rather than taking the app down while the card database loads.
