@@ -7196,6 +7196,17 @@
         }
       }
     },
+    "BE" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reign of the Black Empire"
+          }
+        }
+      }
+    },
     "beast" : {
       "extractionState" : "manual",
       "localizations" : {
