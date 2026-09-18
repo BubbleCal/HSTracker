@@ -56,18 +56,6 @@
 	</array>
 	<key>NSPrincipalClass</key>
 	<string>SentryCrashExceptionApplication</string>
-	<key>SUAutomaticallyUpdate</key>
-	<false/>
-	<key>SUEnableAutomaticChecks</key>
-	<true/>
-	<key>SUEnableSystemProfiling</key>
-	<false/>
-	<key>SUFeedURL</key>
-	<string>https://hsdecktracker.net/hstracker/appcast2.xml</string>
-	<key>SUPublicDSAKeyFile</key>
-	<string>dsa_pub.pem</string>
-	<key>SUPublicEDKey</key>
-	<string>FAEVNwLFlLldmu1C6aA0h041sJAP1sWrTjQhE9iw7BE=</string>
 	<key>SecTaskAccess</key>
 	<array>
 		<string>allowed</string>

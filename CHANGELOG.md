@@ -1,5 +1,6 @@
 # 3.6.10
 ## Hearthstone
+- This build no longer checks for or offers updates: the Check for Updates menu item and the update notification are gone, so it is never replaced by an official release.
 - Fixed HSTracker crashing whenever Hearthstone entered a screen this build has no name for, which a game patch can add at any time: the scene is treated as unknown and noted in the log instead. A card rarity, class or race added by a patch is ignored the same way rather than taking the app down while the card database loads.
 - Fixed everything that has not been translated into the selected language showing its internal name, such as "Counter_AnimalCompanionCost" in place of the Animal Companion counter, now falling back to English again, and translated a large part of what was still English in all thirteen languages.
 - Added diagnostics for the remaining random crashes on macOS 26, and stopped reporting HSReplay and card art server outages as crashes.
