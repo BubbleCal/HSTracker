@@ -39,7 +39,10 @@ class EnumTests: HSTrackerTests {
         XCTAssertEqual(Mode.from(sceneMode: 3), .hub)
         XCTAssertEqual(Mode.from(sceneMode: 4), .gameplay)
         XCTAssertEqual(Mode.from(sceneMode: 7), .tournament)
-        XCTAssertEqual(Mode.from(sceneMode: Mode.allCases.count - 1), .lucky_draw)
+        XCTAssertEqual(Mode.from(sceneMode: 28), .lucky_draw)
+        // Added in Hearthstone 36.6.
+        XCTAssertEqual(Mode.from(sceneMode: 29), .black_market)
+        XCTAssertEqual(Mode.from(sceneMode: Mode.allCases.count - 1), .black_market)
     }
 
     /// A scene id Hearthstone knows and this build does not used to trap in
