@@ -478,6 +478,7 @@ enum GameTag: Int, CaseIterable, Codable {
     // Cast raw as (GameTag)3623 in HDT too - HearthDb has no named constant for it either.
     galakrond = 3623,
     imbue = 3626,
+    gametag_3670 = 3670,
     bacon_is_potential_trinket = 3705,
     end_of_turn_trigger = 3744,
     demon_portal_deck = 3808,
@@ -508,11 +509,14 @@ enum GameTag: Int, CaseIterable, Codable {
     bacon_fodders_in_refresh = 4664,
     gametag_4696 = 4696,
     gametag_4741 = 4741,
+    gametag_4799 = 4799,
+    gametag_4803 = 4803,
     hidden_script_data_4 = 4830,
     hidden_script_data_5 = 4831,
     hidden_script_data_6 = 4832,
     dark_gift_entity = 4865,
-    bacon_activate_tooltip = 4867
+    bacon_activate_tooltip = 4867,
+    only_gold_in_guide = 4897
 
     static var lookup = [String: GameTag]()
     

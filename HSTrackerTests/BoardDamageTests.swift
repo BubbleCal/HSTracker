@@ -543,53 +543,43 @@ class BoardDamageTests: HSTrackerTests {
     // MARK: - Display
 
     func testDisplayText() {
-        XCTAssertEqual(BoardDamage.attributedText(now: 7, nextTurn: 7).string, "7(7)")
-        XCTAssertEqual(BoardDamage.attributedText(now: 0, nextTurn: 9).string, "0(9)")
-        XCTAssertEqual(BoardDamage.attributedText(now: 0, nextTurn: Int.max).string, "0(\u{221e})")
-        XCTAssertEqual(BoardDamage.attributedText(now: Int.max, nextTurn: Int.max).string, "\u{221e}(\u{221e})")
-    }
-
-    func testDisplayFitsTheBadge() {
-        // The hosted app registers its bundled fonts; without Belwe the widths below would mean nothing
-        XCTAssertNotNil(NSFont(name: BoardDamage.fontName, size: 18))
-        // A borderless label like the badge's 54pt field, which pads its text
-        let field = NSTextField(labelWithString: "")
-        // The first ones fit at full size, the rest must shrink
-        for (now, next) in [(12, 20), (24, 38), (99, 120), (100, 100), (120, 240), (999, 999)] {
-            let text = BoardDamage.attributedText(now: now, nextTurn: next)
-            XCTAssertLessThanOrEqual(text.size().width, BoardDamage.maxTextWidth, text.string)
-            field.attributedStringValue = text
-            let needed = field.cell?.cellSize(forBounds: NSRect(x: 0, y: 0, width: 1000, height: 100)).width ?? 0
-            XCTAssertLessThanOrEqual(needed, 54, text.string)
-            let oneLine = text.boundingRect(with: NSSize(width: 1000, height: 1000), options: .usesLineFragmentOrigin)
-            let inField = text.boundingRect(with: NSSize(width: BoardDamage.maxTextWidth, height: 1000),
-                                            options: .usesLineFragmentOrigin)
-            XCTAssertEqual(inField.height, oneLine.height, text.string)
+        func text(_ now: Int, _ next: Int) -> String {
+            let label = BoardAttackIconViewModel.label(now: now, nextTurn: next)
+            return label.now + label.next
         }
-        let shrunk = BoardDamage.attributedText(now: 120, nextTurn: 240)
-        XCTAssertLessThan((shrunk.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)?.pointSize ?? 18, 18)
+        XCTAssertEqual(text(7, 7), "7(7)")
+        XCTAssertEqual(text(0, 9), "0(9)")
+        XCTAssertEqual(text(0, Int.max), "0(\u{221e})")
+        XCTAssertEqual(text(Int.max, Int.max), "\u{221e}(\u{221e})")
     }
 
-    func testDisplayClipsInsteadOfWrapping() {
-        // Too wide even at the smallest size: the paragraph style, which wins over the field's, clips it
-        let text = BoardDamage.attributedText(now: 12345, nextTurn: 123456)
-        let paragraph = text.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle
-        XCTAssertEqual(paragraph?.lineBreakMode, .byClipping)
-        let oneLine = text.boundingRect(with: NSSize(width: 1000, height: 1000), options: .usesLineFragmentOrigin)
-        let inField = text.boundingRect(with: NSSize(width: BoardDamage.maxTextWidth, height: 1000),
-                                        options: .usesLineFragmentOrigin)
-        XCTAssertEqual(inField.height, oneLine.height)
+    func testAttackIconShowsNowAndNextTurn() {
+        guard #available(macOS 10.15, *) else { return }
+        let icon = BoardAttackIconViewModel(isPlayer: true)
+        icon.update(now: 3, nextTurn: 8)
+        XCTAssertEqual(icon.damage, 3)
+        XCTAssertEqual(icon.nextTurnDamage, 8)
+        // HDT's single number still works, and drops the next-turn half
+        icon.update(damage: 5, hasInfiniteDamage: false)
+        XCTAssertNil(icon.nextTurnDamage)
+        XCTAssertEqual(icon.text, "5")
     }
 
-    func testDisplayFontsKeepTheirRatio() {
-        let small = BoardDamage.attributedText(now: 7, nextTurn: 7)
-        XCTAssertEqual((small.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)?.pointSize, 18)
-        XCTAssertEqual((small.attribute(.font, at: 1, effectiveRange: nil) as? NSFont)?.pointSize, 12)
+    func testDisplayFitsTheIcon() {
+        // The hosted app registers its bundled fonts; without ChunkFive the widths below would mean nothing
+        XCTAssertNotNil(NSFont(name: BoardAttackIconViewModel.labelFontName, size: 24))
+        for (now, next) in [(3, 5), (12, 20), (24, 38), (99, 120), (100, 100), (120, 240)] {
+            let label = BoardAttackIconViewModel.label(now: now, nextTurn: next)
+            let width = BoardAttackIconViewModel.labelWidth(now: label.now, next: label.next, fontSize: label.fontSize)
+            XCTAssertLessThanOrEqual(width, BoardAttackIconViewModel.maxLabelWidth, label.now + label.next)
+        }
+        XCTAssertEqual(BoardAttackIconViewModel.label(now: 3, nextTurn: 5).fontSize, BoardAttackIconViewModel.labelFontSize,
+                       "a short pair is drawn at full size")
+        XCTAssertLessThan(BoardAttackIconViewModel.label(now: 120, nextTurn: 240).fontSize, BoardAttackIconViewModel.labelFontSize)
+    }
 
-        let huge = BoardDamage.attributedText(now: 12345, nextTurn: 123456)
-        let nowSize = (huge.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)?.pointSize ?? 0
-        let nextSize = (huge.attribute(.font, at: huge.length - 1, effectiveRange: nil) as? NSFont)?.pointSize ?? 0
-        XCTAssertEqual(nowSize, BoardDamage.minNowFontSize)
-        XCTAssertEqual(nextSize, 8, accuracy: 0.001)
+    func testDisplayStopsShrinkingAtTheSmallestSize() {
+        let label = BoardAttackIconViewModel.label(now: 12345, nextTurn: 123456)
+        XCTAssertEqual(label.fontSize, BoardAttackIconViewModel.minLabelFontSize)
     }
 }

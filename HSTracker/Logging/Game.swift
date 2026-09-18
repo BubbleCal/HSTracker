@@ -145,6 +145,7 @@ class Game: NSObject, PowerEventHandler {
     let relatedCardsManager: RelatedCardsManager
     // Fed by PowerGameStateParser and TagChangeHandler on the log reader queue
     let actionHistory = ActionHistoryRecorder()
+    let arenaPackagesManager: ArenaPackagesManager
     var isBattlegroundsCombatPhase = false
     // Raw controller tag (not player/opponent side, which aren't resolved yet during CREATE_GAME) of
     // any side whose deck was half-copied from their enemy's (Azalina Soulsever).
@@ -185,7 +186,13 @@ class Game: NSObject, PowerEventHandler {
     var minionsInPlay = SynchronizedArray<String>()
     
     var minionsInPlayByPlayer = SynchronizedDictionary<Int, SynchronizedArray<String>>()
-        
+
+    /// Board snapshot taken when Slime 'em! resolves, keyed by controller: the card ids of the
+    /// minions that side's Ectoplasm token will resummon. The tokens are created later in the
+    /// same block, by which point the board is already being destroyed, so the snapshot is
+    /// taken up front and copied onto each token as it appears.
+    var slimedMinions = SynchronizedDictionary<Int, [String]>()
+
     //We do count+1 because the friendly hero is not in setaside
     func battlegroundsHeroCount() -> Int {
         return entities.values.filter { x in x.isHero && x.isInSetAside && (x.has(tag: .bacon_hero_can_be_drafted) || x.has(tag: .bacon_skin) || x.has(tag: .player_tech_level)) }.count + 1 }
@@ -220,7 +227,7 @@ class Game: NSObject, PowerEventHandler {
 	private var guiUpdateResets = false
 	private let _queue = DispatchQueue(label: "net.hearthsim.hstracker.guiupdate", attributes: [])
 	
-    private func updateAllTrackers() {
+    func updateAllTrackers() {
 		SizeHelper.hearthstoneWindow.reload()
 		
 		self.updatePlayerTracker(reset: guiUpdateResets)
@@ -265,13 +272,34 @@ class Game: NSObject, PowerEventHandler {
         }
     }
 	
+    /// HDT's `OverlayWindow.GetCardsFromEntityIds`: the cards behind a list of
+    /// entity ids, folded by card id with a count and sorted like any deck list.
+    private func getCardsFromEntityIds(_ entityIds: [Int]) -> [Card] {
+        var counts = [String: (card: Card, count: Int)]()
+        for id in entityIds {
+            guard let entity = entities[id] else { continue }
+            let card = entity.card
+            guard !card.id.isEmpty else { continue }
+            if let existing = counts[card.id] {
+                counts[card.id] = (existing.card, existing.count + 1)
+            } else {
+                counts[card.id] = (card, 1)
+            }
+        }
+        return counts.values.map { entry -> Card in
+            let card = entry.card.copy()
+            card.count = entry.count
+            return card
+        }.sortCardList()
+    }
+
 	@objc func updateOpponentTracker(reset: Bool = false) {
         DispatchQueue.main.async { [weak self] in
-            guard let self else {
+            guard let self, #available(macOS 10.15, *),
+                  let tracker = self.windowManager.rootOverlay?.viewModel.opponentTracker else {
                 return
             }
-			
-            let tracker = self.windowManager.opponentTracker
+
             if Settings.showOpponentTracker &&
                 (!self.isBattlegroundsMatch() && !self.isMercenariesMatch() && self.currentGameType != .gt_unknown) &&
             !(Settings.dontTrackWhileSpectating && self.spectator) &&
@@ -282,13 +310,49 @@ class Game: NSObject, PowerEventHandler {
                 
                 // update cards
                 if self.gameEnded && Settings.clearTrackersOnGameEnd {
-                    tracker.update(cards: [], top: [], bottom: [], sideboards: [], relatedCards: [], reset: reset)
+                    tracker.update(cards: [], top: [], bottom: [], sideboards: [], relatedCards: [],
+                                   godfreyCards: self.getCardsFromEntityIds(self.opponent.getGodfreyCardIdsToDisplay()),
+                                   reset: reset)
                 } else {
                     let cardWithRelatedCards = relatedCardsManager.getCardsOpponentMayHave(opponent, currentGameType, currentFormatType)
                     cardWithRelatedCards.forEach({
                         $0.count = 1
                     })
-                    tracker.update(cards: self.opponent.opponentCardList, top: [], bottom: [], sideboards: [], relatedCards: cardWithRelatedCards, reset: reset)
+                    let opponentCardList = self.opponent.opponentCardList
+
+                    // Ports the arena branch of HDT's Core.UpdateOpponentCards /
+                    // OverlayWindow.UpdateOpponentCards: the package group is shown in
+                    // its own lens, and its cards are taken out of the related-cards
+                    // lens so they are not listed twice.
+                    var packageCards = [Card]()
+                    var packageLabel = ""
+                    var relatedCards = cardWithRelatedCards
+                    if isArenaMatch {
+                        let (packageKey, cards) = arenaPackagesManager.getOpponentsPackageCards(opponentCardList)
+                        packageCards = cards.filter({ card in
+                            opponentCardList.allSatisfy({ $0.id != card.id })
+                        }).sortCardList()
+                        packageCards.forEach({ $0.count = 1 })
+                        packageLabel = String(format: String.localizedString("Arena_Legendary_Group_Cards", comment: ""),
+                                              packageKey?.name ?? "")
+
+                        // On the current arena rotation only one legendary is available
+                        // per draft, so an active legendary package rules every other
+                        // legendary out of the related cards.
+                        let hasLegendaryPackage = !packageCards.isEmpty
+                        relatedCards = cardWithRelatedCards.filter({ card in
+                            packageCards.allSatisfy({ $0.id != card.id })
+                                && !(hasLegendaryPackage && card.rarity == .legendary)
+                        }).sortCardList()
+                    }
+
+                    tracker.update(cards: opponentCardList, top: [], bottom: [], sideboards: [],
+                                   relatedCards: relatedCards, packageCards: packageCards,
+                                   packageLabel: packageLabel,
+                                   godfreyCards: self.getCardsFromEntityIds(self.opponent.getGodfreyCardIdsToDisplay()),
+                                   reset: reset)
+                    self.windowManager.rootOverlay?.viewModel.opponentTrackerHover
+                        .preloadHoverArt(rows: opponentCardList + relatedCards + packageCards, reset: reset)
                 }
                 
                 let gameStarted = !self.isInMenu && self.entities.count >= 67
@@ -304,48 +368,29 @@ class Game: NSObject, PowerEventHandler {
                     tracker.playerName = names[0]
                 }
                 
-                tracker.graveyard = self.opponent.graveyard
+                tracker.setGraveyard(self.opponent.graveyard)
                 tracker.playerClassId = self.opponent.playerClassId
-                
-                tracker.currentFormat = self.currentFormat
-                tracker.currentGameMode = self.currentGameMode
-                tracker.matchInfo = self.matchInfo
-                
-                tracker.setWindowSizes()
-                var rect: NSRect?
-                
-                if Settings.autoPositionTrackers && self.hearthstoneRunState.isRunning {
-                    rect = SizeHelper.opponentTrackerFrame()
-                } else {
-                    rect = Settings.opponentTrackerFrame
-                    if rect == nil {
-                        let x = WindowManager.screenFrame.origin.x + 50
-                        rect = NSRect(x: x,
-                                      y: WindowManager.top + WindowManager.screenFrame.origin.y,
-                                      width: WindowManager.cardWidth,
-                                      height: WindowManager.top)
-                    }
-                }
-                tracker.hasValidFrame = true
-                self.windowManager.show(controller: tracker, show: true,
-                                        frame: rect, title: "Opponent tracker",
-                                        overlay: self.hearthstoneRunState.isActive)
-                if self.windowManager.linkOpponentDeckPanel.isShowing {
-                    self.windowManager.linkOpponentDeckPanel.show()
-                }
+
+                // The stack is a child of the overlay canvas now, so there is no
+                // window left to frame: the percentages HDT places it with are
+                // read back off the settings here, and the panel measures itself
+                // against the canvas.
+                TrackerPanelViewModel.migratePlacementIfNeeded()
+                tracker.reloadSettings()
+                tracker.isShown = true
             } else {
-                self.windowManager.show(controller: tracker, show: false)
-                self.windowManager.show(controller: self.windowManager.linkOpponentDeckPanel, show: false)
+                tracker.isShown = false
+                self.windowManager.rootOverlay?.viewModel.linkOpponentDeck.hide(true)
             }
 		}
 	}
     
     @objc func updatePlayerTracker(reset: Bool = false) {
         DispatchQueue.main.async { [weak self] in
-            guard let self else {
+            guard let self, #available(macOS 10.15, *),
+                  let tracker = self.windowManager.rootOverlay?.viewModel.playerTracker else {
                 return
             }
-            let tracker = self.windowManager.playerTracker
             if Settings.showPlayerTracker &&
                 !(Settings.dontTrackWhileSpectating && self.spectator) &&
                 (!self.isBattlegroundsMatch() && !self.isMercenariesMatch() && self.currentGameType != .gt_unknown) &&
@@ -369,7 +414,14 @@ class Game: NSObject, PowerEventHandler {
                     return card
                 }
 
-                tracker.update(cards: self.player.playerCardList, top: top, bottom: bottom, sideboards: self.player.playerSideboardsDict, relatedCards: [], reset: reset)
+                tracker.update(cards: self.player.playerCardList, top: top, bottom: bottom,
+                               sideboards: self.player.playerSideboardsDict, relatedCards: [],
+                               godfreyCards: self.getCardsFromEntityIds(self.player.getGodfreyCardIdsToDisplay()),
+                               reset: reset)
+                self.windowManager.rootOverlay?.viewModel.playerTrackerHover
+                    .preloadHoverArt(rows: self.player.playerCardList + top + bottom
+                                        + self.player.playerSideboardsDict.flatMap { $0.cards },
+                                     reset: reset)
                 
                 // update card counter values
                 let gameStarted = !self.isInMenu && self.entities.count >= 67
@@ -382,7 +434,7 @@ class Game: NSObject, PowerEventHandler {
                                 
                 if let currentDeck = self.currentDeck {
                     if let deck = RealmHelper.getDeck(with: currentDeck.id) {
-                        tracker.recordTrackerMessage = StatsHelper
+                        tracker.recordMessage = StatsHelper
                             .getDeckManagerRecordLabel(deck: deck,
                                                        mode: .all)
                         // HDT's LblWinRateAgainst. The opponent's class stays set
@@ -397,16 +449,16 @@ class Game: NSObject, PowerEventHandler {
                            let opponentClass = self.opponent.originalClass,
                            let record = StatsHelper.matchupTrackerRecord(deck: deck,
                                                                          opponentClass: opponentClass) {
-                            tracker.matchupTrackerMessage = StatsHelper
+                            tracker.matchupMessage = StatsHelper
                                 .matchupTrackerLabel(opponentClass: opponentClass, record: record)
                         } else {
-                            tracker.matchupTrackerMessage = ""
+                            tracker.matchupMessage = ""
                         }
                     } else {
                         // An unsaved deck has no record; without this the line kept
                         // showing the previous deck's W-L.
-                        tracker.recordTrackerMessage = ""
-                        tracker.matchupTrackerMessage = ""
+                        tracker.recordMessage = ""
+                        tracker.matchupMessage = ""
                     }
                     tracker.playerName = currentDeck.name
                     if !currentDeck.heroId.isEmpty {
@@ -415,41 +467,19 @@ class Game: NSObject, PowerEventHandler {
                         tracker.playerClassId = currentDeck.playerClass.defaultHeroCardId
                     }
                 } else {
-                    tracker.recordTrackerMessage = ""
-                    tracker.matchupTrackerMessage = ""
+                    tracker.recordMessage = ""
+                    tracker.matchupMessage = ""
                     tracker.playerName = player.name
                     tracker.playerClassId = playerHeroId
                 }
                 
-                tracker.graveyard = self.player.graveyard
-                
-                tracker.currentFormat = self.currentFormat 
-                tracker.currentGameMode = self.currentGameMode
-                tracker.matchInfo = self.matchInfo
-                
-                tracker.setWindowSizes()
-                
-                var rect: NSRect?
-                
-                if Settings.autoPositionTrackers && self.hearthstoneRunState.isRunning {
-                    rect = SizeHelper.playerTrackerFrame()
-                } else {
-                    rect = Settings.playerTrackerFrame
-                    if rect == nil {
-                        let x = WindowManager.screenFrame.width - WindowManager.cardWidth
-                            + WindowManager.screenFrame.origin.x
-                        rect = NSRect(x: x,
-                                      y: WindowManager.top + WindowManager.screenFrame.origin.y,
-                                      width: WindowManager.cardWidth,
-                                      height: WindowManager.top)
-                    }
-                }
-                tracker.hasValidFrame = true
-                self.windowManager.show(controller: tracker, show: true,
-                                   frame: rect, title: "Player tracker",
-                                   overlay: self.hearthstoneRunState.isActive)
+                tracker.setGraveyard(self.player.graveyard)
+
+                TrackerPanelViewModel.migratePlacementIfNeeded()
+                tracker.reloadSettings()
+                tracker.isShown = true
             } else {
-                self.windowManager.show(controller: tracker, show: false)
+                tracker.isShown = false
             }
         }
     }
@@ -473,37 +503,33 @@ class Game: NSObject, PowerEventHandler {
         isBattlegroundsMatch() && !gameEnded && Settings.showTurnCounter && !hideBattlegroundsTurn
     }
 
+    // HDT's OverlayWindow.ShowTimers/HideTimers, which is all that is left of
+    // this now that the three timers are RootOverlay children: there is no
+    // window of their own to frame, and hideAllWhenGameInBackground is already
+    // handled once for the whole canvas in updateRootOverlay().
     func updateTurnTimer() {
         DispatchQueue.main.async { [weak self] in
             guard let self else {
                 return
             }
-            if Settings.showTimer && !self.gameEnded && self.shouldShowGUIElement && !isBattlegroundsMatch() && !isMercenariesMatch() {
-                var rect: NSRect?
-                if Settings.autoPositionTrackers {
-                    rect = SizeHelper.timerHudFrame()
-                } else {
-                    rect = Settings.timerHudFrame
-                    if rect == nil {
-                        rect = SizeHelper.timerHudFrame()
-                    }
-                }
-                if let timerHud = self.turnTimer.timerHud {
-                    timerHud.hasValidFrame = true
-                    self.windowManager.show(controller: timerHud, show: true, frame: rect, title: nil, overlay: self.hearthstoneRunState.isActive)
-                }
-            } else {
-                if let timerHud = self.turnTimer.timerHud {
-                    self.windowManager.show(controller: timerHud, show: false)
-                }
+            if #available(macOS 10.15, *) {
+                self.windowManager.rootOverlay?.viewModel.turnTimer.isShown =
+                    Settings.showTimer && !self.gameEnded && self.shouldShowGUIElement
+                    && !self.isBattlegroundsMatch() && !self.isMercenariesMatch()
             }
-            
         }
     }
     
     func updateSecretTracker(cards: [Card]) {
-        self.windowManager.secretTracker.set(cards: cards)
-        self.updateSecretTracker()
+        DispatchQueue.main.async { [weak self] in
+            guard #available(macOS 10.15, *) else { return }
+            if let panel = self?.windowManager.rootOverlay?.viewModel.secretsPanel {
+                // Read the renders in before any hover, as the deck trackers do
+                ImageUtils.preloadCardArt(cardIds: Settings.showFloatingCard ? cards.map { $0.id } : [], for: panel)
+                panel.set(cards: cards)
+            }
+            self?.updateSecretTracker()
+        }
     }
     
     // Rebuilds the panel for settings that change what it lists or whether it shows at all
@@ -511,70 +537,49 @@ class Game: NSObject, PowerEventHandler {
         updateSecretTracker(cards: secretsManager?.getSecretList() ?? [])
     }
     
+    // The secret helper lives on the RootOverlay canvas now, so there is no
+    // window of its own left to frame - HDT places SecretsContainer from
+    // Config.SecretsTop / SecretsLeft and sizes it from SecretsPanelHeight, which
+    // is what SecretsPanelView reads.
     func updateSecretTracker() {
         DispatchQueue.main.async { [weak self] in
-            guard let self else {
+            guard let self, #available(macOS 10.15, *),
+                  let panel = self.windowManager.rootOverlay?.viewModel.secretsPanel else {
                 return
             }
-            
-            let tracker = self.windowManager.secretTracker
-            // Where the helper ends on the Hearthstone window, top down, so the action history panel can stay clear of it
-            var helperBottom: CGFloat = 0
-            
-            if Settings.showSecretHelper && !self.gameEnded &&
+
+            panel.reloadSettings()
+            panel.isShown = Settings.showSecretHelper && !self.gameEnded &&
                 ((Settings.hideAllWhenGameInBackground && self.hearthstoneRunState.isActive)
-                    || !Settings.hideAllWhenGameInBackground) && !isBattlegroundsMatch() {
-                if tracker.cardCount() > 0 {
-                    tracker.setWindowSizes()
-                    let rect = SizeHelper.secretTrackerFrame(height: tracker.frameHeight)
-                    tracker.contentViewController?.preferredContentSize = rect.size
-                    self.windowManager.show(controller: tracker, show: true,
-                                            frame: rect,
-                                            title: nil, overlay: self.hearthstoneRunState.isActive)
-                    helperBottom = SizeHelper.hearthstoneWindow.frame.maxY - rect.minY
-                } else {
-                    self.windowManager.show(controller: tracker, show: false)
+                    || !Settings.hideAllWhenGameInBackground) && !isBattlegroundsMatch()
+
+            // The action history panel keeps clear of the helper while the two overlap
+            if let actionHistory = self.windowManager.rootOverlay?.viewModel.actionHistory {
+                let frame = panel.drawnFrame(canvasSize: SizeHelper.hearthstoneWindow.frame.size)
+                if actionHistory.secretHelperFrame != frame {
+                    actionHistory.secretHelperFrame = frame
                 }
-            } else {
-                self.windowManager.show(controller: tracker, show: false)
-            }
-            if #available(macOS 10.15, *), let actionHistory = self.windowManager.rootOverlay?.viewModel.actionHistory,
-               actionHistory.secretHelperBottom != helperBottom {
-                actionHistory.secretHelperBottom = helperBottom
             }
         }
     }
     
+    // The active effects live on the RootOverlay canvas, so there is no window
+    // of their own left to frame, show or hide: a side with nothing to show
+    // renders nothing, and hideAllWhenGameInBackground is already handled once
+    // for the whole canvas in updateRootOverlay().
     func updateActiveEffects() {
-        DispatchQueue.main.async { [self] in
-            let hsActive = hearthstoneRunState.isActive
+        if #available(macOS 10.15, *) {
+            DispatchQueue.main.async { [self] in
+                guard let viewModel = windowManager.rootOverlay?.viewModel else { return }
 
-            if isInMenu || !isMulliganDone() || isBattlegroundsMatch() {
-                windowManager.playerActiveEffectsOverlay.visibility = false
-                windowManager.opponentActiveEffectsOverlay.visibility = false
-            } else {
-                windowManager.playerActiveEffectsOverlay.visibility = Settings.showPlayerActiveEffects
-                windowManager.opponentActiveEffectsOverlay.visibility = Settings.showOpponentActiveEffects
-            }
-            
-            if windowManager.playerActiveEffectsOverlay.visibility && windowManager.playerActiveEffectsOverlay.visibleEffects.count > 0 {
-                if (Settings.hideAllWhenGameInBackground && hsActive) || !Settings.hideAllWhenGameInBackground {
-                    windowManager.show(controller: windowManager.playerActiveEffectsOverlay, show: true, frame: SizeHelper.playerActiveEffectsFrame(), overlay: true)
-                    windowManager.playerActiveEffectsOverlay.updateGrid()
+                if isInMenu || !isMulliganDone() || isBattlegroundsMatch() {
+                    viewModel.playerActiveEffects.isShown = false
+                    viewModel.opponentActiveEffects.isShown = false
                 } else {
-                    windowManager.show(controller: windowManager.playerActiveEffectsOverlay, show: false)
+                    viewModel.playerActiveEffects.isShown = Settings.showPlayerActiveEffects
+                    viewModel.opponentActiveEffects.isShown = Settings.showOpponentActiveEffects
                 }
             }
-
-            if windowManager.opponentActiveEffectsOverlay.visibility && windowManager.opponentActiveEffectsOverlay.visibleEffects.count > 0 {
-                if (Settings.hideAllWhenGameInBackground && hsActive) || !Settings.hideAllWhenGameInBackground {
-                    windowManager.show(controller: windowManager.opponentActiveEffectsOverlay, show: true, frame: SizeHelper.opponentActiveEffectsFrame(), overlay: true)
-                    windowManager.opponentActiveEffectsOverlay.updateGrid()
-                } else {
-                    windowManager.show(controller: windowManager.opponentActiveEffectsOverlay, show: false)
-                }
-            }
-
         }
     }
     
@@ -625,56 +630,27 @@ class Game: NSObject, PowerEventHandler {
         }
     }
     
+    // Both mulligan guides and the pre-lobby badges live on the RootOverlay
+    // canvas now, so there is no window of their own left to frame, show or
+    // hide. Only the pre-lobby's own setting gate is left; the
+    // hideAllWhenGameInBackground rule is already handled once for the whole
+    // canvas in updateRootOverlay().
     func updateConstructedMulliganOverlays() {
         DispatchQueue.main.async {
-            let hsActive = self.hearthstoneRunState.isActive
-            
-            if self.windowManager.constructedMulliganGuide.viewModel.visibility {
-                if (Settings.hideAllWhenGameInBackground && hsActive) || !Settings.hideAllWhenGameInBackground {
-                    self.windowManager.show(controller: self.windowManager.constructedMulliganGuide, show: true, frame: SizeHelper.hearthstoneWindow.frame, overlay: true)
-                    DispatchQueue.main.async {
-                        self.windowManager.constructedMulliganGuide.updateScaling()
-                    }
-                } else {
-                    self.windowManager.show(controller: self.windowManager.constructedMulliganGuide, show: false)
-                }
-            }
-
-            if self.windowManager.constructedMulliganGuidePreLobby.isVisible {
-                if ((Settings.hideAllWhenGameInBackground && hsActive) || !Settings.hideAllWhenGameInBackground) && Settings.showMulliganGuidePreLobby {
-                    self.windowManager.show(controller: self.windowManager.constructedMulliganGuidePreLobby, show: true, frame: SizeHelper.constructedMulliganGuidePreLobbyFrame(), overlay: true)
-                    DispatchQueue.main.async {
-                        self.windowManager.constructedMulliganGuidePreLobby.updateScaling()
-                    }
-                } else {
-                    self.windowManager.show(controller: self.windowManager.constructedMulliganGuidePreLobby, show: false)
-                }
-            } else {
-                self.windowManager.show(controller: self.windowManager.constructedMulliganGuidePreLobby, show: false)
+            if #available(macOS 10.15, *) {
+                self.windowManager.rootOverlay?.viewModel.mulliganGuidePreLobby.applyVisibility()
             }
         }
     }
     
+    // The resources widgets live on the RootOverlay canvas, so there is no
+    // window of their own left to frame, show or hide: a side with nothing to
+    // show renders nothing, and hideAllWhenGameInBackground is already handled
+    // once for the whole canvas in updateRootOverlay().
     @available(macOS 10.15, *)
     func updateMaxResourcesWidget() {
         DispatchQueue.main.async { [self] in
             updatePlayerResorucesWidgetVisibility()
-            let hsActive = hearthstoneRunState.isActive
-
-            if let win =  windowManager.playerPlayerResourcesOverlay {
-                if ((Settings.hideAllWhenGameInBackground && hsActive) || !Settings.hideAllWhenGameInBackground) && win.viewModel.visibility && shouldShowTracker {
-                    windowManager.show(controller: win, show: true, frame: SizeHelper.playerMaxResourcesFrame(), overlay: true)
-                } else {
-                    windowManager.show(controller: win, show: false)
-                }
-            }
-            if let win =  windowManager.opponentPlayerResourcesOverlay {
-                if ((Settings.hideAllWhenGameInBackground && hsActive) || !Settings.hideAllWhenGameInBackground) && win.viewModel.visibility && shouldShowTracker {
-                    windowManager.show(controller: win, show: true, frame: SizeHelper.opponentMaxResourcesFrame(), overlay: true)
-                } else {
-                    windowManager.show(controller: win, show: false)
-                }
-            }
         }
     }
 
@@ -802,22 +778,49 @@ class Game: NSObject, PowerEventHandler {
         }
     }
     
+    // The experience counter is a RootOverlay child now, so there is no window
+    // of its own left to frame, show or hide: only HDT's
+    // ShowExperienceCounter/HideExperienceCounter gating is left, and
+    // hideAllWhenGameInBackground is already handled once for the whole canvas
+    // in updateRootOverlay().
     func updateExperienceOverlay() {
-        let rect = SizeHelper.experienceOverlayFrame()
-        
         DispatchQueue.main.async {
-            let experiencePanel = self.windowManager.experiencePanel
-            if Settings.showExperienceCounter && experiencePanel.visible && ((Settings.hideAllWhenGameInBackground && self.hearthstoneRunState.isActive) || !Settings.hideAllWhenGameInBackground) {
-                self.windowManager.show(controller: experiencePanel, show: true, frame: rect, title: nil, overlay: true)
-            } else {
-                self.windowManager.show(controller: experiencePanel, show: false)
+            if #available(macOS 10.15, *) {
+                guard let counter = self.windowManager.rootOverlay?.viewModel.experienceCounter else { return }
+                counter.isShown = Settings.showExperienceCounter && counter.visible
             }
         }
     }
     
+    // OverlayWindow's ExperienceFadeDelay and LevelResetDelay, in seconds.
     static let experienceFadeDelay = 6.0
+    static let levelResetDelay = 0.5
     
+    // The waits below are plain sleeps where HDT awaits, so they need a thread
+    // that can afford to sit still: one level-up holds the method for six and a
+    // half seconds, and the mode wait above them has no bound at all. The
+    // experience watcher calls in from inside its own tick, which would stop it
+    // polling for that whole time, so the work moves here instead. HDT has no
+    // equivalent - it starts ExperienceChangedAsync with .Forget() and awaits.
+    //
+    // Serial, so two level-ups arriving back to back animate the bar one after
+    // the other rather than both at once.
+    private let experienceQueue = DispatchQueue(label: "net.hearthsim.hstracker.experience", attributes: [])
+
+    // OverlayWindow.ExperienceChangedAsync.
+    @available(macOS 10.15, *)
     func experienceChangedAsync(experience: Int, experienceNeeded: Int, level: Int, levelChange: Int, animate: Bool) {
+        experienceQueue.async { [weak self] in
+            self?.runExperienceChanged(experience: experience,
+                                       experienceNeeded: experienceNeeded,
+                                       level: level,
+                                       levelChange: levelChange,
+                                       animate: animate)
+        }
+    }
+
+    @available(macOS 10.15, *)
+    private func runExperienceChanged(experience: Int, experienceNeeded: Int, level: Int, levelChange: Int, animate: Bool) {
         let currentMode = self.currentMode ?? .invalid
         let previousMode = self.previousMode ?? .invalid
         
@@ -827,93 +830,115 @@ class Game: NSObject, PowerEventHandler {
             Thread.sleep(forTimeInterval: 0.500)
         }
         logger.debug("Showing experience counter now")
-        let experienceCounter = windowManager.experiencePanel.experienceTracker
-        experienceCounter.xpDisplay = "\(experience)/\(experienceNeeded)"
-        experienceCounter.levelDisplay = "\(level+1)"
-        experienceCounter.xpPercentage = (Double(experience) / Double(experienceNeeded))
-        if animate {
-            DispatchQueue.main.async {
-                experienceCounter.needsDisplay = true
-                self.windowManager.experiencePanel.visible = true
-                self.updateExperienceOverlay()
-                self.guiNeedsUpdate = true
-            }
-            Thread.sleep(forTimeInterval: Game.experienceFadeDelay)
-        } else {
-            DispatchQueue.main.async {
-                experienceCounter.needsDisplay = true
-                
-            }
+
+        let percentage = Double(experience) / Double(experienceNeeded)
+
+        onExperienceCounter { counter in
+            counter.xpDisplay = "\(experience)/\(experienceNeeded)"
+            counter.levelDisplay = "\(level+1)"
         }
-        if currentMode != Mode.hub {
-            windowManager.experiencePanel.visible = false
+
+        if animate {
+            onExperienceCounter { counter in
+                counter.beginAnimating()
+                counter.show()
+            }
+            updateExperienceOverlay()
+            guiNeedsUpdate = true
+
+            // One pass per level gained: run the bar to full, hold it there,
+            // empty it, and start the next level. Then the real fraction.
+            for _ in 0 ..< max(levelChange, 0) {
+                onExperienceCounter { $0.changeFill(1, instant: false) }
+                Thread.sleep(forTimeInterval: Game.experienceFadeDelay)
+                onExperienceCounter { $0.resetFill() }
+                Thread.sleep(forTimeInterval: Game.levelResetDelay)
+            }
+            onExperienceCounter { $0.changeFill(percentage, instant: false) }
+            Thread.sleep(forTimeInterval: Game.experienceFadeDelay)
+            onExperienceCounter { $0.endAnimating() }
+        } else {
+            onExperienceCounter { $0.changeFill(percentage, instant: true) }
+        }
+
+        // Read again rather than reusing the mode captured above: the animation
+        // above can have held this method for half a minute, which is exactly
+        // when the player has left the hub in the meantime.
+        if self.currentMode != Mode.hub {
+            onExperienceCounter { $0.hide() }
             guiNeedsUpdate = true
         }
     }
 
+    // The counter lives on the RootOverlay canvas, so every read and write goes
+    // through the main queue.
+    @available(macOS 10.15, *)
+    private func onExperienceCounter(_ body: @escaping (ExperienceCounterViewModel) -> Void) {
+        DispatchQueue.main.async {
+            guard let counter = self.windowManager.rootOverlay?.viewModel.experienceCounter else { return }
+            body(counter)
+        }
+    }
+
+    // The opponent hand markers are RootOverlay children now, so there is no
+    // window of their own left to frame: this decides whether they are on screen
+    // and pushes the hand they describe.
     func updateCardHud() {
-        DispatchQueue.main.async { [weak self] in
-            guard let self else {
-                return
-            }
-            
-            let tracker = self.windowManager.cardHudContainer
-            
-            if Settings.showCardHuds && self.shouldShowGUIElement && !self.gameEnded && !self.isBattlegroundsMatch() {
-                tracker.update(entities: self.opponent.hand,
-                               cardCount: self.opponent.handCount, game: self)
-                self.windowManager.show(controller: tracker, show: true,
-                     frame: SizeHelper.cardHudContainerFrame(), title: nil,
-                     overlay: self.hearthstoneRunState.isActive)
-            } else {
-                self.windowManager.show(controller: tracker, show: false)
+        if #available(macOS 10.15, *) {
+            DispatchQueue.main.async { [weak self] in
+                guard let self,
+                      let markers = self.windowManager.rootOverlay?.viewModel.opponentHandMarkers else {
+                    return
+                }
+                if Settings.showCardHuds && self.shouldShowGUIElement && !self.gameEnded && !self.isBattlegroundsMatch() {
+                    markers.isShown = true
+                    markers.update(hand: self.opponent.hand,
+                                   handCount: self.opponent.handCount, game: self)
+                } else {
+                    markers.hide()
+                }
             }
         }
     }
     
+    // The two attack icons live on the RootOverlay canvas now, so there is no
+    // window of their own left to frame, show or hide. What remains is HDT's
+    // OverlayWindow.UpdateIcons: each icon's visibility, and - when at least one
+    // of them is up - the damage it reads off the board.
     func updateBoardStateTrackers() {
         DispatchQueue.main.async {
-            let playerBoardDamage = self.windowManager.playerBoardDamage
-            let opponentBoardDamage = self.windowManager.opponentBoardDamage
+            if #available(macOS 10.15, *) {
+                guard let viewModel = self.windowManager.rootOverlay?.viewModel else { return }
 
-            let visible = self.shouldShowGUIElement
-                && self.currentGameMode != .battlegrounds && self.currentGameMode != .mercenaries
-                && self.isMulliganDone() && !self.gameEnded
-            let showPlayer = Settings.playerBoardDamage && visible
-            let showOpponent = Settings.opponentBoardDamage && visible
-            // Nothing to compute while both counters are hidden
-            let board = showPlayer || showOpponent ? BoardState(game: self) : nil
+                let visible = self.shouldShowGUIElement && !self.gameEnded
+                    && self.currentGameMode != .battlegrounds && self.currentGameMode != .mercenaries
+                    && self.isMulliganDone()
+                let showPlayer = Settings.playerBoardDamage && visible
+                let showOpponent = Settings.opponentBoardDamage && visible
 
-            if showPlayer, let board = board {
-                playerBoardDamage.update(now: board.player.hasInfiniteDamageNow ? Int.max : board.player.damageNow,
-                                         nextTurn: board.player.hasInfiniteDamageNextTurn ? Int.max : board.player.damageNextTurn)
-                var rect: NSRect?
-                if !Settings.autoPositionTrackers {
-                    rect = Settings.playerBoardDamageFrame
+                viewModel.playerBoardAttack.isShown = showPlayer
+                viewModel.opponentBoardAttack.isShown = showOpponent
+
+                // HDT only builds the BoardState when one of the two icons is
+                // actually on screen, and so does this.
+                guard showPlayer || showOpponent else { return }
+
+                let board = BoardState(game: self)
+
+                // n(m): what each side can still deal to the enemy hero this turn, then what its
+                // board could deal on its next turn. BoardState works out both, hero power and
+                // Garrison Commander included.
+                if showPlayer {
+                    viewModel.playerBoardAttack.update(
+                        now: board.player.hasInfiniteDamageNow ? Int.max : board.player.damageNow,
+                        nextTurn: board.player.hasInfiniteDamageNextTurn ? Int.max : board.player.damageNextTurn)
                 }
-                playerBoardDamage.hasValidFrame = true
-                self.windowManager.show(controller: playerBoardDamage, show: true,
-                                        frame: rect ?? SizeHelper.playerBoardDamageFrame(), title: nil,
-                                        overlay: self.hearthstoneRunState.isActive)
-            } else {
-                self.windowManager.show(controller: playerBoardDamage, show: false)
-            }
 
-            if showOpponent, let board = board {
-                opponentBoardDamage.update(now: board.opponent.hasInfiniteDamageNow ? Int.max : board.opponent.damageNow,
-                                           nextTurn: board.opponent.hasInfiniteDamageNextTurn ? Int.max : board.opponent.damageNextTurn)
-                var rect: NSRect?
-                if !Settings.autoPositionTrackers {
-                    rect = Settings.opponentBoardDamageFrame
+                if showOpponent {
+                    viewModel.opponentBoardAttack.update(
+                        now: board.opponent.hasInfiniteDamageNow ? Int.max : board.opponent.damageNow,
+                        nextTurn: board.opponent.hasInfiniteDamageNextTurn ? Int.max : board.opponent.damageNextTurn)
                 }
-                opponentBoardDamage.hasValidFrame = true
-                // This used to pass the default frame whatever was saved, so a moved opponent counter
-                // jumped back on every refresh.
-                self.windowManager.show(controller: opponentBoardDamage, show: true,
-                                        frame: rect ?? SizeHelper.opponentBoardDamageFrame(), title: nil,
-                                        overlay: self.hearthstoneRunState.isActive)
-            } else {
-                self.windowManager.show(controller: opponentBoardDamage, show: false)
             }
         }
     }
@@ -927,40 +952,75 @@ class Game: NSObject, PowerEventHandler {
         }
     }
 	
+    // The board hover slots and the Mercenaries ability strips are RootOverlay
+    // children now, so there are no windows left to frame: this decides whether
+    // they are on screen and pushes the board state they draw from. The gate is
+    // the one the two panels already used, kept as it was.
     func updateBoardOverlay() {
-        // WindowManager.show never orders a window in the unit test host, but the frames handed to it
-        // are worked out first, and SizeHelper reads them through the CoreManager the host never
-        // creates. Any Game a test makes gets here through updateAllTrackers, and with Show flavor text
-        // at its default (on) that crashed the test host.
+        // The board overlay reads the game back through the CoreManager, which the unit test host
+        // never creates. Any Game a test makes gets here through updateAllTrackers.
         guard !AppDelegate.isRunningUnitTests else {
             return
         }
-        DispatchQueue.main.async {
-            let oppTracker = self.windowManager.opponentBoardOverlay
-            let playerTracker = self.windowManager.playerBoardOverlay
-
-            let show = (!self.isMercenariesMatch() && Settings.showFlavorText) || (self.isMercenariesMatch())
-            if !self.isInMenu && show || (self.isMulliganDone() || self.isMercenariesMatch()) && !self.gameEnded && ((Settings.hideAllWhenGameInBackground && self.hearthstoneRunState.isActive) || !Settings.hideAllWhenGameInBackground) {
-                self.windowManager.show(controller: oppTracker, show: true, frame: SizeHelper.opponentBoardOverlay(), title: nil, overlay: self.hearthstoneRunState.isActive)
-                oppTracker.updateBoardState(player: self.opponent)
-                self.windowManager.show(controller: playerTracker, show: true, frame: SizeHelper.playerBoardOverlay(), title: nil, overlay: self.hearthstoneRunState.isActive)
-                playerTracker.updateBoardState(player: self.player)
-            } else {
-                self.windowManager.show(controller: oppTracker, show: false)
-                self.windowManager.show(controller: playerTracker, show: false)
+        if #available(macOS 10.15, *) {
+            DispatchQueue.main.async {
+                guard let board = self.windowManager.rootOverlay?.viewModel.boardOverlay else {
+                    return
+                }
+                let show = (!self.isMercenariesMatch() && Settings.showFlavorText) || (self.isMercenariesMatch())
+                if !self.isInMenu && show || (self.isMulliganDone() || self.isMercenariesMatch()) && !self.gameEnded && ((Settings.hideAllWhenGameInBackground && self.hearthstoneRunState.isActive) || !Settings.hideAllWhenGameInBackground) {
+                    board.isShown = true
+                    // OverlayWindow.IsGameOver, which collapses every slot
+                    // rather than hiding the grids.
+                    let isGameOver = self.isInMenu || self.gameEnded
+                    board.update(player: self.player, opponent: self.opponent, isGameOver: isGameOver)
+                } else {
+                    board.isShown = false
+                    board.clearAbilities()
+                }
             }
         }
     }
 	
+    // The Mercenaries tasks button and its list are RootOverlay children now,
+    // so there are no windows left to frame: this only decides whether the
+    // button is on screen, which is HDT's
+    // ShowMercenariesTasksButton/HideMercenariesTasksButton pair. Hiding the
+    // button hides the list with it, as HideMercenariesTasksButton does.
     func updateMercenariesTaskListButton() {
-        DispatchQueue.main.async {
-          let merc = self.windowManager.mercenariesTaskListButton
-            if Settings.showMercsTasks && merc.visible && ((Settings.hideAllWhenGameInBackground && self.hearthstoneRunState.isActive) || !Settings.hideAllWhenGameInBackground) {
-                let rect = SizeHelper.mercenariesTaskListButton()
-                self.windowManager.show(controller: merc, show: true, frame: rect, title: nil, overlay: true)
-            } else {
-                self.windowManager.show(controller: self.windowManager.mercenariesTaskListView, show: false)
-                self.windowManager.show(controller: merc, show: false)
+        if #available(macOS 10.15, *) {
+            DispatchQueue.main.async {
+                guard let tasks = self.windowManager.rootOverlay?.viewModel.mercenariesTasks else {
+                    return
+                }
+                // OverlayWindow.MercenariesButtonOffset reads this live off the
+                // game to keep the button clear of Hearthstone's "Back" button.
+                tasks.isInMenu = self.isInMenu
+                let show = Settings.showMercsTasks && tasks.isRequested
+                    && ((Settings.hideAllWhenGameInBackground && self.hearthstoneRunState.isActive)
+                        || !Settings.hideAllWhenGameInBackground)
+                tasks.isButtonShown = show
+                if !show {
+                    tasks.isListShown = false
+                }
+            }
+        }
+    }
+
+    // What LoadingScreenHandler used to set on the button controller itself:
+    // whether the Mercenaries scenes want the button at all, before the
+    // settings and background gates updateMercenariesTaskListButton applies.
+    func setMercenariesTasksRequested(_ requested: Bool, gameNoticeVisible: Bool = false) {
+        if #available(macOS 10.15, *) {
+            DispatchQueue.main.async {
+                guard let tasks = self.windowManager.rootOverlay?.viewModel.mercenariesTasks else {
+                    return
+                }
+                tasks.isRequested = requested
+                if requested {
+                    tasks.setGameNoticeVisible(gameNoticeVisible)
+                }
+                self.updateMercenariesTaskListButton()
             }
         }
     }
@@ -999,7 +1059,9 @@ class Game: NSObject, PowerEventHandler {
         // HDT: the whole RootOverlay window is hidden for that
         // (Game.updateRootOverlay), so folding it in would only make the panel
         // reset itself every time the user alt-tabbed.
-        let show = isRunning && isInMenu && !queueEvents.isInQueue && SceneHandler.scene == .bacon && Settings.enableTier7Overlay && Settings.showBattlegroundsTier7PreLobby && (viewModel.battlegroundsGameMode == .solo || viewModel.battlegroundsGameMode == .duos) && viewModel.visibility
+        // subs can toggle this independently, non-subs can just toggle the Tier7 setting above
+        let preLobbyEnabled = Settings.showBattlegroundsTier7PreLobby || !(HSReplayAPI.accountData?.is_tier7 ?? false)
+        let show = isRunning && isInMenu && !queueEvents.isInQueue && SceneHandler.scene == .bacon && Settings.enableTier7Overlay && preLobbyEnabled && (viewModel.battlegroundsGameMode == .solo || viewModel.battlegroundsGameMode == .duos) && viewModel.visibility
         if show {
             Task.init {
                 await viewModel.update()
@@ -1274,6 +1336,8 @@ class Game: NSObject, PowerEventHandler {
     
     private var _battlegroundsRatingInfo: MirrorBattlegroundRatingInfo?
     
+    private var _arenaRatingInfo: MirrorArenaRatingInfo?
+    
     private var _mercenariesRating: Int?
     
     private var isReconnect = false
@@ -1306,7 +1370,7 @@ class Game: NSObject, PowerEventHandler {
     var availableRaces: [Race]? {
         if _availableRaces == nil {
             if let races = MirrorHelper.getAvailableBattlegroundsRaces() {
-                let newRaces = races.compactMap({ x in x.intValue > 0 && x.intValue < Race.allCases.count ? Race.allCases[x.intValue] : nil })
+                let newRaces = races.compactMap({ x in x.intValue > 0 ? Race.allCases[safeIndex: x.intValue] : nil })
                 logger.info("Battlegrounds available races: \(newRaces) - from mirror \(races)")
                 if newRaces.count > 0 && newRaces.count == races.count {
                     _availableRaces = newRaces
@@ -1347,6 +1411,27 @@ class Game: NSObject, PowerEventHandler {
         return _battlegroundsRatingInfo
     }
     
+    /// Read from the arena landing page, so it is only there while that scene is
+    /// up - SceneHandler caches it on the way into the draft. The lazy read is
+    /// HDT's `??=` fallback for when it never got cached.
+    var arenaRatingInfo: MirrorArenaRatingInfo? {
+        if let info = _arenaRatingInfo {
+            return info
+        }
+        _arenaRatingInfo = MirrorHelper.getArenaRatingInfo()
+        return _arenaRatingInfo
+    }
+
+    /// The rating for the mode being played; the two arena ladders are rated
+    /// separately.
+    var arenaRating: Int? {
+        switch currentGameType {
+        case .gt_underground_arena: return arenaRatingInfo?.undergroundRating.intValue
+        case .gt_arena: return arenaRatingInfo?.rating.intValue
+        default: return nil
+        }
+    }
+
     var matchInfo: MatchInfo? {
         
         if _matchInfo != nil {
@@ -1517,10 +1602,11 @@ class Game: NSObject, PowerEventHandler {
     
     init(hearthstoneRunState: HearthstoneRunState) {
         self.hearthstoneRunState = hearthstoneRunState
-		turnTimer = TurnTimer(gui: windowManager.timerHud)
+		turnTimer = TurnTimer(windowManager: windowManager)
         activeEffects = ActiveEffects()
         counterManager = CounterManager()
         relatedCardsManager = RelatedCardsManager()
+        arenaPackagesManager = ArenaPackagesManager()
         super.init()
         counterManager.initialize(game: self)
         actionHistory.gameTypeProvider = { [weak self] in
@@ -1542,10 +1628,6 @@ class Game: NSObject, PowerEventHandler {
             self?.updateSecretTracker(cards: cards)
         }
 		
-		windowManager.startManager()
-        windowManager.playerTracker.window?.delegate = self
-        windowManager.opponentTracker.window?.delegate = self
-		
 		let center = NotificationCenter.default
 		
 		// events that should update the player tracker
@@ -1557,22 +1639,35 @@ class Game: NSObject, PowerEventHandler {
 		                                 Settings.player_graveyard_details_frame, Settings.player_graveyard_frame,
                                          Settings.player_cards_top, Settings.player_cards_bottom, Settings.player_cards_top,
                                          Settings.player_cards_bottom, Settings.hide_player_sideboards,
-                                         Settings.show_matchup_win_rate, Events.game_stats_changed]
+                                         Settings.show_matchup_win_rate, Events.game_stats_changed,
+                                         // Where the stack sits, how big it is drawn and what order its
+                                         // sections come in - see TrackerPanelViewModel.
+                                         Settings.player_deck_top, Settings.player_deck_left, Settings.player_deck_height,
+                                         Settings.overlay_player_scaling, Settings.player_opacity,
+                                         Settings.overlay_center_player_stack, Settings.deck_panel_order_player]
 		
 		// events that should update the opponent's tracker
 		let opponentTrackerUpdateEvents = [Settings.show_opponent_tracker, Settings.opponent_card_count, Settings.opponent_draw_chance,
 		                                   Settings.opponent_deathrattle_frame,
 		                                   Settings.show_opponent_class, Settings.opponent_graveyard_frame,
 		                                   Settings.opponent_graveyard_details_frame,
-                                           Settings.opponent_related_cards]
+                                           Settings.opponent_related_cards,
+                                           Settings.hide_opponent_arena_packages,
+                                           Settings.opponent_deck_top, Settings.opponent_deck_left,
+                                           Settings.opponent_deck_height, Settings.overlay_opponent_scaling,
+                                           Settings.opponent_opacity, Settings.overlay_center_opponent_stack,
+                                           Settings.deck_panel_order_opponent]
 		
 		// events that should update all trackers
 		let allTrackerUpdateEvents = [Settings.rarity_colors, Events.reload_decks, Settings.window_locked, Settings.auto_position_trackers,
 		                              Events.space_changed, Events.hearthstone_closed, Events.hearthstone_running,
 		                              Events.hearthstone_active, Events.hearthstone_deactived, Settings.can_join_fullscreen,
 		                              Settings.hide_all_trackers_when_not_in_game, Settings.hide_all_trackers_when_game_in_background,
-		                              Settings.card_size, Settings.theme_token, Settings.show_action_history]
-        
+		                              Settings.card_size, Settings.theme_token,
+                                      Settings.secrets_panel_top, Settings.secrets_panel_left,
+                                      Settings.secrets_panel_height, Settings.secrets_panel_scaling,
+                                      Settings.tracker_opacity, Settings.show_action_history]
+
         // Toggling Show secret helper used to wait for the next secret change to take effect
         for option in [Settings.show_secret_helper, Settings.auto_grayout_secrets, Settings.remove_secrets_from_list] {
             let observer = center.addObserver(forName: NSNotification.Name(rawValue: option), object: nil, queue: OperationQueue.main) { [weak self] _ in
@@ -1757,6 +1852,7 @@ class Game: NSObject, PowerEventHandler {
         
         minionsInPlay.removeAll()
         minionsInPlayByPlayer.removeAll()
+        slimedMinions.removeAll()
         resetPlayerResourcesWidgets()
     }
     
@@ -1768,6 +1864,10 @@ class Game: NSObject, PowerEventHandler {
     
     func cacheBattlegroundRatingInfo() {
         _battlegroundsRatingInfo = MirrorHelper.getBattlegroundsRatingInfo()
+    }
+    
+    func cacheArenaRating() {
+        _arenaRatingInfo = MirrorHelper.getArenaRatingInfo()
     }
     
     func cacheMercenariesRatingInfo() {
@@ -2023,16 +2123,18 @@ class Game: NSObject, PowerEventHandler {
                                            "deckId": "\(self.getCurrentDeckIdIfAppropriate())"],
                           level: .info)
         
-        windowManager.linkOpponentDeckPanel.isFriendlyMatch = isFriendlyMatch
+        if #available(macOS 10.15, *) {
+            windowManager.rootOverlay?.viewModel.linkOpponentDeck.isFriendlyMatch = isFriendlyMatch
+        }
         
         if isBattlegroundsMatch() && currentGameMode == .spectator, #available(macOS 10.15, *) {
             windowManager.rootOverlay?.viewModel.tier7PreLobby.reset()
         }
         
         if isFriendlyMatch {
-            if !Settings.interactedWithLinkOpponentDeck {
-                windowManager.linkOpponentDeckPanel.autoShown = true
-                windowManager.linkOpponentDeckPanel.show()
+            if !Settings.interactedWithLinkOpponentDeck, #available(macOS 10.15, *) {
+                windowManager.rootOverlay?.viewModel.linkOpponentDeck.autoShown = true
+                windowManager.rootOverlay?.viewModel.linkOpponentDeck.show()
             }
         }
         
@@ -2064,6 +2166,12 @@ class Game: NSObject, PowerEventHandler {
                     // the key-piece recommendations from the auto-enable setting.
                     self.windowManager.rootOverlay?.viewModel.battlegroundsMinionPinning.reset()
                 }
+            }
+        }
+
+        if isArenaMatch, #available(macOS 10.15, *) {
+            Task.detached { [weak self] in
+                await self?.arenaPackagesManager.updatePackages()
             }
         }
     }
@@ -2109,6 +2217,12 @@ class Game: NSObject, PowerEventHandler {
                         Watchers.battlegroundsTeammateBoardStateWatcher.run()
                     }
                     self.updateBattlegroundsOverlays()
+                }
+            }
+
+            if self.isArenaMatch, #available(macOS 10.15, *) {
+                Task.detached { [weak self] in
+                    await self?.arenaPackagesManager.updatePackages()
                 }
             }
         }
@@ -2240,6 +2354,7 @@ class Game: NSObject, PowerEventHandler {
 		} else if self.currentGameMode == .arena {
 			result.arenaLosses = self.arenaInfo?.losses ?? 0
 			result.arenaWins = self.arenaInfo?.wins ?? 0
+			result.arenaRating = self.arenaRating
 		} else if self.currentGameMode == .brawl, let brawlInfo = self.brawlInfo {
 			result.brawlWins = brawlInfo.wins
 			result.brawlLosses = brawlInfo.losses
@@ -2273,6 +2388,7 @@ class Game: NSObject, PowerEventHandler {
 		result.scenarioId = self.matchInfo?.missionId ?? 0
 		result.brawlSeasonId = self.matchInfo?.brawlSeasonId ?? 0
 		result.rankedSeasonId = self.matchInfo?.rankedSeasonId ?? 0
+		result.arenaSeasonId = self.matchInfo?.arenaSeasonId ?? 0
         
         let confirmedCards = self.player.revealedCards.filter { x in x.collectible } + self.player.knownCardsInDeck.filter { x in x.collectible && !x.isCreated }
         if let currentDeck, currentDeck.hsDeckId ?? 0 > 0 {
@@ -2395,9 +2511,7 @@ class Game: NSObject, PowerEventHandler {
         self.handledGameEnd = true
                 
         // clear any left over hover
-        DispatchQueue.main.async {
-            self.windowManager.forceHideFloatingCard()
-        }
+        windowManager.forceHideCardHover()
         if currentGameStats.gameMode == .ranked {
             updatePostGameRanks(gameStats: currentGameStats)
         }
@@ -2996,6 +3110,19 @@ class Game: NSObject, PowerEventHandler {
     func isConstructedMatch() -> Bool {
         return currentGameType == .gt_ranked || currentGameType == .gt_casual || currentGameType == .gt_vs_friend || currentGameType == .gt_vs_ai 
     }
+
+    // The matches a mulligan guide runs in: HDT's
+    // `IsConstructedMatch || IsFriendlyMatch || IsArenaMatch`, where its own
+    // IsConstructedMatch is ranked, casual and friendly only.
+    //
+    // Deliberately not isConstructedMatch(), which HSTracker widened to take
+    // practice mode as well so the trackers work there. HSReplay has no
+    // aggregated mulligan data for BGT_VS_AI, so a practice game's request comes
+    // back with a win rate on hardly any card - HDT never asks for one.
+    var isMulliganGuideMatch: Bool {
+        return currentGameType == .gt_ranked || currentGameType == .gt_casual
+            || currentGameType == .gt_vs_friend || isArenaMatch
+    }
     
     // Mirrors HDT's GameV2.IsBattlegroundsHeroPickingDone: the player's own
     // mulligan (which in Battlegrounds is the hero pick) has resolved. Unlike
@@ -3466,13 +3593,30 @@ class Game: NSObject, PowerEventHandler {
     }
     
     @available(macOS 10.15.0, *)
-    private func waitForMulliganStart(_ timeout: Int = 60) async {
+    /// HDT's `WaitForMulliganStart`, with the answer handed back rather than
+    /// dropped: true when the mulligan is up and waiting for the player, false
+    /// when it is already over (or the game has left for the menu).
+    ///
+    /// The caller has to know, because everything before this point - the guide
+    /// request in particular - is an `await` of its own. A slow round trip can
+    /// land after the player has already confirmed, and by then
+    /// `handlePlayerMulliganDone` has run its cleanup: publishing the guide at
+    /// that point puts it back up over a board that is already being played,
+    /// with nothing left to take it down until `handleTurnStart`'s fallback
+    /// fires, a full opponent turn later.
+    private func waitForMulliganStart(_ timeout: Int = 60) async -> Bool {
         for _ in 0 ..< 16*60*timeout {
             if isInMenu || (gameEntity?[.step] ?? 0) > Step.begin_mulligan.rawValue {
-                return
+                return false
+            }
+            // The player confirming is what starts handlePlayerMulliganDone, so
+            // this is the point past which nothing may be published - the step
+            // above does not advance until the opponent has confirmed too.
+            if (playerEntity?[.mulligan_state] ?? 0) >= Mulligan.done.rawValue {
+                return false
             }
             if MirrorHelper.isMulliganWaitingForUserInput() {
-                break
+                return true
             }
             do {
                 try await Task.sleep(nanoseconds: 16_000_000)
@@ -3480,6 +3624,7 @@ class Game: NSObject, PowerEventHandler {
                 logger.error(error)
             }
         }
+        return false
     }
     
     @available(macOS 10.15.0, *) @MainActor
@@ -3526,8 +3671,10 @@ class Game: NSObject, PowerEventHandler {
             
         async let statsTask = getBattlegroundsHeroPickStats()
                 
-        // Wait for the mulligan to be ready
-        await waitForMulliganStart()
+        // Wait for the mulligan to be ready. Unlike the constructed guides, the
+        // hero panel is put up from here whether or not the pick is still open -
+        // handleBattlegroundsStart runs before the hero pick, not after it.
+        _ = await waitForMulliganStart()
         
         async let waitAndAppear: () = Task.sleep(milliseconds: 500)
         
@@ -4064,12 +4211,21 @@ class Game: NSObject, PowerEventHandler {
     
     @MainActor
     func showMulliganGuideStats(stats: [SingleCardStats], maxRank: Int, selectedParams: [String: String?]?) {
-        windowManager.constructedMulliganGuide.viewModel.setMulliganData(stats: stats, maxRank: maxRank, selectedParams: selectedParams)
+        if #available(macOS 10.15, *) {
+            windowManager.rootOverlay?.viewModel.mulliganGuide.setMulliganData(stats: stats, maxRank: maxRank, selectedParams: selectedParams)
+        }
     }
     
+    // HDT's OverlayWindow.HideMulliganGuideStats, which resets *both* guide view
+    // models rather than only the one the mulligan started with - the game type
+    // can still resolve while the mulligan is up, and with it which of the two
+    // isV2Mulligan picks, so hiding only one leaves the other on screen.
     @MainActor
     func hideMulliganGuideStats() {
-        windowManager.constructedMulliganGuide.viewModel.reset()
+        if #available(macOS 10.15, *) {
+            windowManager.rootOverlay?.viewModel.mulliganGuide.reset()
+            windowManager.rootOverlay?.viewModel.mulliganGuideV2.reset()
+        }
     }
     
     func handleBeginMulligan() {
@@ -4079,7 +4235,7 @@ class Game: NSObject, PowerEventHandler {
                     await self.handleBattlegroundsStart()
                 }
             }
-        } else if isConstructedMatch() || isFriendlyMatch || isArenaMatch {
+        } else if isMulliganGuideMatch {
             logger.info("Mulligan: BEGIN_MULLIGAN gameType=\(currentGameType) format=\(currentFormatType) spectator=\(spectator) v2=\(isV2Mulligan)")
             if #available(macOS 10.15, *) {
                 Task.detached {
@@ -4102,91 +4258,68 @@ class Game: NSObject, PowerEventHandler {
             if #available(macOS 10.15, *) {
                 windowManager.rootOverlay?.viewModel.battlegroundsSession.hideCompStatsOnError()
             }
-        } else if isConstructedMatch() || isFriendlyMatch || isArenaMatch {
+        } else if isMulliganGuideMatch {
             hideMulliganToast()
             
             let openingHand = snapshotOpeningHand()
 
-            if isV2Mulligan {
-                if Settings.enableMulliganGV2 {
-                    let numSwappedCards = self.getMulliganSwappedCards()?.count ?? 0
-                    let guideV2 = windowManager.rootOverlay?.viewModel.mulliganGuideV2
-                    // The reason shown in place of the stats only helps while
-                    // the player is choosing.
-                    guideV2?.error = nil
-
-                    // HDT GameEventHandler.HandlePlayerMulliganDone asks again
-                    // only when cards were swapped, and with the kept hand as
-                    // the offered cards. Asking regardless meant a match whose
-                    // first request had come back empty could activate a trial
-                    // here, after the mulligan, where nothing can be shown.
-                    if numSwappedCards > 0, let guideV2, !guideV2.cardStats.isEmpty {
-                        _mulliganV2Params?.offered_cards = openingHand.map { x in x.card.deckbuildingCard.dbfId }
-                        let result = await getMulliganV2Data(isMulliganDone: true)
-                        DispatchQueue.main.async {
-                            guideV2.updateMulliganDataAfterMulligan(result.data)
-                        }
-                    } else {
-                        logger.debug("MulliganV2: no post-mulligan request (swapped=\(numSwappedCards), stats shown=\(!(guideV2?.cardStats.isEmpty ?? true)))")
-                    }
-
-                    // Delay until the cards fly away
-                    do {
-                        try await Task.sleep(nanoseconds: 2_375_000_000 + UInt64(max(1, numSwappedCards)) * 475_000_000)
-                    } catch {
-                        logger.error(error)
-                    }
-
-                    // Wait for the mulligan to be complete (component or animation)
-                    for _ in 0 ..< 7_500 { // 2 minutes
-                        if isInMenu || (gameEntity?[.step] ?? 0) > Step.begin_mulligan.rawValue {
-                            break
-                        }
-                        if (playerEntity?[.mulligan_state] ?? 0) >= Mulligan.done.rawValue && (opponentEntity?[.mulligan_state] ?? 0) >= Mulligan.done.rawValue {
-                            break
-                        }
-                        do {
-                            try await Task.sleep(nanoseconds: 16_000_000)
-                        } catch {
-                            logger.error(error)
-                        }
-                    }
-                    stopMulliganLivePolling()
-                    DispatchQueue.main.async {
-                        self.windowManager.rootOverlay?.viewModel.mulliganGuideV2.reset()
-                    }
-                }
-            } else if let mulliganCardStats, Settings.enableMulliganGuide {
+            // HDT keeps the wait and the cleanup common to both guides and only
+            // branches on isV2 for the one step that differs - re-showing the
+            // stats for the hand the mulligan ended with. Splitting the whole
+            // thing in two, as this used to, meant a mulligan that started on one
+            // guide and finished on the other (isV2Mulligan reads currentGameType,
+            // which the mirror can still be resolving while the mulligan is up)
+            // never reached its cleanup: the guide stayed on screen and the deck
+            // list kept its win rates until the fallback in handleTurnStart fired,
+            // a full opponent turn later.
+            let isV2 = isV2Mulligan
+            if (isV2 || mulliganCardStats != nil) && (Settings.enableMulliganGuide || Settings.enableMulliganGV2) {
                 let numSwappedCards = self.getMulliganSwappedCards()?.count ?? 0
+                let guideV2 = windowManager.rootOverlay?.viewModel.mulliganGuideV2
+                if isV2 {
+                    // The reason shown in place of the stats only helps while the
+                    // player is choosing.
+                    guideV2?.error = nil
+                }
                 if numSwappedCards > 0 {
                     // show the updated cards
                     let dbfIds = openingHand.compactMap { x in x.card.deckbuildingCard.dbfId }
-                    if dbfIds.count > 0 {
-                        DispatchQueue.main.async {
-                            self.showMulliganGuideStats(stats: dbfIds.compactMap { dbfId in
-                                if let l = mulliganCardStats[dbfId] {
-                                    return l
-                                } else {
-                                    return SingleCardStats(dbf_id: dbfId)
-                                }
-                            }, maxRank: mulliganCardStats.count, selectedParams: nil)
+                    if isV2 {
+                        // The hand the mulligan ended with, not the one it was
+                        // offered - see cacheMulliganV2Params.
+                        cacheMulliganV2Params(offeredDbfIds: dbfIds)
+                        // Only when the first request came back with stats: asking
+                        // regardless meant a match whose first request had come back
+                        // empty could activate a free trial here, after the mulligan,
+                        // where nothing can be shown.
+                        if Settings.enableMulliganGV2, let guideV2, !guideV2.cardStats.isEmpty {
+                            let result = await getMulliganV2Data(isMulliganDone: true)
+                            guideV2.updateMulliganDataAfterMulligan(result.data)
+                        } else {
+                            logger.debug("MulliganV2: no post-mulligan request (swapped=\(numSwappedCards), stats shown=\(!(guideV2?.cardStats.isEmpty ?? true)))")
                         }
+                    } else if let mulliganCardStats, dbfIds.count > 0 {
+                        showMulliganGuideStats(stats: dbfIds.compactMap { dbfId in
+                            if let l = mulliganCardStats[dbfId] {
+                                return l
+                            } else {
+                                return SingleCardStats(dbf_id: dbfId)
+                            }
+                        }, maxRank: mulliganCardStats.count, selectedParams: nil)
                     }
                 }
+
                 // Delay until the cards fly away
                 do {
                     try await Task.sleep(nanoseconds: 2_375_000_000 + UInt64(max(1, numSwappedCards)) * 475_000_000)
                 } catch {
                     logger.error(error)
                 }
-                
+
                 // Wait for the mulligan to be complete (component or animation)
                 for _ in 0 ..< 7_500 { // 2 minutes
                     if isInMenu || (gameEntity?[.step] ?? 0) > Step.begin_mulligan.rawValue {
-                        DispatchQueue.main.async {
-                            self.hideMulliganGuideStats()
-                            self.player.mulliganCardStats = nil
-                        }
+                        finishMulliganGuide()
                         return
                     }
                     if (playerEntity?[.mulligan_state] ?? 0) >= Mulligan.done.rawValue && (opponentEntity?[.mulligan_state] ?? 0) >= Mulligan.done.rawValue {
@@ -4198,12 +4331,20 @@ class Game: NSObject, PowerEventHandler {
                         logger.error(error)
                     }
                 }
-                DispatchQueue.main.async {
-                    self.hideMulliganGuideStats()
-                    self.player.mulliganCardStats = nil
-                }
+                finishMulliganGuide()
             }
         }
+    }
+
+    /// The end of HDT's HandlePlayerMulliganDone: both guides come down and the
+    /// deck list drops its win rates (setting `Player.mulliganCardStats` is what
+    /// redraws it, HDT's `Core.UpdatePlayerCards(true)`). The live polling stop is
+    /// HSTracker's own - HDT's MulliganStateWatcher is stopped by the same event.
+    @available(macOS 10.15.0, *) @MainActor
+    private func finishMulliganGuide() {
+        stopMulliganLivePolling()
+        hideMulliganGuideStats()
+        player.mulliganCardStats = nil
     }
     
     func handlePlayerEntityChoices(choice: IHsChoice) {
@@ -4374,6 +4515,10 @@ class Game: NSObject, PowerEventHandler {
     func setChoicesVisible(_ choicesVisible: Bool, _ cardIds: [String]?) {
         if #available(macOS 10.15, *) {
             windowManager.rootOverlay?.viewModel.battlegroundsTrinketPicking.choicesVisible = choicesVisible
+            OverlayOpacityMask.trace("setChoicesVisible visible=\(choicesVisible)"
+                                     + " cards=\(cardIds ?? [String]())"
+                                     + " combat=\(isBattlegroundsCombatPhase)"
+                                     + " bgs=\(isBattlegroundsMatch())")
         }
 
         guard isBattlegroundsMatch() else { return }
@@ -4401,6 +4546,9 @@ class Game: NSObject, PowerEventHandler {
     }
 
     func onBattlegroundsShoppingStart() {
+        if #available(macOS 10.15, *) {
+            OverlayOpacityMask.trace("shopping start, pending=\(pendingBgsCombatChoices ?? [String]())")
+        }
         if let pending = pendingBgsCombatChoices {
             pendingBgsCombatChoices = nil
             applyDiscoverCardMask(pending)
@@ -4408,8 +4556,16 @@ class Game: NSObject, PowerEventHandler {
     }
 
     private func applyDiscoverCardMask(_ cardIds: [String]) {
-        let cards = cardIds.compactMap { Cards.by(cardId: $0) }
+        // Cards.any(byId:) for the same reason setCardOpacityMask uses it:
+        // Cards.by(cardId:) drops hero powers and hero skins, and dropping one
+        // here does not just lose a card - it shortens the list the branches
+        // below are decided on and counted from, so an offer holding one would
+        // be drawn a card too narrow, or drawn at all where HDT (whose
+        // GetCardFromId keeps everything) matches no branch and draws nothing.
+        let cards = cardIds.compactMap { Cards.any(byId: $0) }
         guard #available(macOS 10.15, *) else { return }
+
+        OverlayOpacityMask.trace("applyDiscoverCardMask cards=\(cards.map { $0.id })")
 
         if cards.all({ $0.type == .battleground_trinket }) {
             let count = cards.count
@@ -4764,7 +4920,11 @@ class Game: NSObject, PowerEventHandler {
                                 result = await getMulliganV2Data()
                             }
 
-                            await waitForMulliganStart()
+                            // Nothing goes up for a mulligan that is already over -
+                            // see waitForMulliganStart.
+                            guard await waitForMulliganStart() else {
+                                break
+                            }
 
                             // The trial status, deck status and activation
                             // are all awaited above, and hsreplay.net can be
@@ -4815,7 +4975,11 @@ class Game: NSObject, PowerEventHandler {
                                     showToast = false
                                 }
 
-                                await waitForMulliganStart()
+                                // Nothing goes up for a mulligan that is already over -
+                                // see waitForMulliganStart.
+                                guard await waitForMulliganStart() else {
+                                    break
+                                }
 
                                 if isPastMulliganChoice {
                                     logger.info("MulliganV1: result arrived after the mulligan or in the menu, not shown")
@@ -4917,7 +5081,7 @@ class Game: NSObject, PowerEventHandler {
         let starLevel = playerMedalInfo?.starLevel ?? 0
         let starsPerWin = playerMedalInfo?.starsPerWin ?? 0
 
-        _mulliganGuideParams = MulliganGuideParams(deckstring: activeDeck.shortid, game_type: BnetGameType.getBnetGameType(gameType: currentGameType, format: Format(formatType: currentFormatType)).rawValue, format_type: currentFormatType.rawValue, opponent_class: opponentClass.rawValue.uppercased(), player_initiative: playerEntity?[.first_player] == 1 ? "FIRST" : "COIN", player_star_level: starLevel > 0 ? starLevel : nil, player_star_multiplier: starsPerWin > 0 ? starsPerWin : nil, player_region: Region.toBnetRegion(region: currentRegion))
+        _mulliganGuideParams = MulliganGuideParams(deckstring: activeDeck.shortid, game_type: BnetGameType.getBnetGameType(gameType: currentGameType, format: Format(formatType: currentFormatType)).rawValue, format_type: currentFormatType.rawValue, opponent_class: opponentClass.rawValue.uppercased(), player_initiative: playerEntity?[.first_player] == 1 ? "FIRST" : "COIN", player_star_level: starLevel > 0 ? starLevel : nil, player_star_multiplier: starsPerWin > 0 ? starsPerWin : nil, player_region: Region.toBnetRegion(region: currentRegion), offered_cards: mulliganState.offeredCards.compactMap { x in x.card.deckbuildingCard.dbfId })
     }
     
     @available(macOS 10.15.0, *)
@@ -4985,7 +5149,9 @@ class Game: NSObject, PowerEventHandler {
         guard let bnetGameType = BnetGameType(rawValue: gameType) else {
             return MulliganGuideResult(unavailable: .deckNotAvailable(gameType: gameType, state: "unknown game type"))
         }
-        let preLobby = windowManager.constructedMulliganGuidePreLobby.viewModel
+        guard let preLobby = mulliganGuidePreLobbyViewModel else {
+            return MulliganGuideResult(unavailable: .deckNotAvailable(gameType: gameType, state: "no pre-lobby"))
+        }
         let state = await preLobby.deckStatusForMulliganGuide(gameType: bnetGameType, deckstring: deckstring, dbfIds: deckCards, starLevel: starLevel)
         guard ConstructedMulliganGuidePreLobbyViewModel.isAvailableForMulliganGuide(state) else {
             return MulliganGuideResult(unavailable: .deckNotAvailable(gameType: gameType, state: state.map { "\($0)" } ?? "nil"))
@@ -5001,8 +5167,16 @@ class Game: NSObject, PowerEventHandler {
         return MulliganGuideResult(data: token)
     }
 
-    func cacheMulliganV2Params(offeredDbfIds: [Int]) {
-        if _mulliganV2Params != nil {
+    /// HDT's `CacheMulliganGuideParams(isV2:dbfIds:)` -> `CacheMulliganV2Params`.
+    ///
+    /// Handing in the offered cards explicitly rebuilds the cached params rather
+    /// than keeping the ones the mulligan started with - HDT's
+    /// `if(_mulliganGuideParams != null && dbfIds == null) return;`. That is what
+    /// lets the request made once the mulligan is done carry the hand it ended
+    /// with; reusing the cached ones asked the server to re-rate the cards that
+    /// were thrown away.
+    func cacheMulliganV2Params(offeredDbfIds: [Int]? = nil) {
+        if _mulliganV2Params != nil && offeredDbfIds == nil {
             return
         }
 
@@ -5010,12 +5184,13 @@ class Game: NSObject, PowerEventHandler {
             return
         }
 
+        let offeredCards = offeredDbfIds ?? mulliganState.offeredCards.compactMap { x in x.card.dbfId }
         let deckCards = activeDeck.cards.flatMap { card in Array(repeating: card.dbfId, count: max(card.count, 1)) }
         let opponentClass = opponent.playerEntities.first { x in x.isHero && x.isInPlay }?.card.playerClass ?? CardClass.invalid
         let starLevel = playerMedalInfo?.starLevel ?? 0
         let starsPerWin = playerMedalInfo?.starsPerWin ?? 0
 
-        _mulliganV2Params = MulliganV2Params(deckstring: activeDeck.shortid, player_class: activeDeck.playerClass.rawValue.uppercased(), deck_cards: deckCards, opponent_class: opponentClass.rawValue.uppercased(), player_initiative: playerEntity?[.first_player] == 1 ? "FIRST" : "COIN", player_region: Region.toBnetRegion(region: currentRegion), player_star_level: starLevel > 0 ? starLevel : nil, player_star_multiplier: starsPerWin > 0 ? starsPerWin : nil, game_type: BnetGameType.getBnetGameType(gameType: currentGameType, format: Format(formatType: currentFormatType)).rawValue, format_type: currentFormatType.rawValue, offered_cards: offeredDbfIds, mulligan_state: Mulligan.input.rawValue)
+        _mulliganV2Params = MulliganV2Params(deckstring: activeDeck.shortid, player_class: activeDeck.playerClass.rawValue.uppercased(), deck_cards: deckCards, opponent_class: opponentClass.rawValue.uppercased(), player_initiative: playerEntity?[.first_player] == 1 ? "FIRST" : "COIN", player_region: Region.toBnetRegion(region: currentRegion), player_star_level: starLevel > 0 ? starLevel : nil, player_star_multiplier: starsPerWin > 0 ? starsPerWin : nil, game_type: BnetGameType.getBnetGameType(gameType: currentGameType, format: Format(formatType: currentFormatType)).rawValue, format_type: currentFormatType.rawValue, offered_cards: offeredCards, mulligan_state: Mulligan.input.rawValue)
         if let params = _mulliganV2Params {
             // HDT CacheMulliganV2Params logs the same line.
             logger.info("--- Caching Mulligan V2 Params --- game_type=\(params.game_type) format_type=\(params.format_type) star_level=\(params.player_star_level.map(String.init) ?? "nil") region=\(params.player_region ?? "nil") player_class=\(params.player_class) opponent_class=\(params.opponent_class) initiative=\(params.player_initiative) deckstring=\(params.deckstring) offered=\(params.offered_cards ?? [])")
@@ -5082,20 +5257,25 @@ class Game: NSObject, PowerEventHandler {
         return _mulliganGuideParams
     }
     
+    // The pre-lobby's own view model, which lives on the RootOverlay canvas
+    // with the badges it drives.
+    @available(macOS 10.15, *)
+    private var mulliganGuidePreLobbyViewModel: ConstructedMulliganGuidePreLobbyViewModel? {
+        windowManager.rootOverlay?.viewModel.mulliganGuidePreLobby.viewModel
+    }
+
     @MainActor
     private func showMulliganGuidePreLobby() {
-        windowManager.constructedMulliganGuidePreLobby.isVisible = true
-        let frame = SizeHelper.constructedMulliganGuidePreLobbyFrame()
-        windowManager.show(controller: windowManager.constructedMulliganGuidePreLobby, show: true, frame: frame)
-        DispatchQueue.main.async {
-            self.windowManager.constructedMulliganGuidePreLobby.updateScaling()
+        if #available(macOS 10.15, *) {
+            windowManager.rootOverlay?.viewModel.mulliganGuidePreLobby.isRequested = true
         }
     }
     
     @MainActor
     private func hideMulliganGuidePreLobby() {
-        windowManager.constructedMulliganGuidePreLobby.isVisible = false
-        windowManager.show(controller: windowManager.constructedMulliganGuidePreLobby, show: false)
+        if #available(macOS 10.15, *) {
+            windowManager.rootOverlay?.viewModel.mulliganGuidePreLobby.isRequested = false
+        }
     }
     
     @MainActor
@@ -5187,7 +5367,7 @@ class Game: NSObject, PowerEventHandler {
             showMulliganGuidePreLobby()
             if #available(macOS 10.15.0, *) {
                 Task.detached { [self] in
-                    await windowManager.constructedMulliganGuidePreLobby.viewModel.ensureLoaded()
+                    await mulliganGuidePreLobbyViewModel?.ensureLoaded()
                 }
             }
         } else {
@@ -5202,12 +5382,13 @@ class Game: NSObject, PowerEventHandler {
     }
 
     func setDeckPickerState(_ vft: VisualsFormatType, _ decksList: [CollectionDeckBoxVisual?], _ isModalOpen: Bool) {
-        let vm = windowManager.constructedMulliganGuidePreLobby.viewModel
-        if vm.decksOnPage == nil || decksList != vm.decksOnPage {
-            vm.decksOnPage = decksList
+        if #available(macOS 10.15, *), let vm = mulliganGuidePreLobbyViewModel {
+            if vm.decksOnPage == nil || decksList != vm.decksOnPage {
+                vm.decksOnPage = decksList
+            }
+            vm.visualsFormatType = vft
+            vm.isModalOpen = isModalOpen
         }
-        vm.visualsFormatType = vft
-        vm.isModalOpen = isModalOpen
 
         if #available(macOS 10.15, *), let widgetVm = windowManager.rootOverlay?.viewModel.constructedMulliganPreLobbyWidget {
             widgetVm.isModalOpen = isModalOpen
@@ -5216,7 +5397,9 @@ class Game: NSObject, PowerEventHandler {
     }
 
     func setConstructedQueue(_ inQueue: Bool) {
-        windowManager.constructedMulliganGuidePreLobby.viewModel.isInQueue = inQueue
+        if #available(macOS 10.15, *) {
+            mulliganGuidePreLobbyViewModel?.isInQueue = inQueue
+        }
         if #available(macOS 10.15, *), let widgetVm = windowManager.rootOverlay?.viewModel.constructedMulliganPreLobbyWidget {
             widgetVm.isInQueue = inQueue
         }
@@ -5321,7 +5504,12 @@ class Game: NSObject, PowerEventHandler {
             } else if inHand {
                 entities = handPosition != nil ? player.hand.filter { e in e.zonePosition == handPosition } : player.hand.filter { e in e.cardId == cardId }
             } else {
-                entities = player.deck.filter { e in e.cardId == cardId }
+                // Created tokens (Ectoplasm, Fizzle's Snapshot) are listed straight from hand and
+                // are never hidden, so they need matching too - the card list row for one *is* that
+                // entity, and its stored cards are the whole point of hovering it.
+                entities = (player.deck.filter { e in e.cardId == cardId }
+                            + player.hand.filter { e in e.cardId == cardId && (e.info.hidden || e.info.created) })
+                    .sorted { $0.id < $1.id }
             }
 
             for entity in entities {
@@ -5369,6 +5557,8 @@ class Game: NSObject, PowerEventHandler {
                     tooltipGridCards.setPoolStatistics(statistics, relatedCardsSummary: summary, hasLargePool: hasLargePool)
 
                     let frame = SizeHelper.hearthstoneWindow.frame
+                    // SetRelatedCardsTrigger(BigCardState) opens with vm.Scale = Height / 1080.
+                    tooltipGridCards.setScale(frame.height / 1080)
                     let y = frame.maxY - 480
                     // find the left of the card
                     let cardTotal = hoveredCard.zoneSize > 10 ? hoveredCard.zoneSize : 10
@@ -5383,7 +5573,10 @@ class Game: NSObject, PowerEventHandler {
                     let cardHeight = 0.5
                     let cardHeightInPixels = cardHeight * frame.height
                     let cardWidth = cardHeightInPixels * 34 / (cardHeight * 100)
-                    let x = correctedOffsetX + cardWidth / 2 - Double(tooltipGridCards.gridWidth) / 2.0
+                    // getScaledXPos returns an offset inside the Hearthstone window, so it has to be
+                    // carried back into screen space - without frame.minX the tooltip lands at the
+                    // same offset on whichever display has x == 0 instead of the one the game is on.
+                    let x = frame.minX + correctedOffsetX + cardWidth / 2 - Double(tooltipGridCards.gridWidth) / 2.0
                     let tooltipFrame = NSRect(x: Int(x), y: Int(y), width: tooltipGridCards.gridWidth, height: tooltipGridCards.gridHeight)
                     tooltipGridCards.show(frame: tooltipFrame)
                     RelatedCardsRightClickMonitor.shared.setHoveredLargePool(
@@ -5414,6 +5607,8 @@ class Game: NSObject, PowerEventHandler {
                     tooltipGridCards.setPoolStatistics(statistics, relatedCardsSummary: summary, hasLargePool: hasLargePool)
 
                     let frame = SizeHelper.hearthstoneWindow.frame
+                    // SetRelatedCardsTrigger(BigCardState) opens with vm.Scale = Height / 1080.
+                    tooltipGridCards.setScale(frame.height / 1080)
                     let y = frame.maxY - 480
 
                     // find the left of the card
@@ -5431,7 +5626,10 @@ class Game: NSObject, PowerEventHandler {
                     let cardHeightInPixels = cardHeight * frame.height
                     let cardWidth = cardHeightInPixels * 31 / (cardHeight * 100)
 
-                    let x = correctedOffsetX + cardWidth / 2 - Double(tooltipGridCards.gridWidth) / 2.0
+                    // getScaledXPos returns an offset inside the Hearthstone window, so it has to be
+                    // carried back into screen space - without frame.minX the tooltip lands at the
+                    // same offset on whichever display has x == 0 instead of the one the game is on.
+                    let x = frame.minX + correctedOffsetX + cardWidth / 2 - Double(tooltipGridCards.gridWidth) / 2.0
                     let tooltipFrame = NSRect(x: Int(x), y: Int(y), width: tooltipGridCards.gridWidth, height: tooltipGridCards.gridHeight)
                     tooltipGridCards.show(frame: tooltipFrame)
                     RelatedCardsRightClickMonitor.shared.setHoveredLargePool(
@@ -5464,6 +5662,8 @@ class Game: NSObject, PowerEventHandler {
                     tooltipGridCards.setPoolStatistics(statistics, relatedCardsSummary: summary, hasLargePool: hasLargePool)
 
                     let frame = SizeHelper.hearthstoneWindow.frame
+                    // SetRelatedCardsTrigger(BigCardState) opens with vm.Scale = Height / 1080.
+                    tooltipGridCards.setScale(frame.height / 1080)
                     let y = frame.maxY - 480
                     
                     // find the left of the card
@@ -5481,7 +5681,10 @@ class Game: NSObject, PowerEventHandler {
                     let cardHeightInPixels = cardHeight * frame.height
                     let cardWidth = cardHeightInPixels * 31 / (cardHeight * 100)
                     
-                    let x = correctedOffsetX + cardWidth / 2 - Double(tooltipGridCards.gridWidth) / 2.0
+                    // getScaledXPos returns an offset inside the Hearthstone window, so it has to be
+                    // carried back into screen space - without frame.minX the tooltip lands at the
+                    // same offset on whichever display has x == 0 instead of the one the game is on.
+                    let x = frame.minX + correctedOffsetX + cardWidth / 2 - Double(tooltipGridCards.gridWidth) / 2.0
                     let tooltipFrame = NSRect(x: Int(x), y: Int(y), width: tooltipGridCards.gridWidth, height: tooltipGridCards.gridHeight)
                     tooltipGridCards.show(frame: tooltipFrame)
                     RelatedCardsRightClickMonitor.shared.setHoveredLargePool(
@@ -5523,7 +5726,10 @@ class Game: NSObject, PowerEventHandler {
             if self.isTraditionalHearthstoneMatch {
                 let isFriendlyCard = state.side == PlayerSide.friendly.rawValue
 
-                self.windowManager.playerTracker.highlightPlayerDeckCards(highlightSourceCardId: isFriendlyCard ? state.cardId : nil)
+                if #available(macOS 10.15, *) {
+                    self.windowManager.rootOverlay?.viewModel.playerTrackerHover
+                        .highlightPlayerDeckCards(highlightSourceCardId: isFriendlyCard ? state.cardId : nil)
+                }
             }
             self.updateTooltips()
             // Mirrors HDT's SetAnomalyGuidesTrigger(string cardId), called
@@ -5546,7 +5752,12 @@ class Game: NSObject, PowerEventHandler {
         // resolves to RelatedCardsTooltipPanel.shared, whose lazy init instantiates an
         // NSPanel, so every access to the panel - reads included - has to be on the main
         // thread.
-        if state.cardId == "" {
+        //
+        // HDT opens with vm.Reset() + SetHoveredLargePool(null, null) and only then decides
+        // whether anything replaces them, so every bail-out takes the previous Discover option's
+        // tooltip down with it - moving from an option that has a pool to one that doesn't must
+        // not leave the old grid on screen.
+        func reset() {
             DispatchQueue.main.async {
                 let vm = self.windowManager.tooltipGridCards
                 if vm.cards.count > 0 {
@@ -5554,106 +5765,139 @@ class Game: NSObject, PowerEventHandler {
                 }
                 RelatedCardsRightClickMonitor.shared.clearHoveredLargePool()
             }
+        }
+
+        if state.cardId == "" {
+            reset()
             return
         }
 
         // Not ideal. Maybe we re-position the tooltip on size change and canvas.top/left change?
 
         // HDT's SetRelatedCardsTrigger(DiscoverState) gates this one on OutfinderInDeck.
-        // Anything that is not a tooltip to show has to take the current one
-        // down: this used to just return, leaving the previously hovered card's
-        // pool on screen as if it belonged to the card now under the cursor.
         guard Settings.showPlayerRelatedCards,
               !relatedCardsManager.isOutfinderSuppressed(cardId: state.cardId, surfaceEnabled: Settings.outfinderInDeck) else {
-            hideRelatedCardsTooltip()
+            reset()
             return
         }
         let relatedCards = getRelatedCards(player: player, cardId: state.cardId)
         guard relatedCards.count > 0 else {
-            hideRelatedCardsTooltip()
+            reset()
             return
         }
-        
+
         let frame = SizeHelper.hearthstoneWindow.frame
-        
+
+        // The trigger rectangle: HDT's RelatedCardsTrigger Grid, laid out over the hovered
+        // Discover option, is what the tooltip is placed against - it is not the tooltip's own
+        // frame. top is measured from the top of the Hearthstone window, as Canvas.Top is.
         let top = frame.height * 0.2
         let height = frame.height * 0.53
         let width = frame.height * 0.3
         var left = 0.0
-        var tooltipPlacement = PlacementMode.right
-        
+        // vm.Reset() leaves TooltipPlacement at PlacementMode.Top - HDT's own name for this enum -
+        // which is what an unrecognized zone size falls back to.
+        var tooltipPlacement = CardTooltipPlacement.top
+
         switch state.zoneSize {
         case 4:
             left = (0.116 + Double(state.zonePosition) * 0.2) * frame.width
-            tooltipPlacement = state.zonePosition < 2 ? PlacementMode.right : PlacementMode.left
+            tooltipPlacement = state.zonePosition < 2 ? .right : .left
         case 3:
             let centerPosition = 1
             let offsetXScale = 0.2
-            
+
             let relativePosition = state.zonePosition - centerPosition
             let offsetX = 0.5 - 0.088 + Double(relativePosition) * offsetXScale
             left = offsetX * frame.width
-            tooltipPlacement = PlacementMode.right
+            tooltipPlacement = .right
         case 2:
             left = state.zonePosition == 0 ? 0.318 * frame.width : 0.518 * frame.width
-            tooltipPlacement = state.zonePosition == 0 ? PlacementMode.left : PlacementMode.right
+            tooltipPlacement = state.zonePosition == 0 ? .left : .right
         case 1:
             left = (0.5 - 0.088) * frame.width
-            tooltipPlacement = PlacementMode.left
+            tooltipPlacement = .left
         default:
-            break
+            // HDT's switch leaves the trigger at its post-Reset zero size, which can never be
+            // hovered, so no tooltip is shown at all.
+            reset()
+            return
         }
-        
+
         DispatchQueue.main.async {
             let vm = self.windowManager.tooltipGridCards
-            let nonNullableRelatedCards = relatedCards.compactMap({ $0 })
             vm.setTitle(String.localizedString("Related_Cards", comment: ""))
-            // Content first, then measure. Reading gridWidth/gridHeight
-            // before handing the panel its new cards sized this tooltip from
-            // the *previous* one, which put it on the wrong side of the
-            // card - and off screen entirely when the pools differed a lot.
-            vm.setCardIdsFromCards(nonNullableRelatedCards)
+            // MaxCardGridHeight="470" on the GridCardImages inside this tooltip, same as every
+            // other path that shows it.
+            vm.setCardIdsFromCards(relatedCards.compactMap({ $0 }), 470)
             let (statistics, summary, hasLargePool) = self.relatedCardsManager.getPoolStatistics(cardId: state.cardId, relatedCards: relatedCards, player: self.player)
             vm.setPoolStatistics(statistics, relatedCardsSummary: summary, hasLargePool: hasLargePool)
+            // SetRelatedCardsTrigger(DiscoverState) opens with vm.Scale = Height / 1080.
+            vm.setScale(frame.height / 1080)
 
+            // Read after the pool is set: gridWidth/gridHeight are derived from the cards the
+            // panel is currently holding, so reading them first measures the previous pool.
             let tooltipWidth = CGFloat(vm.gridWidth)
             let tooltipHeight = CGFloat(vm.gridHeight)
 
-            // Correct placement if tooltip would go outside of window, and it fit on the other side
+            // Correct placement if tooltip would go outside of window, and it fit on the other side.
+            // Each of SetTooltip's four branches swaps for the opposite side on the same axis,
+            // which is what CardTooltipPlacement.flipped does.
             switch tooltipPlacement {
-            case PlacementMode.top:
+            case .top:
                 if top - tooltipHeight < 0.0 && top + height + tooltipHeight <= frame.height {
-                    tooltipPlacement = PlacementMode.bottom
+                    tooltipPlacement = tooltipPlacement.flipped
                 }
-            case PlacementMode.bottom:
+            case .bottom:
                 if top + height + tooltipHeight > frame.height && top - tooltipHeight >= 0.0 {
-                    tooltipPlacement = PlacementMode.top
+                    tooltipPlacement = tooltipPlacement.flipped
                 }
-            case PlacementMode.left:
+            case .left:
                 if left - tooltipWidth < 0.0 && left + width + tooltipWidth <= frame.width {
-                    tooltipPlacement = PlacementMode.right
+                    tooltipPlacement = tooltipPlacement.flipped
                 }
-            case PlacementMode.right:
+            case .right:
                 if left + width + tooltipWidth > frame.width && left - tooltipWidth >= 0.0 {
-                    tooltipPlacement = PlacementMode.left
+                    tooltipPlacement = tooltipPlacement.flipped
                 }
             }
 
-            let tooltipFrame = NSRect(x: left, y: frame.height - top - tooltipHeight, width: tooltipWidth, height: tooltipHeight)
+            // Place the tooltip against the trigger rectangle. HDT does not use WPF's own
+            // ToolTipService placement - OverlayWindow.Tooltips.cs's SetTooltip reads
+            // ToolTipService.Placement as a direction and then positions the tooltip itself,
+            // centering it on the trigger's other axis. Until now the frame was built from the
+            // trigger's own left/top, which drew the grid on top of the Discover option instead of
+            // beside it and made tooltipPlacement have no effect at all.
+            var tooltipLeft: CGFloat
+            var tooltipTop: CGFloat
+            switch tooltipPlacement {
+            case .left:
+                tooltipLeft = left - tooltipWidth
+                tooltipTop = top + height / 2 - tooltipHeight / 2
+            case .right:
+                tooltipLeft = left + width
+                tooltipTop = top + height / 2 - tooltipHeight / 2
+            case .top:
+                tooltipLeft = left + width / 2 - tooltipWidth / 2
+                tooltipTop = top - tooltipHeight
+            case .bottom:
+                tooltipLeft = left + width / 2 - tooltipWidth / 2
+                tooltipTop = top + height
+            }
+            // SetTooltip's closing clamp: the tooltip is kept inside the overlay, which covers the
+            // Hearthstone window.
+            tooltipLeft = max(0, min(tooltipLeft, frame.width - tooltipWidth))
+            tooltipTop = max(0, min(tooltipTop, frame.height - tooltipHeight))
+
+            // left/top are window-relative (every measurement above is a fraction of the
+            // Hearthstone window), so both have to be offset by the window's own screen origin.
+            let tooltipFrame = NSRect(x: frame.minX + tooltipLeft, y: frame.maxY - tooltipTop - tooltipHeight,
+                                      width: tooltipWidth, height: tooltipHeight)
             vm.show(frame: tooltipFrame)
             RelatedCardsRightClickMonitor.shared.setHoveredLargePool(
                 card: hasLargePool ? Cards.by(cardId: state.cardId) : nil,
-                pool: hasLargePool ? nonNullableRelatedCards : [],
+                pool: hasLargePool ? relatedCards.compactMap({ $0 }) : [],
                 anchorFrame: tooltipFrame)
-        }
-    }
-
-    /// Takes the shared related-cards panel down, from any thread.
-    @available(macOS 10.15, *)
-    private func hideRelatedCardsTooltip() {
-        DispatchQueue.main.async {
-            self.windowManager.tooltipGridCards.hide()
-            RelatedCardsRightClickMonitor.shared.clearHoveredLargePool()
         }
     }
     
@@ -5714,8 +5958,9 @@ class Game: NSObject, PowerEventHandler {
     func resetPlayerResourcesWidgets(_ maxHealth: Int, _ maxMana: Int, _ maxHandSize: Int) {
         if #available(macOS 10.15, *) {
             DispatchQueue.main.async {
-                self.windowManager.playerPlayerResourcesOverlay?.viewModel.initialize(maxHealth, maxMana, maxHandSize)
-                self.windowManager.opponentPlayerResourcesOverlay?.viewModel.initialize(maxHealth, maxMana, maxHandSize)
+                guard let viewModel = self.windowManager.rootOverlay?.viewModel else { return }
+                viewModel.playerResources.initialize(maxHealth, maxMana, maxHandSize)
+                viewModel.opponentResources.initialize(maxHealth, maxMana, maxHandSize)
             }
         }
     }
@@ -5723,7 +5968,7 @@ class Game: NSObject, PowerEventHandler {
     func updatePlayerResourcesWidget(_ maxHealth: Int, _ maxMana: Int, _ maxHandSize: Int, _ corpsesLeft: Int? = nil) {
         if #available(macOS 10.15, *) {
             DispatchQueue.main.async {
-                self.windowManager.playerPlayerResourcesOverlay?.viewModel.updatePlayerResourcesWidget(maxHealth, maxMana, maxHandSize, corpsesLeft)
+                self.windowManager.rootOverlay?.viewModel.playerResources.updatePlayerResourcesWidget(maxHealth, maxMana, maxHandSize, corpsesLeft)
             }
         }
     }
@@ -5731,55 +5976,28 @@ class Game: NSObject, PowerEventHandler {
     func updateOpponentResourcesWidget(_ maxHealth: Int, _ maxMana: Int, _ maxHandSize: Int, _ corpsesLeft: Int?) {
         if #available(macOS 10.15, *) {
             DispatchQueue.main.async {
-                self.windowManager.opponentPlayerResourcesOverlay?.viewModel.updatePlayerResourcesWidget(maxHealth, maxMana, maxHandSize, corpsesLeft)
+                self.windowManager.rootOverlay?.viewModel.opponentResources.updatePlayerResourcesWidget(maxHealth, maxMana, maxHandSize, corpsesLeft)
             }
         }
     }
     
+    // shouldShowTracker is folded in here because the window show/hide this
+    // replaces applied it on top of the widget's own visibility flag.
     func updatePlayerResorucesWidgetVisibility() {
         if #available(macOS 10.15, *) {
-            if isInMenu || !isMulliganDone() || isBattlegroundsMatch() {
-                windowManager.playerPlayerResourcesOverlay?.viewModel.visibility = false
-                windowManager.opponentPlayerResourcesOverlay?.viewModel.visibility = false
+            guard let viewModel = windowManager.rootOverlay?.viewModel else { return }
+            if isInMenu || !isMulliganDone() || isBattlegroundsMatch() || !shouldShowTracker {
+                viewModel.playerResources.isShown = false
+                viewModel.opponentResources.isShown = false
             } else {
-                windowManager.playerPlayerResourcesOverlay?.viewModel.visibility = Settings.showPlayerMaxResources
-                windowManager.opponentPlayerResourcesOverlay?.viewModel.visibility = Settings.showOpponentMaxResources
+                viewModel.playerResources.isShown = Settings.showPlayerMaxResources
+                viewModel.opponentResources.isShown = Settings.showOpponentMaxResources
             }
         }
     }
 }
 
-// MARK: NSWindowDelegate functions
-extension Game: NSWindowDelegate {
-    
-    func windowDidResize(_ notification: Notification) {
-        
-        guard let window = notification.object as? NSWindow else { return }
-        
-        if window == self.windowManager.playerTracker.window {
-            self.updatePlayerTracker(reset: false)
-            onWindowMove(tracker: self.windowManager.playerTracker)
-        } else if window == self.windowManager.opponentTracker.window {
-            self.updateOpponentTracker(reset: false)
-            onWindowMove(tracker: self.windowManager.opponentTracker)
-        }
-    }
-    
-    func windowDidMove(_ notification: Notification) {
-        guard let window = notification.object as? NSWindow else { return }
-        if window == self.windowManager.playerTracker.window {
-            onWindowMove(tracker: self.windowManager.playerTracker)
-        } else if window == self.windowManager.opponentTracker.window {
-            onWindowMove(tracker: self.windowManager.opponentTracker)
-        }
-    }
-    
-    private func onWindowMove(tracker: Tracker) {
-        if !tracker.isWindowLoaded || !tracker.hasValidFrame {return}
-        if tracker.playerType == .player {
-            Settings.playerTrackerFrame = tracker.window?.frame
-        } else {
-            Settings.opponentTrackerFrame = tracker.window?.frame
-        }
-    }
-}
+// The two deck trackers used to be windows of their own, and this extension kept
+// Settings.player/opponentTrackerFrame in step as they were dragged and resized.
+// They are RootOverlay children now, dragged on the canvas into the percentages
+// HDT stores (see TrackerPanelViewModel), so nothing here is left.

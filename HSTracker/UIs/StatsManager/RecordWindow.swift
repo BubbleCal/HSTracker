@@ -222,7 +222,7 @@ final class RecordWindow: NSWindowController, NSMenuDelegate, NSWindowDelegate {
         var newFilter = filter
         newFilter.mode = RecordFilter.modes[max(modePopup.indexOfSelectedItem, 0)]
         newFilter.format = RecordFilter.formats[max(formatPopup.indexOfSelectedItem, 0)]
-        newFilter.timeFrame = RecordTimeFrame.allCases[max(timePopup.indexOfSelectedItem, 0)]
+        newFilter.timeFrame = RecordTimeFrame.allCases[safeIndex: timePopup.indexOfSelectedItem] ?? .allTime
         newFilter.includeArchived = archivedCheckbox.state == .on
         newFilter.includeNoDeck = noDeckCheckbox.state == .on
         let deckIndex = deckPopup.indexOfSelectedItem

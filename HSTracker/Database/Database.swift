@@ -202,7 +202,7 @@ class Database {
         case GameTag.overload.rawValue:
             currentCard?.overload = intValue
         case GameTag.rarity.rawValue:
-            if let rarity = Rarity.at(intValue) {
+            if let rarity = Rarity.allCases[safeIndex: intValue] {
                 currentCard?.rarity = rarity
             } else {
                 Database.logUnknownTagValue(tag: id, value: intValue)
@@ -225,13 +225,13 @@ class Database {
         case GameTag.cardtype.rawValue:
             currentCard?.type = CardType(rawValue: intValue) ?? .invalid
         case GameTag.class.rawValue:
-            if let playerClass = CardClass.at(intValue) {
+            if let playerClass = CardClass.allCases[safeIndex: intValue] {
                 currentCard?.playerClass = playerClass
             } else {
                 Database.logUnknownTagValue(tag: id, value: intValue)
             }
         case GameTag.cardrace.rawValue:
-            if let race = Race.at(intValue) {
+            if let race = Race.allCases[safeIndex: intValue] {
                 currentCard?.race = race
                 currentCard?.races.append(race)
             } else {
@@ -261,6 +261,7 @@ class Database {
         case 2524, 2525, 2526, 2527, 2528, 2529, 2530, 2531, 2532, 2533, 2534, 2536, 2537, 2538, 2539, 2540, 2541, 2542, 2543, 2544, 2522, 2523, 2545, 2546, 2547, 2548, 2549, 2550, 2551, 2552, 2553, 2554, 2555, 2556, 2584, 2585, 2586, 2587, 2588, 4756:
             if let race = RaceUtils.tagRaceMap[id] {
                 currentCard?.races.append(race)
+                currentCard?.raceTags.append(id)
             }
         case GameTag.is_bacon_pool_spell.rawValue:
             currentCard?.isBaconPoolSpell = intValue != 0
@@ -285,6 +286,8 @@ class Database {
             currentCard?.isBaconBuddy = intValue == 1
         case GameTag.bacon_tripled_base_minion_id.rawValue:
             currentCard?.baconTripledBaseMinionId = intValue
+        case GameTag.only_gold_in_guide.rawValue:
+            currentCard?.onlyGoldInGuide = intValue == 1
         case GameTag.bacon_evolution_card_id.rawValue:
             currentCard?.baconEvolutionCardId = intValue
         case GameTag.bacon_heropower_base_hero_id.rawValue:

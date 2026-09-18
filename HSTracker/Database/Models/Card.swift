@@ -25,6 +25,18 @@ final class Card {
     var collectible = false
     var cost = 0
     var flavor = ""
+
+    // HDT's Card.FormattedFlavorText, which is CleanUpText(flavor, replaceTags:
+    // false): the game's own markup characters come out, but the <b>/<i> tags
+    // deliberately stay in - the flavor text panel renders them (see
+    // OverlayFormattedText), unlike the card text, which HDT strips them from.
+    var formattedFlavorText: String {
+        flavor
+            .replacingOccurrences(of: "$", with: "")
+            .replacingOccurrences(of: "#", with: "")
+            .replacingOccurrences(of: "\\n", with: "\n")
+            .replacingOccurrences(of: "[x]", with: "")
+    }
     var health = 0
     var attack = 0
     var overload = 0
@@ -44,6 +56,12 @@ final class Card {
     var enText = ""
     var race: Race = .invalid
     var races: [Race] = []
+    // The per-race marker tags the entity carries (GameTag 2522-2588), in the
+    // order they appear in the card data. HearthDb resolves a card's secondary
+    // race from these rather than from a tag of its own, so BattlegroundsDb needs
+    // the tag ids - not just the races - to tell whether a remote tag override
+    // has switched one of them off.
+    var raceTags: [Int] = []
     var type: CardType = .invalid
     var mechanics: [String] = []
     var isStandard = false
@@ -67,6 +85,10 @@ final class Card {
     var tourist = 0
     var baconTriple = false
     var baconTripleUpgradeMinionId = 0
+    // ONLY_GOLD_IN_GUIDE - a Battlegrounds minion that has no normal version to
+    // show, so a tooltip skips straight to the golden one instead of putting the
+    // two side by side.
+    var onlyGoldInGuide = false
     // BACON_BUDDY / BACON_TRIPLED_BASE_MINION_ID - BattlegroundsDb pairs them to
     // collect the base (non-golden) buddies for the Buddies card-type filter.
     var isBaconBuddy = false
@@ -284,11 +306,8 @@ final class Card {
         var cardClass = 1
         var multipleClasses = self.multipleClasses
         while multipleClasses != 0 {
-            if 1 == (multipleClasses & 1) {
-                // A class added after this build ships sets a bit we have no case for.
-                if let cardClass = CardClass.at(cardClass) {
-                    classes.append(cardClass)
-                }
+            if 1 == (multipleClasses & 1), let cardClass = CardClass.allCases[safeIndex: cardClass] {
+                classes.append(cardClass)
             }
             multipleClasses >>= 1
             cardClass += 1
@@ -308,7 +327,7 @@ final class Card {
         if !isTourist {
             return nil
         }
-        return CardClass.at(tourist)
+        return CardClass.allCases[safeIndex: tourist]
     }
     
     func getTouristVisitClass() -> CardClass? {
@@ -469,11 +488,13 @@ extension Card: NSCopying {
         copy.deckListIndex = self.deckListIndex
         copy.battlegroundsSkinParentId = self.battlegroundsSkinParentId
         copy.races = self.races
+        copy.raceTags = self.raceTags
         copy.zilliaxCustomizableFunctionalModule = self.zilliaxCustomizableFunctionalModule
         copy.zilliaxCustomizableCosmeticModule = self.zilliaxCustomizableCosmeticModule
         copy.multipleClasses = self.multipleClasses
         copy.hideCostTag = self.hideCostTag
         copy.baconTripleUpgradeMinionId = self.baconTripleUpgradeMinionId
+        copy.onlyGoldInGuide = self.onlyGoldInGuide
         copy.baconEvolutionCardId = self.baconEvolutionCardId
         copy.baconHeroPowerBaseHeroId = self.baconHeroPowerBaseHeroId
         copy.faction = self.faction

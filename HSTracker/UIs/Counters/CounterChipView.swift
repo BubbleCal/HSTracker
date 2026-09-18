@@ -88,71 +88,6 @@ final class CounterChipViewModel: ObservableObject, Identifiable {
     }
 }
 
-// Carries the chip's NSView so RootOverlayWindow can tell when the cursor is
-// over it, and so the tooltip can be anchored to the chip's own screen-space
-// frame (what the old CounterView.tooltipDisplay got from
-// `self.convert(self.bounds, to: nil)`).
-//
-// The chips now sit on the RootOverlay canvas, which stays click-through -
-// HDT marks them IsOverlayHoverVisible, not IsOverlayHitTestVisible, so a
-// click over a counter still reaches Hearthstone. A click-through window is
-// delivered no mouse-entered events at all, which is why the NSTrackingArea
-// this used to carry is gone: the cursor is matched against the registry
-// instead, exactly as CardHoverRegistry does for the card tooltips.
-@available(macOS 10.15, *)
-final class CounterHoverNSView: NSView {
-    private(set) var counter: BaseCounter?
-
-    // Match NSHostingView's own flip so NSView.convert() stays consistent with
-    // SwiftUI's Y-down coordinate space, as CardHoverNSView does.
-    override var isFlipped: Bool { true }
-
-    func update(counter: BaseCounter) {
-        guard self.counter !== counter else { return }
-        self.counter = counter
-        if window != nil {
-            CounterHoverRegistry.shared.register(self)
-        }
-    }
-
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        if window != nil {
-            CounterHoverRegistry.shared.register(self)
-        } else {
-            CounterHoverRegistry.shared.unregister(self)
-            // The counter went away while its tooltip was up (or on its way
-            // up) - RootOverlayWindow's own sweep would only notice on the next
-            // mouse move, and there may not be one.
-            if let counter {
-                CounterTooltipController.shared.hide(ifShowing: counter)
-            }
-        }
-    }
-}
-
-@available(macOS 10.15, *)
-class CounterHoverRegistry {
-    static let shared = CounterHoverRegistry()
-
-    struct Entry {
-        let counter: BaseCounter
-        weak var view: CounterHoverNSView?
-    }
-
-    private(set) var entries: [Entry] = []
-
-    func register(_ view: CounterHoverNSView) {
-        entries.removeAll { $0.view == nil || $0.view === view }
-        guard let counter = view.counter else { return }
-        entries.append(Entry(counter: counter, view: view))
-    }
-
-    func unregister(_ view: CounterHoverNSView) {
-        entries.removeAll { $0.view === view || $0.view == nil }
-    }
-}
-
 // Drives RelatedCardsTooltipPanel from whichever chip the cursor is over.
 // Ported from the old CounterView.tooltipDisplay, including its 0.6s delay -
 // HDT's counters carry ToolTipService.InitialShowDelay="600".
@@ -211,19 +146,25 @@ class CounterTooltipController {
         let cardImages = RelatedCardsTooltipPanel.shared
         cardImages.setTitle(counter.localizedName)
         cardImages.setCardIdsFromCards(cardsToDisplay)
-        // The panel is shared with the trackers' own card hovers, which do set
-        // these. A counter has no Outfinder pool of its own, so without clearing
-        // them the chip's grid was drawn next to the last hovered card's
-        // statistics - and vanished outright when that card had set
-        // hasLargePool, since the content view drops the grid in that case.
+        // HDT gives the counters a GridCardImages of their own, so its pool summary is simply
+        // never set; here the panel is a singleton shared with the card-tooltip paths, and those
+        // leave their last card's Outfinder summary behind. Left set, it is drawn beside this
+        // grid - and a large pool drops the grid entirely (see RelatedCardsTooltipContentView),
+        // so the counter's own cards never appear at all. Cleared for the same reason the scale
+        // is set explicitly just below. The right-click browser state goes with it: it belongs to
+        // the card that raised the summary, and a right-click over this tooltip would otherwise
+        // open that card's pool.
         cardImages.setPoolStatistics(nil, relatedCardsSummary: nil, hasLargePool: false)
-        // Same reason: right-clicking here must not open the pool browser for
-        // whatever card was hovered before.
         RelatedCardsRightClickMonitor.shared.clearHoveredLargePool()
+
+        let hsFrame = SizeHelper.hearthstoneWindow.frame
+        // CountersOverlay.xaml sets OverlayExtensions.AutoScaleToolTip on each chip, which makes
+        // SetTooltip scale the tooltip by the chip's own scale - and the chips live in the
+        // height / 1080 subtree, the same factor CountersOverlayView reproduces here.
+        cardImages.setScale(hsFrame.height / 1080)
 
         let width = CGFloat(cardImages.gridWidth)
         let height = CGFloat(cardImages.gridHeight)
-        let hsFrame = SizeHelper.hearthstoneWindow.frame
 
         let x = anchor.minX < width ? anchor.maxX : anchor.minX - width
         var y = anchor.minY
@@ -241,16 +182,6 @@ class CounterTooltipController {
         guard shownCounter != nil else { return }
         shownCounter = nil
         RelatedCardsTooltipPanel.shared.hide()
-    }
-}
-
-@available(macOS 10.15, *)
-private struct CounterHoverRepresentable: NSViewRepresentable {
-    let counter: BaseCounter
-
-    func makeNSView(context: Context) -> CounterHoverNSView { CounterHoverNSView() }
-    func updateNSView(_ nsView: CounterHoverNSView, context: Context) {
-        nsView.update(counter: counter)
     }
 }
 
@@ -289,7 +220,13 @@ struct CounterChipView: View {
         .padding(5)
         .frame(width: viewModel.chipWidth, height: 51, alignment: .leading)
         .clipped()
-        .background(CounterHoverRepresentable(counter: viewModel.counter))
+        // HDT hangs a GridCardImages off the chip's IsOverlayHoverVisible
+        // border, the same element a card tile hangs a CardTooltip off, so the
+        // chip registers with the shared hover registry rather than one of its
+        // own. The cursor is matched there rather than by an NSTrackingArea
+        // because the canvas stays click-through, and a click-through window is
+        // delivered no mouse-entered events at all.
+        .relatedCardsTooltip(counter: viewModel.counter)
     }
 
     private var circleImage: some View {

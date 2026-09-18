@@ -265,15 +265,33 @@ class ActionHistoryPresentationTests: HSTrackerTests {
         let canvas = CGSize(width: 1440, height: 900)
         let top = viewModel.origin(canvasSize: canvas).y
 
-        viewModel.secretHelperBottom = top + 52
+        viewModel.secretHelperFrame = secretHelper(bottom: top + 52)
         XCTAssertEqual(viewModel.origin(canvasSize: canvas).y, top + 52 + ActionHistoryViewModel.margin, accuracy: 0.01)
-        viewModel.secretHelperBottom = max(0, top - 100)
+        viewModel.secretHelperFrame = secretHelper(bottom: max(0, top - 100))
         XCTAssertEqual(viewModel.origin(canvasSize: canvas).y, top, accuracy: 0.01)
 
         // A panel the player placed stays where it was put
         viewModel.drag(translation: .zero, canvasSize: canvas)
-        viewModel.secretHelperBottom = canvas.height / 2
+        viewModel.secretHelperFrame = secretHelper(bottom: canvas.height / 2)
         XCTAssertEqual(viewModel.origin(canvasSize: canvas).y, top, accuracy: 0.01)
+    }
+
+    func testASecretHelperInAnotherColumnLeavesThePanelAlone() {
+        guard #available(macOS 10.15, *) else { return }
+        let viewModel = makeViewModel()
+        let canvas = CGSize(width: 1440, height: 900)
+        let automatic = viewModel.origin(canvasSize: canvas)
+
+        // The helper can be dragged anywhere now; only one over the panel's column pushes it down
+        viewModel.secretHelperFrame = CGRect(x: 1000, y: 0, width: SizeHelper.trackerWidth, height: automatic.y + 200)
+        XCTAssertEqual(viewModel.origin(canvasSize: canvas).y, automatic.y, accuracy: 0.01)
+        viewModel.secretHelperFrame = secretHelper(bottom: automatic.y + 200)
+        XCTAssertEqual(viewModel.origin(canvasSize: canvas).y, automatic.y + 200 + ActionHistoryViewModel.margin, accuracy: 0.01)
+    }
+
+    /// A secret helper in the automatic position's column, drawn from the top of the canvas down to `bottom`
+    private func secretHelper(bottom: CGFloat) -> CGRect {
+        CGRect(x: SizeHelper.trackerWidth + 25, y: 0, width: SizeHelper.trackerWidth, height: bottom)
     }
 
     func testReleasingADragSavesWhereThePanelStoppedOnce() {
@@ -416,7 +434,7 @@ class ActionHistoryPresentationTests: HSTrackerTests {
 
         viewModel.drag(translation: CGSize(width: 600, height: 300), startLocation: .zero, canvasSize: canvas)
         viewModel.endDrag()
-        viewModel.secretHelperBottom = automatic.y + 400
+        viewModel.secretHelperFrame = secretHelper(bottom: automatic.y + 400)
         XCTAssertEqual(viewModel.origin(canvasSize: canvas).y, automatic.y + 300, accuracy: 0.01, "the player's position wins")
 
         viewModel.resetPosition()

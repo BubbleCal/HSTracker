@@ -28,8 +28,16 @@ class SingleCardStats: MulliganGuideData.CardStats {
             if let kp = stats.keep_percentage {
                 res.keep_percentage = max(min(kp, 100.0), 0.0)
             }
-            res.rank = stats.opening_hand_winrate != nil ? rank : nil
-            rank += 1
+            // HDT's `Rank = stats.OpeningHandWinrate != null ? rank++ : null`: a
+            // card the server has no winrate for takes no rank *and does not
+            // consume one*, so the ranks stay 1..n over the cards that have one
+            // and the rank gradient keeps lining up with maxRank.
+            if stats.opening_hand_winrate != nil {
+                res.rank = rank
+                rank += 1
+            } else {
+                res.rank = nil
+            }
             res.baseWinRate = baseWinRate
             return res
         }
@@ -40,10 +48,15 @@ class SingleCardStats: MulliganGuideData.CardStats {
     }
 }
 
-class ConstructedMulliganSingleCardViewModel: ViewModel {
+// HDT's ConstructedMulliganSingleCardViewModel: one offered card's column in
+// the V1 guide. Identifiable so the guide's card row can ForEach over them -
+// by identity, since two copies of the same card can be offered at once and a
+// dbfId would collide.
+@available(macOS 10.15, *)
+class ConstructedMulliganSingleCardViewModel: ObservableObject, Identifiable {
     let cardHeaderVM: ConstructedMulliganSingleCardHeaderViewModel
     let dbfId: Int?
-    
+
     init(stats: SingleCardStats?, maxRank: Int?) {
         dbfId = stats?.dbf_id
         self.cardHeaderVM = ConstructedMulliganSingleCardHeaderViewModel(rank: stats?.rank, mulliganWr: stats?.opening_hand_winrate, keepRate: stats?.keep_percentage, maxRank: maxRank, baseWinRate: stats?.baseWinRate)

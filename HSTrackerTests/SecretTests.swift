@@ -2004,43 +2004,41 @@ class SecretTests: HSTrackerTests {
 
     // MARK: - Secret helper panel
 
-    func testSecretPanel_UpdatesCountInPlaceAndMovesImpossibleRowDown() {
-        let panel = CardList(windowNibName: "CardList")
-        _ = panel.window
-        guard let table = panel.table else { return XCTFail("the secret panel has no table") }
+    func testSecretPanel_KeepsImpossibleRowsBelowThePossibleOnes() {
+        guard #available(macOS 10.15, *) else { return }
         func card(_ secret: MultiIdCard, _ count: Int) -> Card {
             let card = Card(id: secret.ids[0])
             card.count = count
             return card
         }
-        func rows() -> [CardBar] {
-            return (0..<panel.cardCount()).compactMap { panel.tableView(table, viewFor: nil, row: $0) as? CardBar }
-        }
         let bear = CardIds.Secrets.Hunter.BearTrap, explosive = CardIds.Secrets.Hunter.ExplosiveTrap
-        let snake = CardIds.Secrets.Hunter.SnakeTrap, venomstrike = CardIds.Secrets.Hunter.VenomstrikeTrap
+        let snake = CardIds.Secrets.Hunter.SnakeTrap
 
-        panel.set(cards: [card(bear, 1), card(explosive, 1), card(snake, 1)])
-        let before = rows()
-        XCTAssertEqual(before.map { $0.card?.id }, [bear.ids[0], explosive.ids[0], snake.ids[0]])
+        let sorted = SecretsManager.sortedForPanel([card(explosive, 0), card(snake, 1), card(bear, 1)])
+        XCTAssertEqual(sorted.map { $0.count }, [1, 1, 0], "the impossible row goes below the possible ones")
+        XCTAssertEqual(sorted.last?.id, explosive.ids[0])
 
-        panel.set(cards: [card(bear, 1), card(snake, 1), card(explosive, 0)])
-        let after = rows()
-        XCTAssertEqual(after.map { $0.card?.id }, [bear.ids[0], snake.ids[0], explosive.ids[0]])
-        XCTAssertEqual(after.map { $0.card?.count }, [1, 1, 0])
-        XCTAssertTrue(after[2] === before[1], "the row was rebuilt instead of updated")
-        XCTAssertEqual(table.numberOfRows, 3)
+        // The overlay panel lists the dimmed row rather than dropping it
+        let panel = SecretsPanelViewModel()
+        panel.set(cards: sorted)
+        XCTAssertEqual(panel.cards.cards.map { $0.count }, [1, 1, 0])
+    }
 
-        // Removal, insertion and a move in one update
-        panel.set(cards: [card(venomstrike, 1), card(snake, 2), card(explosive, 0), card(bear, 0)])
-        let last = rows()
-        XCTAssertEqual(last.map { $0.card?.id }, [venomstrike.ids[0], snake.ids[0], explosive.ids[0], bear.ids[0]])
-        XCTAssertEqual(last.map { $0.card?.count }, [1, 2, 0, 0])
-        XCTAssertTrue(last[3] === before[0])
-        XCTAssertEqual(table.numberOfRows, 4)
+    func testSecretPanel_DrawnFrameCoversItsRowsOnly() {
+        guard #available(macOS 10.15, *) else { return }
+        let panel = SecretsPanelViewModel()
+        let canvas = CGSize(width: 1440, height: 900)
+        panel.set(cards: [Card(id: CardIds.Secrets.Hunter.BearTrap.ids[0])])
+        XCTAssertEqual(panel.drawnFrame(canvasSize: canvas), .zero, "nothing is drawn while it is hidden")
 
-        panel.set(cards: [])
-        XCTAssertEqual(panel.cardCount(), 0)
-        XCTAssertEqual(table.numberOfRows, 0)
+        panel.isShown = true
+        let one = panel.drawnFrame(canvasSize: canvas)
+        XCTAssertEqual(one.minX, canvas.width * CGFloat(panel.left) / 100, accuracy: 0.01)
+        XCTAssertEqual(one.minY, canvas.height * CGFloat(panel.top) / 100, accuracy: 0.01)
+        XCTAssertGreaterThan(one.height, 0)
+
+        panel.set(cards: [Card(id: CardIds.Secrets.Hunter.BearTrap.ids[0]), Card(id: CardIds.Secrets.Hunter.SnakeTrap.ids[0])])
+        XCTAssertGreaterThan(panel.drawnFrame(canvasSize: canvas).height, one.height)
     }
 
     func testTrackersPreferences_SecretOptionsSitIndentedUnderShowSecretHelper() {
@@ -2064,20 +2062,26 @@ class SecretTests: HSTrackerTests {
         XCTAssertEqual(remove.frame.minX, grayOut.frame.minX)
     }
 
-    func testFloatingCard_SubtitleWithoutImage_WindowFitsTheNoteAlone() {
-        let floatingCard = FloatingCard(windowNibName: "FloatingCard")
-        guard let window = floatingCard.window else { return XCTFail("the floating card has no window") }
-        window.setContentSize(NSSize(width: 256, height: 388))
+    func testExclusionHint_ShowsTheReasonForADimmedSecretOnly() {
+        guard #available(macOS 10.15, *) else { return }
+        let hint = SecretExclusionHintPanel.shared
+        defer { hint.hide() }
+        // Far off screen
+        let row = NSRect(x: -20000, y: -20000, width: 217, height: 34)
 
-        // With card previews off, the reason for a dimmed secret row shows on its own
-        floatingCard.set(card: Card(id: CardIds.Secrets.Hunter.ExplosiveTrap.ids[0]), subtitle: "Turn 5: You attacked the enemy hero",
-                         showsImage: false)
+        let render = NSRect(x: row.maxX, y: row.midY - 150, width: 220, height: 333)
+        hint.show(summary: "Turn 5: You attacked the enemy hero", renderFrame: render, rowFrame: row)
+        XCTAssertTrue(hint.isVisible)
+        XCTAssertGreaterThan(hint.frame.height, 12)
 
-        XCTAssertFalse(floatingCard.showsImage)
-        XCTAssertTrue(floatingCard.imageView.isHidden)
-        let noteHeight = floatingCard.subtitleHeight(width: window.frame.width)
-        XCTAssertGreaterThan(noteHeight, 0)
-        XCTAssertEqual(window.contentView?.frame.height ?? 0, noteHeight, accuracy: 0.5)
+        hint.show(summary: nil, renderFrame: render, rowFrame: row)
+        XCTAssertFalse(hint.isVisible, "no reason, no box")
+
+        // A secret the opponent can still have is never looked up
+        let possible = Card(id: CardIds.Secrets.Hunter.ExplosiveTrap.ids[0])
+        possible.count = 1
+        hint.show(for: possible, rowFrame: row)
+        XCTAssertFalse(hint.isVisible)
     }
 
     func setPlayerAsCurrentPlayer() {

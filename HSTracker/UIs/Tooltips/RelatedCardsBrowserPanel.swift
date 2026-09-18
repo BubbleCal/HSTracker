@@ -165,8 +165,10 @@ enum RelatedCardsBrowserTooltip {
         // Card.UpdateTooltip sets ShowTriple = BaconCard, so a constructed pool card gets no golden
         // companion image. source/sourceView opt out of the CardHoverRegistry bookkeeping that
         // RootOverlayWindow's own hovers rely on - see CardTooltipSource.
-        CardTooltipPanel.shared.show(cardId: card.id, showTriple: card.baconCard,
-                                     baconTriple: card.baconTriple, placement: placement,
+        CardTooltipPanel.shared.show(CardTooltipRequest(cardId: card.id,
+                                                        showTriple: card.baconCard,
+                                                        baconTriple: card.baconTriple,
+                                                        placement: placement),
                                      anchor: anchor, bounds: bounds,
                                      source: .trackingArea, sourceView: view,
                                      baconCard: card.baconCard)
@@ -601,7 +603,10 @@ final class RelatedCardsBrowserPanel: NSPanel {
         viewModel.reset(cardName: sourceCard.name, cards: relatedCards)
 
         var origin = NSPoint(x: frame.maxX + 12, y: frame.maxY - 600)
-        if let screen = NSScreen.screens.first(where: { $0.frame.contains(frame.origin) }) ?? NSScreen.main {
+        // intersects, not contains(frame.origin): the anchor's bottom-left corner can sit below
+        // the screen it is on, and falling through to NSScreen.main would then clamp the panel
+        // onto the main display rather than the one the game is on.
+        if let screen = NSScreen.screens.first(where: { $0.frame.intersects(frame) }) ?? NSScreen.main {
             if origin.x + RelatedCardsBrowserContentView.width > screen.frame.maxX {
                 origin.x = frame.minX - RelatedCardsBrowserContentView.width - 12
             }

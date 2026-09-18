@@ -395,8 +395,6 @@ final class Settings {
     static var deckManagerPreferCards: Bool
     @UserDefault(key: Settings.show_floating_card, defaultValue: true)
     static var showFloatingCard: Bool
-    @UserDefaultRawRepresentable(key: Settings.floating_card_style, defaultValue: .image)
-    static var floatingCardStyle: FloatingCardStyle
     @UserDefault(key: Settings.disable_tracking_in_spectator_mode, defaultValue: true)
     static var dontTrackWhileSpectating: Bool
     @UserDefault(key: Settings.window_locked, defaultValue: true)
@@ -554,6 +552,29 @@ final class Settings {
     @UserDefault(key: Settings.auto_show_battlegrounds_trinket_picking, defaultValue: true)
     static var autoShowBattlegroundsTrinketPicking: Bool
 
+    // Arenasmith (HDT's EnableArenasmithOverlay, ShowArenaHeroPicking,
+    // ShowArenasmithScore, ShowArenaRelatedCards, ShowArenaDeckSynergies,
+    // ShowArenaRedraftDiscard, ShowArenasmithPreLobby, HideOpponentArenaPackages
+    // and ArenasmithPreLobbyTrialsCollapsed).
+    @UserDefault(key: Settings.enable_arenasmith_overlay, defaultValue: true)
+    static var enableArenasmithOverlay: Bool
+    @UserDefault(key: Settings.show_arena_hero_picking, defaultValue: true)
+    static var showArenaHeroPicking: Bool
+    @UserDefault(key: Settings.show_arenasmith_score, defaultValue: true)
+    static var showArenasmithScore: Bool
+    @UserDefault(key: Settings.show_arena_related_cards, defaultValue: true)
+    static var showArenaRelatedCards: Bool
+    @UserDefault(key: Settings.show_arena_deck_synergies, defaultValue: true)
+    static var showArenaDeckSynergies: Bool
+    @UserDefault(key: Settings.show_arena_redraft_discard, defaultValue: true)
+    static var showArenaRedraftDiscard: Bool
+    @UserDefault(key: Settings.show_arenasmith_prelobby, defaultValue: true)
+    static var showArenasmithPreLobby: Bool
+    @UserDefault(key: Settings.hide_opponent_arena_packages, defaultValue: false)
+    static var hideOpponentArenaPackages: Bool
+    @UserDefault(key: Settings.arenasmith_prelobby_trials_collapsed, defaultValue: false)
+    static var arenasmithPreLobbyTrialsCollapsed: Bool
+
     // Tavern Pinning (HDT's ShowBattlegroundsTavernMarkers,
     // AutoEnableTavernMarkersRecommended, TavernMarkersPanelExpanded, and the
     // three "dismissed" flags its ConfigWrapper exposes). Defaults match
@@ -677,9 +698,6 @@ final class Settings {
     @UserDefault(key: Settings.opponent_max_resources, defaultValue: true)
     static var showOpponentMaxResources: Bool
 
-    @UserDefaultCustom(key: Settings.timer_hud_frame, defaultValue: nil)
-    static var timerHudFrame: NSRect?
-    
     @UserDefault(key: Settings.show_card_huds, defaultValue: true)
     static var showCardHuds: Bool
     @UserDefault(key: Settings.show_secret_helper, defaultValue: true)
@@ -717,17 +735,159 @@ final class Settings {
     @UserDefaultCustom(key: Settings.opponent_tracker_frame, defaultValue: nil)
     static var opponentTrackerFrame: NSRect?
 
+    // MARK: - Deck tracker placement on the overlay canvas
+    //
+    // The two deck trackers used to be windows of their own, positioned from an
+    // absolute NSRect. They are now children of the RootOverlay canvas, placed
+    // the way HDT places BorderStackPanelPlayer / BorderStackPanelOpponent:
+    //
+    //   Canvas.SetTop(BorderStackPanelPlayer, Height * PlayerDeckTop / 100)
+    //   Canvas.SetLeft(BorderStackPanelPlayer, Width * PlayerDeckLeft / 100
+    //                   - StackPanelPlayer.ActualWidth * OverlayPlayerScaling / 100)
+    //   Canvas.SetTop(BorderStackPanelOpponent, Height * OpponentDeckTop / 100)
+    //   Canvas.SetLeft(BorderStackPanelOpponent, Width * OpponentDeckLeft / 100)
+    //
+    // (OverlayWindow.Update.cs). Note the player stack hangs its *right* edge on
+    // PlayerDeckLeft, which is why its default is just short of 100.
+    //
+    // Percentages rather than an absolute rect so the placement survives a
+    // resolution change, and the defaults are HDT's own (Config.cs).
+    @UserDefault(key: Settings.player_deck_top, defaultValue: 2.0)
+    static var playerDeckTop: Double
+    @UserDefault(key: Settings.player_deck_left, defaultValue: 99.5)
+    static var playerDeckLeft: Double
+    @UserDefault(key: Settings.opponent_deck_top, defaultValue: 12.5)
+    static var opponentDeckTop: Double
+    @UserDefault(key: Settings.opponent_deck_left, defaultValue: 0.5)
+    static var opponentDeckLeft: Double
+
+    // The height the stack is laid out in, as a percentage of the client height -
+    // HDT's PlayerDeckHeight / OpponentDeckHeight, set by dragging the resize
+    // grip at the panel's bottom-right corner. It is what the card rows shrink to
+    // fit, and what decides whether the stack is pinned to the top or the bottom
+    // of its box (OverlayWindow.xaml.cs PlayerStackHeight / PlayerStackPanelAlignment).
+    @UserDefault(key: Settings.player_deck_height, defaultValue: 88.0)
+    static var playerDeckHeight: Double
+    @UserDefault(key: Settings.opponent_deck_height, defaultValue: 72.0)
+    static var opponentDeckHeight: Double
+
+    // HDT's OverlayPlayerScaling / OverlayOpponentScaling, applied to the whole
+    // stack as a ScaleTransform would be (OverlayWindow.Update.cs UpdateScaling).
+    // Stored as a percentage, like HDT's.
+    @UserDefault(key: Settings.overlay_player_scaling, defaultValue: 100.0)
+    static var overlayPlayerScaling: Double
+    @UserDefault(key: Settings.overlay_opponent_scaling, defaultValue: 100.0)
+    static var overlayOpponentScaling: Double
+
+    // HDT's OverlayCenterPlayerStackPanel / OverlayCenterOpponentStackPanel -
+    // whether the stack sits at the top of its box or is centred in it
+    // (OverlayWindow.xaml.cs PlayerStackPanelAlignment).
+    @UserDefault(key: Settings.overlay_center_player_stack, defaultValue: false)
+    static var overlayCenterPlayerStack: Bool
+    @UserDefault(key: Settings.overlay_center_opponent_stack, defaultValue: false)
+    static var overlayCenterOpponentStack: Bool
+
+    // HDT's PlayerOpacity / OpponentOpacity - the stack's own opacity, per side.
+    // HSTracker used to have one tracker_opacity for both, which is the *window*
+    // background alpha rather than the content's; trackerOpacity above is kept
+    // only so migrateTrackerPlacementIfNeeded() can seed these once.
+    @UserDefault(key: Settings.player_opacity, defaultValue: 100.0)
+    static var playerOpacity: Double
+    @UserDefault(key: Settings.opponent_opacity, defaultValue: 100.0)
+    static var opponentOpacity: Double
+
+    // The order the stack's sections are drawn in, top to bottom - HDT's
+    // DeckPanelOrderLocalPlayer / DeckPanelOrderOpponent. Stored as the raw
+    // strings of DeckPanel so an unknown entry from a newer build is simply
+    // dropped rather than shifting everything after it.
+    @UserDefault(key: Settings.deck_panel_order_player, defaultValue: DeckPanel.defaultPlayerOrder.map { $0.rawValue })
+    static var deckPanelOrderPlayer: [String]
+    @UserDefault(key: Settings.deck_panel_order_opponent, defaultValue: DeckPanel.defaultOpponentOrder.map { $0.rawValue })
+    static var deckPanelOrderOpponent: [String]
+
+    // The secrets panel, which moved onto the canvas with the trackers. HDT's
+    // SecretsTop / SecretsLeft / SecretsPanelHeight / SecretsPanelScaling - note
+    // its scaling is a plain factor in HDT, not a percentage.
+    @UserDefault(key: Settings.secrets_panel_top, defaultValue: 5.0)
+    static var secretsPanelTop: Double
+    @UserDefault(key: Settings.secrets_panel_left, defaultValue: 15.0)
+    static var secretsPanelLeft: Double
+    @UserDefault(key: Settings.secrets_panel_height, defaultValue: 40.0)
+    static var secretsPanelHeight: Double
+    @UserDefault(key: Settings.secrets_panel_scaling, defaultValue: 1.0)
+    static var secretsPanelScaling: Double
+
+    // Where the counters and the active-effects tiles sit, as percentages of the
+    // client - HDT's PlayerCountersVertical/Horizontal, OpponentCountersVertical/
+    // Horizontal and the ActiveEffects pair, with HDT's own defaults (Config.cs).
+    // Both are movable there while the overlay is unlocked, and both hang the
+    // opponent's copy from the *bottom* edge, so its vertical percentage is
+    // measured up from the bottom of the client and grows as it is dragged up
+    // (OverlayWindow.Input.cs).
+    @UserDefault(key: Settings.player_counters_vertical, defaultValue: 68.4)
+    static var playerCountersVertical: Double
+    @UserDefault(key: Settings.player_counters_horizontal, defaultValue: 67.7)
+    static var playerCountersHorizontal: Double
+    @UserDefault(key: Settings.opponent_counters_vertical, defaultValue: 70.6)
+    static var opponentCountersVertical: Double
+    @UserDefault(key: Settings.opponent_counters_horizontal, defaultValue: 67.7)
+    static var opponentCountersHorizontal: Double
+
+    @UserDefault(key: Settings.player_active_effects_vertical, defaultValue: 71.6)
+    static var playerActiveEffectsVertical: Double
+    @UserDefault(key: Settings.player_active_effects_horizontal, defaultValue: 66.2)
+    static var playerActiveEffectsHorizontal: Double
+    @UserDefault(key: Settings.opponent_active_effects_vertical, defaultValue: 73.8)
+    static var opponentActiveEffectsVertical: Double
+    @UserDefault(key: Settings.opponent_active_effects_horizontal, defaultValue: 66.2)
+    static var opponentActiveEffectsHorizontal: Double
+
+    // The board attack icons and the max-resources widgets, both of which hang
+    // by their top edge on either side - HDT's AttackIcon*Position and
+    // *MaxResources* pairs, with its defaults.
+    @UserDefault(key: Settings.attack_icon_player_vertical, defaultValue: 67.62)
+    static var attackIconPlayerVertical: Double
+    @UserDefault(key: Settings.attack_icon_player_horizontal, defaultValue: 25.5)
+    static var attackIconPlayerHorizontal: Double
+    @UserDefault(key: Settings.attack_icon_opponent_vertical, defaultValue: 22.39)
+    static var attackIconOpponentVertical: Double
+    @UserDefault(key: Settings.attack_icon_opponent_horizontal, defaultValue: 25.5)
+    static var attackIconOpponentHorizontal: Double
+
+    @UserDefault(key: Settings.player_max_resources_vertical, defaultValue: 95.6)
+    static var playerMaxResourcesVertical: Double
+    @UserDefault(key: Settings.player_max_resources_horizontal, defaultValue: 75.2)
+    static var playerMaxResourcesHorizontal: Double
+    @UserDefault(key: Settings.opponent_max_resources_vertical, defaultValue: 0.3)
+    static var opponentMaxResourcesVertical: Double
+    @UserDefault(key: Settings.opponent_max_resources_horizontal, defaultValue: 72.2)
+    static var opponentMaxResourcesHorizontal: Double
+
+    // The three turn timers: where the middle one sits, as percentages of the
+    // client, and how far the two per-player ones sit from it - which HDT keeps
+    // in points rather than percentages (TimersHorizontalSpacing /
+    // TimersVerticalSpacing), so they keep their gap whatever the resolution.
+    // Dragging the middle timer moves all three; dragging the player's own moves
+    // the pair.
+    @UserDefault(key: Settings.timers_vertical_position, defaultValue: 44.5)
+    static var timersVerticalPosition: Double
+    @UserDefault(key: Settings.timers_horizontal_position, defaultValue: 72.0)
+    static var timersHorizontalPosition: Double
+    @UserDefault(key: Settings.timers_vertical_spacing, defaultValue: 42.0)
+    static var timersVerticalSpacing: Double
+    @UserDefault(key: Settings.timers_horizontal_spacing, defaultValue: 48.0)
+    static var timersHorizontalSpacing: Double
+
+    // Set once the absolute frames above have been converted into the
+    // percentages, so a player who moved a tracker keeps it where they put it.
+    @UserDefault(key: Settings.migrated_tracker_placement, defaultValue: false)
+    static var migratedTrackerPlacement: Bool
+
     @UserDefault(key: Settings.player_board_damage, defaultValue: true)
     static var playerBoardDamage: Bool
     
-    @UserDefaultCustom(key: Settings.player_board_damage_frame, defaultValue: nil)
-    static var playerBoardDamageFrame: NSRect?
-    
     @UserDefault(key: Settings.opponent_board_damage, defaultValue: true)
     static var opponentBoardDamage: Bool
-    
-    @UserDefaultCustom(key: Settings.opponent_board_damage_frame, defaultValue: nil)
-    static var opponentBoardDamageFrame: NSRect?
     
     @UserDefault(key: Settings.show_fatigue, defaultValue: true)
     static var fatigueIndicator: Bool
@@ -838,6 +998,19 @@ final class Settings {
         return language == .ruRU
     }
 
+    // Helper.UseLatinFont() / Helper.LatinLanguages: the card languages HDT
+    // renders card names in Chunkfive for, falling back to the system font in
+    // bold for the rest. Polish and Russian are on the fallback side upstream
+    // even though only one of the two is a non-Latin script, so the list is
+    // carried over as HDT writes it rather than derived from the script.
+    // (HDT's enGB has no counterpart in HSTracker's language list.)
+    static var usesLatinCardFont: Bool {
+        guard let language = hearthstoneLanguage else { return true }
+
+        let latinLanguages: [Language.Hearthstone] = [.enUS, .frFR, .deDE, .itIT, .ptBR, .esMX, .esES]
+        return latinLanguages.contains(language)
+    }
+
     static var isSimplifiedChinese: Bool {
         guard let language = hearthstoneLanguage else { return false }
 
@@ -894,7 +1067,6 @@ extension Settings {
     static let hide_all_trackers_when_game_in_background = "hide_all_trackers_when_game_in_background"
     static let deckmanager_prefer_cards = "deckmanager_prefer_cards"
     static let show_floating_card = "show_floating_card"
-    static let floating_card_style = "floating_card_style"
     static let disable_tracking_in_spectator_mode = "disable_tracking_in_spectator_mode"
     static let window_locked = "window_locked"
     static let prefer_golden_cards = "prefer_golden_cards"
@@ -951,6 +1123,15 @@ extension Settings {
     static let show_battlegrounds_tier7_session_comp_stats = "show_battlegrounds_tier7_session_comp_stats"
     static let always_show_tier_7 = "always_show_tier_7"
     static let auto_show_battlegrounds_trinket_picking = "auto_show_battlegrounds_trinket_picking"
+    static let enable_arenasmith_overlay = "enable_arenasmith_overlay"
+    static let show_arena_hero_picking = "show_arena_hero_picking"
+    static let show_arenasmith_score = "show_arenasmith_score"
+    static let show_arena_related_cards = "show_arena_related_cards"
+    static let show_arena_deck_synergies = "show_arena_deck_synergies"
+    static let show_arena_redraft_discard = "show_arena_redraft_discard"
+    static let show_arenasmith_prelobby = "show_arenasmith_prelobby"
+    static let hide_opponent_arena_packages = "hide_opponent_arena_packages"
+    static let arenasmith_prelobby_trials_collapsed = "arenasmith_prelobby_trials_collapsed"
     static let show_battlegrounds_tavern_markers = "show_battlegrounds_tavern_markers"
     static let auto_enable_tavern_markers_recommended = "auto_enable_tavern_markers_recommended"
     static let tavern_markers_panel_expanded = "tavern_markers_panel_expanded"
@@ -1003,7 +1184,6 @@ extension Settings {
     static let show_opponent_tracker = "show_opponent_tracker"
     static let show_timer = "show_timer"
 
-    static let timer_hud_frame = "timer_hud_frame"
     static let show_card_huds = "show_card_huds"
     static let show_secret_helper = "show_secret_helper"
     static let auto_grayout_secrets = "auto_grayout_secrets"
@@ -1014,10 +1194,47 @@ extension Settings {
     static let show_apphealth = "show_apphealth"
     static let player_tracker_frame = "player_tracker_frame"
     static let opponent_tracker_frame = "opponent_tracker_frame"
+    static let player_deck_top = "player_deck_top"
+    static let player_deck_left = "player_deck_left"
+    static let player_deck_height = "player_deck_height"
+    static let opponent_deck_top = "opponent_deck_top"
+    static let opponent_deck_left = "opponent_deck_left"
+    static let opponent_deck_height = "opponent_deck_height"
+    static let overlay_player_scaling = "overlay_player_scaling"
+    static let overlay_center_player_stack = "overlay_center_player_stack"
+    static let overlay_center_opponent_stack = "overlay_center_opponent_stack"
+    static let overlay_opponent_scaling = "overlay_opponent_scaling"
+    static let player_opacity = "player_opacity"
+    static let opponent_opacity = "opponent_opacity"
+    static let deck_panel_order_player = "deck_panel_order_player"
+    static let deck_panel_order_opponent = "deck_panel_order_opponent"
+    static let secrets_panel_top = "secrets_panel_top"
+    static let secrets_panel_left = "secrets_panel_left"
+    static let secrets_panel_height = "secrets_panel_height"
+    static let secrets_panel_scaling = "secrets_panel_scaling"
+    static let player_counters_vertical = "player_counters_vertical"
+    static let player_counters_horizontal = "player_counters_horizontal"
+    static let opponent_counters_vertical = "opponent_counters_vertical"
+    static let opponent_counters_horizontal = "opponent_counters_horizontal"
+    static let player_active_effects_vertical = "player_active_effects_vertical"
+    static let player_active_effects_horizontal = "player_active_effects_horizontal"
+    static let opponent_active_effects_vertical = "opponent_active_effects_vertical"
+    static let opponent_active_effects_horizontal = "opponent_active_effects_horizontal"
+    static let attack_icon_player_vertical = "attack_icon_player_vertical"
+    static let attack_icon_player_horizontal = "attack_icon_player_horizontal"
+    static let attack_icon_opponent_vertical = "attack_icon_opponent_vertical"
+    static let attack_icon_opponent_horizontal = "attack_icon_opponent_horizontal"
+    static let player_max_resources_vertical = "player_max_resources_vertical"
+    static let player_max_resources_horizontal = "player_max_resources_horizontal"
+    static let opponent_max_resources_vertical = "opponent_max_resources_vertical"
+    static let opponent_max_resources_horizontal = "opponent_max_resources_horizontal"
+    static let timers_vertical_position = "timers_vertical_position"
+    static let timers_horizontal_position = "timers_horizontal_position"
+    static let timers_vertical_spacing = "timers_vertical_spacing"
+    static let timers_horizontal_spacing = "timers_horizontal_spacing"
+    static let migrated_tracker_placement = "migrated_tracker_placement"
     static let player_board_damage = "player_board_damage"
-    static let player_board_damage_frame = "player_board_damage_frame"
     static let opponent_board_damage = "opponent_board_damage"
-    static let opponent_board_damage_frame = "opponent_board_damage_frame"
     static let show_fatigue = "show_fatigue"
     static let show_opponent_active_effects = "show_opponent_active_effects"
     static let show_player_active_effects = "show_player_active_effects"

@@ -164,86 +164,36 @@ class HoverPopupTests: HSTrackerTests {
         }
     }
 
-    func testFloatingCardShowsACachedRenderBeforeItReturns() {
-        let first = Card(id: "HOVER_TEST_FIRST_\(UUID().uuidString)")
-        let second = Card(id: "HOVER_TEST_SECOND_\(UUID().uuidString)")
-        let firstImage = makeImage(width: 4, height: 4)
-        let secondImage = makeImage(width: 4, height: 4)
-        ImageUtils.store(firstImage, type: .cardArt, cardId: first.id)
-        ImageUtils.store(secondImage, type: .cardArt, cardId: second.id)
-
-        let floatingCard = FloatingCard(windowNibName: "FloatingCard")
-        _ = floatingCard.window
-        floatingCard.set(card: first)
-        XCTAssertTrue(floatingCard.imageView.image === firstImage)
-        // Moving to the next row swaps the render at once, never showing the previous card
-        floatingCard.set(card: second)
-        XCTAssertTrue(floatingCard.imageView.image === secondImage)
+    /// Runs the main run loop until `condition` holds or `timeout` passes, and says which.
+    private func spin(for timeout: TimeInterval, until condition: () -> Bool) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while !condition() && Date() < deadline {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.005))
+        }
+        return condition()
     }
 
-    func testShowAndHideFloatingCardApplyBeforeReturning() {
-        let windowManager = WindowManager()
-        let card = Card(id: "HOVER_TEST_SHOW_\(UUID().uuidString)")
+    func testTrackerRowPreviewHasNoShowDelay() throws {
+        guard #available(macOS 10.15, *) else { return }
+        let card = Card(id: "HOVER_TEST_ROW_PREVIEW_\(UUID().uuidString)")
         ImageUtils.store(makeImage(width: 4, height: 4), type: .cardArt, cardId: card.id)
         let row = NSView()
-        let otherRow = NSView()
-        // Far off screen; a subtitle makes it show whatever the card preview setting is
-        let userInfo: [String: Any] = [
-            "card": card,
-            "frame": [CGFloat(-20000), CGFloat(-20000), CGFloat(256), CGFloat(388)],
-            "useFrame": true,
-            "subtitle": "test",
-            "source": row
-        ]
-        windowManager.showFloatingCard(Notification(name: Notification.Name(Events.show_floating_card),
-                                                    object: nil, userInfo: userInfo))
-        defer { windowManager.forceHideFloatingCard() }
+        _ = makeVisibleWindow(with: row)
+        let panel = CardTooltipPanel.shared
+        defer { panel.hide() }
+        // Far off screen
+        let anchor = NSRect(x: -20000, y: -20000, width: 217, height: 34)
+        let request = CardTooltipRequest(cardId: card.id, showTriple: false)
 
-        XCTAssertEqual(windowManager.floatingCard.card?.id, card.id)
-        XCTAssertTrue(windowManager.floatingCardSource === row)
-        XCTAssertEqual(windowManager.floatingCard.window?.isVisible, true)
-        XCTAssertEqual(windowManager.floatingCard.window?.animationBehavior, NSWindow.AnimationBehavior.none)
-        XCTAssertNotNil(windowManager.closeRequestTimer)
+        // HDT's own 300ms show delay: nothing yet after 100ms
+        panel.show(request, anchor: anchor, source: .trackingArea, sourceView: row, baconCard: false)
+        XCTAssertFalse(spin(for: 0.1) { panel.currentCardId == card.id })
+        panel.hide()
 
-        // A late exit from another row, with the same card, leaves this popup alone
-        windowManager.hideFloatingCard(Notification(name: Notification.Name(Events.hide_floating_card), object: nil,
-                                                    userInfo: ["card": card, "source": otherRow]))
-        XCTAssertEqual(windowManager.floatingCard.window?.isVisible, true)
-
-        windowManager.hideFloatingCard(Notification(name: Notification.Name(Events.hide_floating_card), object: nil,
-                                                    userInfo: ["card": card, "source": row]))
-        XCTAssertEqual(windowManager.floatingCard.window?.isVisible, false)
-        XCTAssertNil(windowManager.floatingCardSource)
-        XCTAssertNil(windowManager.closeRequestTimer)
-    }
-
-    func testFloatingCardOwnershipOnlyBlocksAHideFromAnotherView() {
-        let windowManager = WindowManager()
-        let row = NSView()
-        XCTAssertFalse(windowManager.isFloatingCardOwned(byOtherThan: row), "nothing shown yet")
-        XCTAssertFalse(windowManager.isFloatingCardOwned(byOtherThan: nil))
-    }
-
-    func testHoverSourceStaysWhileTheCursorIsOverIt() throws {
-        let bar = CardBar()
-        let window = makeVisibleWindow(with: bar)
-        let rect = window.convertToScreen(bar.convert(bar.bounds, to: nil))
-        let inside = NSPoint(x: rect.midX, y: rect.midY)
-        let outside = NSPoint(x: rect.maxX + 5, y: rect.midY)
-
-        // The bar has not been told the mouse entered, so it is not hovered
-        XCTAssertFalse(WindowManager.isHoverSource(bar, stillUnder: inside))
-
-        let entered = NSEvent.enterExitEvent(with: .mouseEntered, location: .zero, modifierFlags: [], timestamp: 0,
-                                             windowNumber: window.windowNumber, context: nil, eventNumber: 0,
-                                             trackingNumber: 0, userData: nil)
-        bar.mouseEntered(with: try XCTUnwrap(entered))
-        XCTAssertTrue(bar.isHovered)
-        XCTAssertTrue(WindowManager.isHoverSource(bar, stillUnder: inside))
-        XCTAssertFalse(WindowManager.isHoverSource(bar, stillUnder: outside))
-
-        window.orderOut(nil)
-        XCTAssertFalse(WindowManager.isHoverSource(bar, stillUnder: inside), "a tracker ordered out under the cursor")
+        // The deck trackers' and the secret helper's rows: up at once, with the cached render
+        panel.show(request, anchor: anchor, source: .trackingArea, sourceView: row, baconCard: false, showDelay: 0)
+        XCTAssertTrue(spin(for: 0.1) { panel.currentCardId == card.id && panel.isVisible })
+        XCTAssertEqual(panel.animationBehavior, NSWindow.AnimationBehavior.none)
     }
 
     private final class RecordingHover: CardCellHover {
@@ -282,7 +232,4 @@ class HoverPopupTests: HSTrackerTests {
         XCTAssertEqual(delegate.outs, ["HOVER_TEST_ROW"])
     }
 
-    func testHoverSourceWithoutAWindowIsNotHovered() {
-        XCTAssertFalse(WindowManager.isHoverSource(NSView(), stillUnder: .zero))
-    }
 }

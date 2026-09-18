@@ -51,7 +51,7 @@ extension Mode {
     /// on the watcher's queue. Each unknown id is logged once, so a new scene can be
     /// added here from a user's log.
     static func from(sceneMode index: Int) -> Mode {
-        if let mode = Mode.at(index) {
+        if let mode = Mode.allCases[safeIndex: index] {
             return mode
         }
         unknownSceneModesLock.around {

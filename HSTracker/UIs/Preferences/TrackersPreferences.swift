@@ -161,12 +161,14 @@ class TrackersPreferences: PreferencePaneController, PreferencePane {
             Settings.showExperienceCounter = showExperienceCounter.state == .on
             let game = AppDelegate.instance().coreManager.game
             
-            if showExperienceCounter.state == .on {
-                if let mode = game.currentMode, mode == Mode.hub {
-                    game.windowManager.experiencePanel.visible = true
+            if #available(macOS 10.15, *), let counter = game.windowManager.rootOverlay?.viewModel.experienceCounter {
+                if showExperienceCounter.state == .on {
+                    if let mode = game.currentMode, mode == Mode.hub {
+                        counter.show()
+                    }
+                } else {
+                    counter.hide()
                 }
-            } else {
-                game.windowManager.experiencePanel.visible = false
             }
         } else if sender == showMulliganToast {
             Settings.showMulliganToast = showMulliganToast.state == .on
@@ -175,7 +177,10 @@ class TrackersPreferences: PreferencePaneController, PreferencePane {
         } else if sender == enableMulliganGuide {
             Settings.enableMulliganGuide = enableMulliganGuide.state == .on
             let game = AppDelegate.instance().coreManager.game
-            if enableMulliganGuide.state == .on {
+            // HDT clears on *un*check (CheckboxEnableMulliganStats_Unchecked):
+            // turning the guide off takes down whatever it left on screen, while
+            // turning it on has nothing to clear.
+            if enableMulliganGuide.state == .off {
                 game.hideMulliganGuideStats()
                 // Clear the Mulligan overlay if it's visible
                 game.player.mulliganCardStats = nil
@@ -183,10 +188,10 @@ class TrackersPreferences: PreferencePaneController, PreferencePane {
             game.updateMulliganGuidePreLobby()
         } else if sender == enableMulliganGV2 {
             Settings.enableMulliganGV2 = enableMulliganGV2.state == .on
-            if #available(macOS 10.15, *) {
+            if #available(macOS 10.15, *), enableMulliganGV2.state == .off {
                 let game = AppDelegate.instance().coreManager.game
                 game.stopMulliganLivePolling()
-                game.windowManager.rootOverlay?.viewModel.mulliganGuideV2.reset()
+                game.hideMulliganGuideStats()
             }
         } else if sender == showMulliganGuidePreLobby {
             Settings.showMulliganGuidePreLobby = showMulliganGuidePreLobby.state == .on

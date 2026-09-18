@@ -54,10 +54,10 @@ class ActionHistoryViewModel: ObservableObject {
     @Published var panelSize: CGSize = .zero
     @Published var listContentHeight: CGFloat = 0
 
-    // The bottom edge of the secret helper in canvas pixels, 0 while it is hidden. Game.updateSecretTracker
-    // sets it: the helper is its own window in the same column as the automatic position, above the
-    // overlay, so it would hide the panel's title bar - its only drag handle.
-    @Published var secretHelperBottom: CGFloat = 0
+    // Where the secret helper is drawn on the canvas, in canvas pixels, empty while it is hidden.
+    // Game.updateSecretTracker sets it: the helper sits above this panel, so where the two overlap it
+    // would hide the panel's title bar - its only drag handle.
+    @Published var secretHelperFrame: CGRect = .zero
 
     // How much of the list's width a legacy (always shown) scroller takes. Overlay scrollers draw
     // over the content and take none; a mouse or "Show scroll bars: Always" switches to legacy ones,
@@ -170,12 +170,13 @@ class ActionHistoryViewModel: ObservableObject {
         var y = canvasSize.height * CGFloat(top) / 100.0
         let x: CGFloat
         if left < 0 {
-            // Right of the opponent tracker, in the secret helper's column (SizeHelper.secretTrackerFrame),
-            // so the automatic position moves down below the helper while it is up. A position the
-            // player dragged to is left where it was put.
+            // Right of the opponent tracker, where the secret helper usually is too, so the automatic
+            // position moves down below the helper while the two overlap. A position the player
+            // dragged to is left where it was put.
             x = SizeHelper.trackerWidth + 25
-            if secretHelperBottom > 0 {
-                y = max(y, secretHelperBottom + ActionHistoryViewModel.margin)
+            let width = panelSize.width > 0 ? panelSize.width : ActionHistoryViewModel.panelWidth
+            if !secretHelperFrame.isEmpty && secretHelperFrame.minX < x + width && x < secretHelperFrame.maxX {
+                y = max(y, secretHelperFrame.maxY + ActionHistoryViewModel.margin)
             }
         } else {
             x = canvasSize.width * CGFloat(left) / 100.0
@@ -256,5 +257,22 @@ class ActionHistoryViewModel: ObservableObject {
         top = Settings.actionHistoryDefaultTop
         left = Settings.actionHistoryDefaultLeft
         savePosition(top, left)
+    }
+}
+
+@available(macOS 10.15, *)
+extension SecretsPanelViewModel {
+    /// The rows the secret helper draws, in canvas pixels - SecretsPanelView's own geometry: its
+    /// origin from the placement percentages, the list's height from the rows fitted into the box,
+    /// and both scaled by SecretsPanelScaling. Empty while it shows nothing.
+    func drawnFrame(canvasSize: CGSize) -> CGRect {
+        guard isShown, cardCount > 0, canvasSize.height > 0 else { return .zero }
+        let scale = CGFloat(scaling)
+        let boxHeight = max(canvasSize.height * CGFloat(height) / 100.0 / max(scale, 0.01), 0)
+        let rowHeight = min(CGFloat(Settings.cardSize.rowHeight), max(boxHeight / CGFloat(cardCount), 0))
+        return CGRect(x: canvasSize.width * CGFloat(left) / 100.0,
+                      y: canvasSize.height * CGFloat(top) / 100.0,
+                      width: SizeHelper.trackerWidth * scale,
+                      height: rowHeight * CGFloat(cardCount) * scale)
     }
 }

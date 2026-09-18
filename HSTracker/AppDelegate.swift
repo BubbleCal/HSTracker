@@ -13,6 +13,7 @@ import Preferences
 import Sentry
 import AppMover
 import Mixpanel
+import Security
 
 import OAuthSwift
 
@@ -41,7 +42,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSUserNotificationCenterDele
     var triggers: [NSObjectProtocol] = []
     
     lazy var preferences: PreferencesWindowController = {
-        let panes: [PreferencePane] = [
+        var panes: [PreferencePane] = [
             GeneralPreferences(nibName: "GeneralPreferences", bundle: nil),
             GamePreferences(nibName: "GamePreferences", bundle: nil),
             TrackersPreferences(nibName: "TrackersPreferences", bundle: nil),
@@ -50,9 +51,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSUserNotificationCenterDele
             OpponentTrackersPreferences(nibName: "OpponentTrackersPreferences", bundle: nil),
             TheOutfinderPreferences(nibName: "TheOutfinderPreferences", bundle: nil),
             BattlegroundsPreferences(nibName: "BattlegroundsPreferences", bundle: nil),
+            ArenaPreferences(nibName: "ArenaPreferences", bundle: nil),
             MercenariesPreferences(nibName: "MercenariesPreferences", bundle: nil),
             ImportingPreferences(nibName: "ImportingPreferences", bundle: nil)
         ]
+        // Built in code, so it has no nib to name - see OverlayLayoutPreferences.
+        if #available(macOS 10.15, *) {
+            panes.insert(OverlayLayoutPreferences(), at: 3)
+        }
         // Each pane fixes its own width (see PreferencePaneController), so the window keeps a
         // constant width across panes and only its height adapts.
         return PreferencesWindowController(preferencePanes: panes, style: .toolbarItems, animated: true)
@@ -91,36 +97,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSUserNotificationCenterDele
         //setenv("CFNETWORK_DIAGNOSTICS", "3", 1)
         
         Mixpanel.initialize(token: "da39869dcbc77a77a53506f12ff08094")
-
-        SentrySDK.start { options in
-            options.dsn = "https://254d50452b94680e7ac7968694d1de3a@o35918.ingest.us.sentry.io/92505"
-            options.debug = false // Enabled debug when first installing is always helpful
-            options.appHangTimeoutInterval = 60.0
-
-            // The SDK swizzles NSURLSessionTask and reports every 5xx response as an
-            // error by default, from any host the app talks to. That is a backend
-            // health signal, not an HSTracker defect, and it belongs in HSReplay's own
-            // monitoring - as Sentry issues they were HSTRACKER-3C, 67k events across
-            // hsreplay.net, art.hearthstonejson.com and Mixpanel, drowning out the
-            // crashes we can actually act on. The calls themselves already handle a
-            // failed response by logging it and carrying on.
-            options.enableCaptureFailedRequests = false
-
-            // Set tracesSampleRate to 1.0 to capture 100% of transactions for performance monitoring.
-            // We recommend adjusting this value in production.
-            options.tracesSampleRate = 0.0
-
-            // Sample rate for profiling, applied on top of TracesSampleRate.
-            // We recommend adjusting this value in production.
-            options.profilesSampleRate = 0.0
+        if !AppDelegate.isTelemetryEnabled {
+            // Mixpanel.mainInstance() asserts when initialize(token:) was never called, and
+            // HSReplayAPI and MixpanelEvents both reach for it, so a fork still needs an
+            // instance - just one that never sends anything.
+            Mixpanel.mainInstance().optOutTracking()
         }
-        SentrySDK.configureScope { scope in
-#if arch(arm64)
-            let arch = "arm64"
-#else
-            let arch = "x64"
-#endif
-            scope.setTag(value: arch, key: "device.arch")
+
+        if AppDelegate.isTelemetryEnabled {
+            startCrashReporting()
         }
         let options = [
             kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true as CFBoolean
@@ -325,6 +310,107 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSUserNotificationCenterDele
         Settings.showMinionsAvailable = !showedBanned
         Settings.showMinionsBanned = showedBanned
         Settings.migratedSessionMinionTypes = true
+    }
+
+    // HSTracker is open source, so the Sentry DSN and the Mixpanel token ship inside
+    // every binary built from this repository, and any fork that rebuilds it keeps
+    // reporting into HearthSim's projects. In Sentry that showed up as releases such as
+    // net.hearthsim.hstracker.selfbuild, net.hearthsim.hstracker.trial26 and
+    // com.baconbrain.hstracker, which distort the release list and the crash triage that
+    // reads it. A build is ours only when it carries our bundle id *and* is signed by our
+    // team - checking the signature as well as the bundle id also catches the self-builds
+    // that keep the official bundle id with a build number we never shipped.
+    private static let officialBundleIdentifier = "net.hearthsim.hstracker"
+    private static let officialTeamIdentifier = "RL7C49LAMC"
+
+    static let isOfficialBuild: Bool = {
+        guard Bundle.main.bundleIdentifier == officialBundleIdentifier else {
+            return false
+        }
+        return codeSigningTeamIdentifier() == officialTeamIdentifier
+    }()
+
+    /// A build that was never shipped. The repository carries CFBundleVersion "DEV", and
+    /// the release build replaces it with the build number being cut, so anything still
+    /// reading "DEV" was built locally - by us, since `isOfficialBuild` has already ruled
+    /// out the forks.
+    static let isDevelopmentBuild: Bool = {
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String == "DEV"
+    }()
+
+    /// Whether an XCTest bundle is being hosted in this process. The tests are injected
+    /// into HSTracker.app itself, which carries our bundle id and our signature, so
+    /// `isOfficialBuild` accepts a test run and cannot be what keeps it quiet.
+    static let isRunningTests: Bool = {
+        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+    }()
+
+    /// Whether this process may report into HearthSim's Sentry and Mixpanel projects.
+    ///
+    /// Being an official build is not enough on its own. Our own development builds are
+    /// signed with the same Developer ID and keep the same bundle id, so they satisfy
+    /// `isOfficialBuild` and had been reporting alongside the releases - dist "DEV" was
+    /// several hundred events over 90 days, and a fatal error raised by a test run
+    /// arrived as a crash indistinguishable from a user's. Anything a local build hits is
+    /// in front of whoever is running it already.
+    static let isTelemetryEnabled: Bool = {
+        isOfficialBuild && !isDevelopmentBuild && !isRunningTests
+    }()
+
+    /// The Team ID the running binary is signed with, or nil when it is unsigned or ad hoc
+    /// signed, as a local "Sign to Run Locally" build is.
+    static func codeSigningTeamIdentifier() -> String? {
+        var code: SecCode?
+        guard SecCodeCopySelf(SecCSFlags(rawValue: 0), &code) == errSecSuccess, let code else {
+            return nil
+        }
+        var staticCode: SecStaticCode?
+        guard SecCodeCopyStaticCode(code, SecCSFlags(rawValue: 0), &staticCode) == errSecSuccess,
+              let staticCode else {
+            return nil
+        }
+        var information: CFDictionary?
+        guard SecCodeCopySigningInformation(staticCode,
+                                            SecCSFlags(rawValue: UInt32(kSecCSSigningInformation)),
+                                            &information) == errSecSuccess,
+              let information = information as? [String: Any] else {
+            return nil
+        }
+        return information[kSecCodeInfoTeamIdentifier as String] as? String
+    }
+
+    /// Only called when reporting is allowed; see `isTelemetryEnabled`.
+    private func startCrashReporting() {
+        SentrySDK.start { options in
+            options.dsn = "https://254d50452b94680e7ac7968694d1de3a@o35918.ingest.us.sentry.io/92505"
+            options.debug = false // Enabled debug when first installing is always helpful
+            options.appHangTimeoutInterval = 60.0
+
+            // The SDK swizzles NSURLSessionTask and reports every 5xx response as an
+            // error by default, from any host the app talks to. That is a backend
+            // health signal, not an HSTracker defect, and it belongs in HSReplay's own
+            // monitoring - as Sentry issues they were HSTRACKER-3C, 67k events across
+            // hsreplay.net, art.hearthstonejson.com and Mixpanel, drowning out the
+            // crashes we can actually act on. The calls themselves already handle a
+            // failed response by logging it and carrying on.
+            options.enableCaptureFailedRequests = false
+
+            // Set tracesSampleRate to 1.0 to capture 100% of transactions for performance monitoring.
+            // We recommend adjusting this value in production.
+            options.tracesSampleRate = 0.0
+
+            // Sample rate for profiling, applied on top of TracesSampleRate.
+            // We recommend adjusting this value in production.
+            options.profilesSampleRate = 0.0
+        }
+        SentrySDK.configureScope { scope in
+#if arch(arm64)
+            let arch = "arm64"
+#else
+            let arch = "x64"
+#endif
+            scope.setTag(value: arch, key: "device.arch")
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -758,18 +844,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSUserNotificationCenterDele
                                         comment: "")
         if let game = coreManager?.game {
             if Settings.windowsLocked {
-                game.windowManager.playerActiveEffectsOverlay.forceHideExampleEffects()
-                game.windowManager.playerActiveEffectsOverlay.updateGrid()
-                
                 if #available(macOS 10.15, *) {
+                    game.windowManager.rootOverlay?.viewModel.playerActiveEffects.forceHideExampleEffects()
+                    game.windowManager.rootOverlay?.viewModel.opponentActiveEffects.forceHideExampleEffects()
                     game.windowManager.rootOverlay?.viewModel.playerCounters.forceHideExampleCounters()
+                    game.windowManager.rootOverlay?.viewModel.opponentCounters.forceHideExampleCounters()
                 }
             } else {
-                game.windowManager.playerActiveEffectsOverlay.forceShowExampleEffects(true)
-                game.windowManager.playerActiveEffectsOverlay.updateGrid()
-                
+                // Both sides, as HDT's UnlockUi does - otherwise the opponent's
+                // blocks have nothing to drag unless the game happens to be
+                // showing them.
                 if #available(macOS 10.15, *) {
+                    game.windowManager.rootOverlay?.viewModel.playerActiveEffects.forceShowExampleEffects()
+                    game.windowManager.rootOverlay?.viewModel.opponentActiveEffects.forceShowExampleEffects()
                     game.windowManager.rootOverlay?.viewModel.playerCounters.forceShowExampleCounters()
+                    game.windowManager.rootOverlay?.viewModel.opponentCounters.forceShowExampleCounters()
                 }
             }
         }

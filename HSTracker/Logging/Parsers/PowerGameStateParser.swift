@@ -45,6 +45,11 @@ class PowerGameStateParser: LogEventParser {
     var tmpEntities = SynchronizedArray<Entity>()
     var currentEntity: Entity?
     var gameStateIsInsideMetaDataHistoryTarget = false
+    // HDT's IsInsideMetaDataBurnedCard: the META_DATA block that names the cards
+    // an overdraw burned. Only Godfrey the Betrayer makes anything of it here -
+    // the burned card goes to the void rather than being destroyed, and the
+    // Overdrawn lens lists what is in there.
+    var gameStateIsInsideMetaDataBurnedCard = false
 
 	private let eventHandler: PowerEventHandler
 
@@ -116,6 +121,7 @@ class PowerGameStateParser: LogEventParser {
     func handle(logLine: LogLine) {
         var creationTag = false
         var isInsideMetaDataHistoryTarget = false
+        var isInsideMetaDataBurnedCard = false
 
         // current game
         if GameEntityRegex.match(logLine.line) {
@@ -338,6 +344,24 @@ class PowerGameStateParser: LogEventParser {
                         player?.beatrixCardIds.insert(id)
                     }
                 }
+
+                // Godfrey's Atlas burns the overdrawn card into the void, which
+                // shows up as a new hidden entity created by the enchantment's
+                // own TRIGGER_VISUAL block. The card it was copied from arrives
+                // separately, in the BURNED_CARD metadata above.
+                if let currentBlock,
+                   currentBlock.cardId == CardIds.NonCollectible.Neutral.GodfreytheBetrayer_GodfreysAtlasEnchantment,
+                   currentBlock.type == "TRIGGER", currentBlock.triggerKeyword == "TRIGGER_VISUAL",
+                   let blockEntity = eventHandler.entities[currentBlock.sourceEntityId] {
+                    let isControlledByPlayer = blockEntity.isControlled(by: eventHandler.player.id)
+                    let player = isControlledByPlayer ? eventHandler.player : eventHandler.opponent
+                    player?.addGodfreyNewEntityId(id)
+                    if isControlledByPlayer {
+                        AppDelegate.instance().coreManager.game.updatePlayerTracker()
+                    } else {
+                        AppDelegate.instance().coreManager.game.updateOpponentTracker()
+                    }
+                }
                 
                 // Used to detect and update hidden magnetized AutoAssembler deathrattles
                 if  // short-circuit on CardId to minimize frequency of this check
@@ -348,8 +372,12 @@ class PowerGameStateParser: LogEventParser {
                     let deadMinion = eventHandler.entities[currentBlock.sourceEntityId],
                     deadMinion.isMinion {
                     // The CARDRACE tag only carries the primary race, so a dual-race Mech is missed;
-                    // read the race off the card definition instead.
-                    if deadMinion.card.isMech() || deadMinion.card.isAllRace() {
+                    // read the race off the card definition too. The other way round, the card's
+                    // static race misses a minion made a Mech by an enchantment (Amalgamation);
+                    // the live CARDRACE tag carries that one.
+                    let liveRaceValue = deadMinion[GameTag.cardrace]
+                    let liveRace = Race.allCases[safeIndex: liveRaceValue] ?? Race.invalid
+                    if deadMinion.card.isMech() || deadMinion.card.isAllRace() || liveRace == .mechanical || liveRace == .all {
                         let isGolden = cardId == CardIds.NonCollectible.Neutral.AncestralAutomaton_AncestralAutomaton
                         let sourceZone = deadMinion[GameTag.zone]
                         if sourceZone == Zone.graveyard.rawValue {  // Deathrattles triggered the normal way
@@ -638,7 +666,34 @@ class PowerGameStateParser: LogEventParser {
         } else if logLine.line.contains("META_DATA - Meta=HISTORY_TARGET") {
             gameStateIsInsideMetaDataHistoryTarget = true
             isInsideMetaDataHistoryTarget = true
+        } else if logLine.line.contains("META_DATA - Meta=BURNED_CARD") {
+            gameStateIsInsideMetaDataBurnedCard = true
+            isInsideMetaDataBurnedCard = true
         } else if MetaInfoRegex.match(logLine.line) {
+            if gameStateIsInsideMetaDataBurnedCard {
+                let match = MetaInfoRegex.matches(logLine.line)
+                if let entityId = Int(match.count > 1 ? match[1].value : match[0].value),
+                   let entity = eventHandler.entities[entityId] {
+                    let isControlledByPlayer = entity.isControlled(by: eventHandler.player.id)
+                    // Only a Godfrey burn goes to the void; an ordinary overdraw
+                    // destroys the card and has nothing to list.
+                    // PowerEventHandler has no effects of its own, so this reads
+                    // the live game's - the same instance the effect system fills.
+                    let effects = AppDelegate.instance().coreManager.game.activeEffects
+                        .getVisibleEffects(controlledByPlayer: isControlledByPlayer)
+                    if effects.contains(where: { $0.cardId == CardIds.NonCollectible.Neutral.GodfreytheBetrayer_GodfreysAtlasEnchantment }) {
+                        let player = isControlledByPlayer ? eventHandler.player : eventHandler.opponent
+                        player?.addGodfreyCopiedEntityId(entityId)
+                        entity.info.hidden = false
+                        if isControlledByPlayer {
+                            AppDelegate.instance().coreManager.game.updatePlayerTracker()
+                        } else {
+                            AppDelegate.instance().coreManager.game.updateOpponentTracker()
+                        }
+                    }
+                }
+                isInsideMetaDataBurnedCard = true
+            }
             if gameStateIsInsideMetaDataHistoryTarget {
                 let match = MetaInfoRegex.matches(logLine.line)
                 if let entityId = Int(match.count > 1 ? match[1].value : match[0].value), let entity = eventHandler.entities[entityId] {
@@ -683,12 +738,29 @@ class PowerGameStateParser: LogEventParser {
                         let copyOfCardId = lastCardDrawnEntity?.info.copyOfCardId ?? "\(lastCardDrawnId)"
                         addKnownCardId(eventHandler: eventHandler, cardId: "", copyOfCardId: copyOfCardId)
                     }
+
+                    // Godfrey pulling a card back out of the void.
+                    if let currentBlock,
+                       currentBlock.cardId == CardIds.NonCollectible.Neutral.GodfreytheBetrayer_GodfreysAtlasEnchantment,
+                       currentBlock.type == "TRIGGER",
+                       let blockEntity = eventHandler.entities[currentBlock.sourceEntityId] {
+                        let isControlledByPlayer = blockEntity.isControlled(by: eventHandler.player.id)
+                        let player = isControlledByPlayer ? eventHandler.player : eventHandler.opponent
+                        player?.returnGodfreyCard(newEntityId: entity.id,
+                                                  copiedEntityId: entity[.copied_from_entity_id])
+                        if isControlledByPlayer {
+                            AppDelegate.instance().coreManager.game.updatePlayerTracker()
+                        } else {
+                            AppDelegate.instance().coreManager.game.updateOpponentTracker()
+                        }
+                    }
                 }
             } else {
                 logger.info("Invalid source id: \(match[1].value)")
             }
         }
         gameStateIsInsideMetaDataHistoryTarget = isInsideMetaDataHistoryTarget
+        gameStateIsInsideMetaDataBurnedCard = isInsideMetaDataBurnedCard
         if logLine.line.contains("End Spectator") && eventHandler.isInMenu {
             eventHandler.gameEnded = true
             eventHandler.gameEnd()
@@ -1373,8 +1445,14 @@ class PowerGameStateParser: LogEventParser {
                                 }
                             }
                         case CardIds.Collectible.Priest.SlimeEm:
-                            eventHandler.player.slimedMinions = eventHandler.player.board.filter { $0.isMinion }
-                            eventHandler.opponent.slimedMinions = eventHandler.opponent.board.filter { $0.isMinion }
+                            // Snapshot both boards before the spell destroys them. The Ectoplasm tokens are
+                            // created later in this same block; ectoplasmCreated copies the matching side's
+                            // snapshot onto each token, so several Ectoplasms in hand each keep the board
+                            // their own Slime 'em! destroyed.
+                            eventHandler.slimedMinions.removeAll()
+                            for slimedPlayer in [ eventHandler.player, eventHandler.opponent ].compactMap({ $0 }) where slimedPlayer.id > 0 {
+                                eventHandler.slimedMinions[slimedPlayer.id] = snapshotSlimedMinions(slimedPlayer)
+                            }
                         case CardIds.NonCollectible.Priest.Repackage_RepackagedBoxToken:
                             for card in actionStartingEntity?.info.storedCardIds ?? [String]() {
                                 addKnownCardId(eventHandler: eventHandler, cardId: card)
@@ -1772,6 +1850,17 @@ class PowerGameStateParser: LogEventParser {
                 eventHandler.knownCardIds[blockId]?.removeLast()
             }
         }
+    }
+
+    /// The card ids Slime 'em! will hand back to `player`, in the order the Ectoplasm grid shows
+    /// them (most expensive first, duplicates kept - two copies of a minion on board are two
+    /// resummons). latestCardId, not cardId: what gets resummoned is the minion as it stood on
+    /// board, which may have transformed since it was played.
+    private func snapshotSlimedMinions(_ player: Player) -> [String] {
+        return player.board.filter { $0.isMinion }
+            .map { $0.info.latestCardId }
+            .filter { !$0.isEmpty }
+            .sorted { (Cards.by(cardId: $0)?.cost ?? 0) > (Cards.by(cardId: $1)?.cost ?? 0) }
     }
 
     private func addKnownCardId(eventHandler: PowerEventHandler, cardId: String?, count: Int = 1, location: DeckLocation = .unknown, copyOfCardId: String? = nil, info: EntityInfo? = nil) {

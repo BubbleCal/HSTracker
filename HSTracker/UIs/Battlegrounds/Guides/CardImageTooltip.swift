@@ -26,19 +26,26 @@ import SwiftUI
 
 // MARK: - Registry
 
-// HDT's ToolTipService.Placement, as consumed by its own overlay tooltip system
-// (OverlayExtensions.Tooltip + OverlayWindow.Tooltips.cs) rather than by WPF's:
-// SetTooltip normalizes Top/Bottom/Left and folds everything else - including
-// unset - into Right. So Right is the default here too, matching CardTile.xaml,
-// which attaches a CardTooltip without naming a placement.
-//
-// Only the two directions HSTracker needs are modelled. HDT also supports Top
-// and Bottom; nothing in the ported surface uses them.
-enum CardTooltipPlacement {
-    case left
-    case right
-
-    var flipped: CardTooltipPlacement { self == .left ? .right : .left }
+// Everything the hovered element declares about its tooltip: what
+// CardTooltipViewModel carries (the card and its caption) plus the
+// ToolTipService attached properties SetTooltip reads off the target.
+@available(macOS 10.15, *)
+struct CardTooltipRequest: Equatable {
+    let cardId: String
+    var showTriple = true
+    var baconTriple = false
+    // CardTooltipViewModel.Text, drawn over the top of the card image.
+    var text: String?
+    var placement: CardTooltipPlacement = .right
+    // ToolTipService.HorizontalOffset / VerticalOffset. HDT applies each one
+    // away from the target, so the sign does not depend on which side the
+    // tooltip lands on. Nothing ported sets a horizontal offset; the card
+    // markers set VerticalOffset="20".
+    var horizontalOffset: CGFloat = 0
+    var verticalOffset: CGFloat = 0
+    // HDT's Card.BaconCard, when the element knows it - see CardTooltipPanel.show. nil tries the
+    // Battlegrounds art first and falls back to the standard render.
+    var baconCard: Bool?
 }
 
 // Which mechanism put the tooltip currently on screen. HDT needs no equivalent - every element
@@ -52,21 +59,41 @@ enum CardTooltipSource {
     case trackingArea
 }
 
+// Which tooltip a hovered element puts up. HDT attaches both of these through
+// one mechanism - OverlayExtensions.ToolTip alongside IsOverlayHoverVisible -
+// naming a different content type per element: CardTooltip on a card tile or an
+// active effect, GridCardImages on a counter. Modelling it the same way here is
+// what lets a single registry, and a single cursor sweep in RootOverlayWindow,
+// serve both; the counters used to carry a parallel registry and sweep of their
+// own.
+@available(macOS 10.15, *)
+enum OverlayTooltip {
+    // HDT's CardTooltip: one card image, with its golden companion, the
+    // optional line CardTooltipViewModel.Text lays over the top of it, and
+    // where the element wants it put.
+    case card(CardTooltipRequest)
+    // HDT's GridCardImages: the titled grid of related cards the counters
+    // carry. The counter itself is held rather than its cards, because
+    // CardsToDisplay is read at show time - its value moves during a game.
+    case relatedCards(counter: BaseCounter)
+
+    // Identity for "is the cursor still on the same thing", not value equality:
+    // a counter is a reference type and its contents change under it.
+    func matches(_ other: OverlayTooltip) -> Bool {
+        switch (self, other) {
+        case let (.card(a), .card(b)):
+            return a == b
+        case let (.relatedCards(a), .relatedCards(b)):
+            return a === b
+        default:
+            return false
+        }
+    }
+}
+
 @available(macOS 10.15, *)
 final class CardHoverNSView: NSView {
-    private(set) var cardId: String = ""
-    // HDT's ShowTripleTooltip. False suppresses the golden companion image -
-    // see BattlegroundsMinionArt.showTriple.
-    private(set) var showTriple: Bool = true
-    // HDT's Card.BaconTriple, which its cardImageDownloader URL formula appends
-    // "_triple" for. The golden card's own art is only published under that
-    // suffix - bgs/.../BG20_100_G.png is a 404, bgs/.../BG20_100_G_triple.png
-    // is a 200 - so a golden minion whose id is requested bare renders nothing.
-    private(set) var baconTriple: Bool = false
-    private(set) var placement: CardTooltipPlacement = .right
-    // HDT's Card.BaconCard, when the element knows it - see CardTooltipPanel.show. nil tries the
-    // Battlegrounds art first and falls back to the standard render.
-    private(set) var baconCard: Bool?
+    private(set) var tooltip: OverlayTooltip?
 
     // Match NSHostingView's own flip so NSView.convert() coordinate conversions
     // are consistent with SwiftUI's Y-down coordinate space throughout the tree.
@@ -80,15 +107,9 @@ final class CardHoverNSView: NSView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func update(cardId: String, showTriple: Bool, baconTriple: Bool, placement: CardTooltipPlacement, baconCard: Bool? = nil) {
-        guard cardId != self.cardId || showTriple != self.showTriple
-                || baconTriple != self.baconTriple || placement != self.placement
-                || baconCard != self.baconCard else { return }
-        self.cardId = cardId
-        self.showTriple = showTriple
-        self.baconTriple = baconTriple
-        self.placement = placement
-        self.baconCard = baconCard
+    func update(tooltip: OverlayTooltip) {
+        guard !(self.tooltip?.matches(tooltip) ?? false) else { return }
+        self.tooltip = tooltip
         if window != nil {
             CardHoverRegistry.shared.register(self)
         }
@@ -100,11 +121,21 @@ final class CardHoverNSView: NSView {
             CardHoverRegistry.shared.register(self)
         } else {
             CardHoverRegistry.shared.unregister(self)
-            // Hide immediately if this was the currently-shown card — the 150ms
-            // fallback timer in RootOverlayWindow is too slow for navigation
-            // (back to list) and doesn't fire at all when the match ends and
-            // the overlay window is torn down.
-            CardTooltipPanel.shared.hide(ifShowing: cardId)
+            // Hide immediately if this was the currently-shown tooltip — the
+            // 150ms fallback timer in RootOverlayWindow is too slow for
+            // navigation (back to list) and doesn't fire at all when the match
+            // ends and the overlay window is torn down.
+            switch tooltip {
+            case .card(let request):
+                CardTooltipPanel.shared.hide(ifShowing: request.cardId)
+            case .relatedCards(let counter):
+                // The counter went away while its grid was up (or on its way
+                // up) - RootOverlayWindow's own sweep would only notice on the
+                // next mouse move, and there may not be one.
+                CounterTooltipController.shared.hide(ifShowing: counter)
+            case nil:
+                break
+            }
         }
     }
 }
@@ -114,11 +145,7 @@ class CardHoverRegistry {
     static let shared = CardHoverRegistry()
 
     struct Entry {
-        let cardId: String
-        let showTriple: Bool
-        let baconTriple: Bool
-        let placement: CardTooltipPlacement
-        let baconCard: Bool?
+        let tooltip: OverlayTooltip
         weak var view: CardHoverNSView?
     }
 
@@ -126,10 +153,9 @@ class CardHoverRegistry {
 
     func register(_ view: CardHoverNSView) {
         entries.removeAll { $0.view == nil || $0.view === view }
-        guard !view.cardId.isEmpty else { return }
-        entries.append(Entry(cardId: view.cardId, showTriple: view.showTriple,
-                             baconTriple: view.baconTriple, placement: view.placement,
-                             baconCard: view.baconCard, view: view))
+        guard let tooltip = view.tooltip else { return }
+        if case .card(let request) = tooltip, request.cardId.isEmpty { return }
+        entries.append(Entry(tooltip: tooltip, view: view))
     }
 
     func unregister(_ view: CardHoverNSView) {
@@ -139,22 +165,37 @@ class CardHoverRegistry {
 
 @available(macOS 10.15, *)
 private struct CardHoverRepresentable: NSViewRepresentable {
-    let cardId: String
-    let showTriple: Bool
-    let baconTriple: Bool
-    let placement: CardTooltipPlacement
-    let baconCard: Bool?
+    let tooltip: OverlayTooltip
 
     func makeNSView(context: Context) -> CardHoverNSView {
         CardHoverNSView()
     }
 
     func updateNSView(_ nsView: CardHoverNSView, context: Context) {
-        nsView.update(cardId: cardId, showTriple: showTriple, baconTriple: baconTriple, placement: placement, baconCard: baconCard)
+        nsView.update(tooltip: tooltip)
     }
 }
 
 // MARK: - Tooltip panel
+
+// CardTooltip.xaml's HearthstoneTextBlock: the line CardTooltipViewModel.Text
+// carries, drawn over the top of the card image rather than beside it. It sits
+// inside the same Grid as the Image, HorizontalAlignment="Center"
+// VerticalAlignment="Top", so it overlaps the art and never moves the tooltip.
+@available(macOS 10.15, *)
+private struct CardTooltipCaption: View {
+    let text: String
+    let fontSize: CGFloat
+
+    var body: some View {
+        Text(verbatim: text)
+            .chunkFive(size: fontSize)
+            // HearthstoneTextBlock's defaults - white fill, black stroke, a
+            // 2pt pen centred on the outline so half of it sits outside.
+            .outlinedText(.white, outlineColor: .black, width: 1)
+            .fixedSize()
+    }
+}
 
 // Mirrors HDT's CardTooltip.xaml: base card shown immediately, golden card shown
 // 0.8s later ALONGSIDE the base (matching StoryboardShowDelayed BeginTime="0:0:0.8").
@@ -166,7 +207,15 @@ class CardTooltipPanel: NSPanel {
 
     private let primaryImageView = NSImageView()
     private let goldenImageView = NSImageView()
+    private let captionView = NSHostingView(rootView: CardTooltipCaption(text: "", fontSize: 16))
     private(set) var currentCardId: String?
+    // What the panel is currently *for*, as opposed to what it is currently rendering: set the
+    // moment a show is asked for, where currentCardId waits out the show delay. Hovers arrive
+    // faster than that delay - a cursor crossing a second tracker row on its way off the list
+    // leaves for 300ms with the first card still on screen and the second one only requested -
+    // and hide(ifShowing:) has to recognize that hover as the one that owns the panel, or the
+    // first card's tooltip is stranded there with nothing left to take it down.
+    private var requestedCardId: String?
     private(set) var currentSource: CardTooltipSource = .registry
     // Bumped by every show and every hide. Art loads are asynchronous and a
     // download can take seconds, so `currentCardId == cardId` alone is not
@@ -191,6 +240,11 @@ class CardTooltipPanel: NSPanel {
     // re-runs SetPlacement with this value, and CardTooltip reads it to decide
     // which way round the base and golden cards sit.
     private var effectivePlacement: CardTooltipPlacement = .right
+    // CardTooltipViewModel.Text for the hover currently being served.
+    private var currentText: String?
+    // ToolTipService.HorizontalOffset / VerticalOffset for the same hover.
+    private var horizontalOffset: CGFloat = 0
+    private var verticalOffset: CGFloat = 0
 
     private static let tooltipWidth: CGFloat = 220
     private static let tooltipHeight: CGFloat = tooltipWidth * 388.0 / 256.0
@@ -199,6 +253,9 @@ class CardTooltipPanel: NSPanel {
     // 0.8s matches CardTooltip.xaml StoryboardShowDelayed BeginTime="0:0:0.8"
     private static let goldenDelay: TimeInterval = 0.8
     private static let maxDuration: TimeInterval = 60
+    // CardTooltip.xaml's FontSize="16" on the caption. It is the size the text
+    // starts at, not the size it is drawn at - see captionFontSize(fitting:within:).
+    private static let captionBaseFontSize: CGFloat = 16
 
     private init() {
         super.init(
@@ -222,9 +279,17 @@ class CardTooltipPanel: NSPanel {
         goldenImageView.imageScaling = .scaleProportionallyUpOrDown
         goldenImageView.frame = .zero
 
+        captionView.frame = .zero
+        captionView.isHidden = true
+        // Nothing in this container uses auto layout, and NSHostingView is the
+        // one subview that would otherwise opt into it.
+        captionView.translatesAutoresizingMaskIntoConstraints = true
+
         let container = NSView(frame: NSRect(x: 0, y: 0, width: w, height: h))
         container.addSubview(goldenImageView)
         container.addSubview(primaryImageView)
+        // Last, so it draws over the art the way the XAML's Grid stacks it.
+        container.addSubview(captionView)
         contentView = container
 
         // Hide tooltip when Hearthstone loses focus (tab-away).
@@ -252,22 +317,36 @@ class CardTooltipPanel: NSPanel {
     ///   - baconCard: HDT's Card.BaconCard, which its URL formula picks bgs vs render from
     ///     outright. Pass it when the caller knows; leave it nil to try BG art and fall back, which
     ///     is what the guides need because their text can reference either kind.
-    func show(cardId: String, showTriple: Bool = true, baconTriple: Bool = false,
-              placement: CardTooltipPlacement = .right,
+    ///   - request: what the hovered element declares - the card, its caption, and the
+    ///     ToolTipService placement and offsets. See CardTooltipRequest.
+    ///   - showDelay: overrides HDT's InitialShowDelay. The deck trackers and the secret helper pass
+    ///     0 in this fork, so their rows read at a glance.
+    func show(_ request: CardTooltipRequest,
               anchor: NSRect? = nil, bounds: NSRect? = nil,
               source: CardTooltipSource = .registry, sourceView: NSView? = nil,
-              baconCard: Bool? = nil) {
+              baconCard: Bool? = nil, showDelay: TimeInterval? = nil) {
+        let cardId = request.cardId
+        let showTriple = request.showTriple
+        let baconTriple = request.baconTriple
+        let baconCard = baconCard ?? request.baconCard
         // Stored rather than passed down: the golden art resolves later and the
         // early-return path below re-positions against the same geometry.
-        preferredPlacement = placement
+        preferredPlacement = request.placement
+        horizontalOffset = request.horizontalOffset
+        verticalOffset = request.verticalOffset
+        currentText = request.text
         currentAnchor = anchor
         currentBounds = bounds
         currentSource = source
+        requestedCardId = cardId
         pendingHideWork?.cancel()
         pendingHideWork = nil
 
         if currentCardId == cardId && isVisible {
             position(panelWidth: frame.size.width)
+            // Same card, possibly a different line: a marker keeps its card id
+            // while the source it names changes underneath it.
+            layOutCaption(in: primaryImageView.frame)
             return
         }
 
@@ -286,7 +365,10 @@ class CardTooltipPanel: NSPanel {
             // still fire, leaving a ghost tooltip after the guide is gone.
             switch source {
             case .registry:
-                guard CardHoverRegistry.shared.entries.contains(where: { $0.view != nil && $0.cardId == cardId }) else { return }
+                guard CardHoverRegistry.shared.entries.contains(where: { entry in
+                    guard case .card(let request) = entry.tooltip else { return false }
+                    return entry.view != nil && request.cardId == cardId
+                }) else { return }
             case .trackingArea:
                 // The same check for a view the registry never held: losing its window is how a
                 // closed panel or a rebuilt row reports that it is gone.
@@ -308,7 +390,14 @@ class CardTooltipPanel: NSPanel {
             // The upshot is that HDT reserves the golden's space up front and
             // never moves the tooltip afterwards. This used to size to one card
             // and re-position 0.8s later when the golden arrived.
-            let goldenCardId = Self.goldenCardId(for: cardId, showTriple: showTriple)
+            let (primaryCardId, goldenCardId) = Self.tooltipCards(for: cardId, showTriple: showTriple)
+            // An ONLY_GOLD_IN_GUIDE minion put its golden version in the primary
+            // slot. That card is a Battlegrounds one by construction - it only has
+            // a triple at all - so its art comes off the bgs endpoint under the
+            // "_triple" name, exactly as scheduleGolden asks for it.
+            let onlyGold = primaryCardId != cardId
+            let primaryBaconTriple = onlyGold ? true : baconTriple
+            let primaryBaconCard = onlyGold ? true : baconCard
             let panelWidth = goldenCardId != nil ? w * 2 : w
 
             self.primaryImageView.image = nil
@@ -319,15 +408,17 @@ class CardTooltipPanel: NSPanel {
             let goldenFirst = self.effectivePlacement == .left
             if goldenCardId != nil {
                 // CardTooltip.xaml.cs: ImageDock = placement == Left ? Dock.Right
-                // : Dock.Left. Both images dock the same way with the primary
-                // first, which keeps the base card against the hovered element
-                // and puts the golden on the outside.
+                // : Dock.Left - so only Left reverses, and Top and Bottom dock
+                // the same way Right does. Both images dock the same way with
+                // the primary first, which keeps the base card against the
+                // hovered element and puts the golden on the outside.
                 self.primaryImageView.frame = NSRect(x: goldenFirst ? w : 0, y: 0, width: w, height: h)
                 self.goldenImageView.frame = NSRect(x: goldenFirst ? 0 : w, y: 0, width: w, height: h)
             } else {
                 self.primaryImageView.frame = NSRect(x: 0, y: 0, width: w, height: h)
                 self.goldenImageView.frame = .zero
             }
+            self.layOutCaption(in: self.primaryImageView.frame)
 
             func showPrimary(_ img: NSImage?) {
                 self.primaryImageView.image = img
@@ -348,7 +439,7 @@ class CardTooltipPanel: NSPanel {
             // - tries BG art and falls back to the standard render. That fallback costs a 404 per
             // attempt and failed downloads are not cached, so it is worth avoiding when possible.
             func loadStandardRender() {
-                ImageUtils.cardArt(for: cardId) { [weak self] img in
+                ImageUtils.cardArt(for: primaryCardId) { [weak self] img in
                     DispatchQueue.main.async {
                         guard let self = self, self.showGeneration == generation,
                               self.currentCardId == cardId else { return }
@@ -359,10 +450,10 @@ class CardTooltipPanel: NSPanel {
                 }
             }
 
-            if baconCard == false {
+            if primaryBaconCard == false {
                 loadStandardRender()
             } else {
-                ImageUtils.cardArtBG(for: cardId, baconTriple: baconTriple) { [weak self] img in
+                ImageUtils.cardArtBG(for: primaryCardId, baconTriple: primaryBaconTriple) { [weak self] img in
                     if let img = img {
                         DispatchQueue.main.async {
                             guard let self = self, self.showGeneration == generation,
@@ -376,7 +467,19 @@ class CardTooltipPanel: NSPanel {
             }
         }
         pendingShowWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + Self.showDelay, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + (showDelay ?? Self.showDelay), execute: work)
+    }
+
+    // Mirrors CardTooltipViewModel.UpdateTooltipCards: which card fills the card
+    // image the tooltip is butted against, and which - if any - goes in the
+    // golden slot beside it.
+    static func tooltipCards(for cardId: String, showTriple: Bool) -> (primary: String, golden: String?) {
+        let tripleCardId = goldenCardId(for: cardId, showTriple: showTriple)
+        // ONLY_GOLD_IN_GUIDE minions have no normal version, so skip straight to the golden one
+        if let tripleCardId, Cards.by(cardId: cardId)?.onlyGoldInGuide ?? false {
+            return (tripleCardId, nil)
+        }
+        return (cardId, tripleCardId)
     }
 
     // The triple upgrade of a Battlegrounds card, or nil if it has none (or the
@@ -434,6 +537,53 @@ class CardTooltipPanel: NSPanel {
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.goldenDelay, execute: work)
     }
 
+    // CardTooltip.xaml's caption, laid over the top of the primary card image.
+    //
+    // The tooltip never grows to fit it. The Grid that holds the caption and
+    // the image together is capped by MaxWidth - CardImageSize * 256, the card
+    // image's own width - and OutlinedTextBlock.MeasureOverride walks its font
+    // size down a point at a time until the line fits whatever width it is
+    // measured with. So a long card name is drawn smaller instead of pushing
+    // the panel wider, and every other caller's geometry is untouched.
+    private func layOutCaption(in slot: NSRect) {
+        guard let text = currentText, !text.isEmpty, slot.width > 0 else {
+            clearCaption()
+            return
+        }
+        let fontSize = Self.captionFontSize(fitting: text, within: slot.width)
+        let size = Self.captionSize(text, fontSize: fontSize)
+        captionView.rootView = CardTooltipCaption(text: text, fontSize: fontSize)
+        // OutlinedTextBlock.OnRender draws an unconstrained left-aligned line a
+        // twentieth of its own height below the block's top. Applied by lowering
+        // the frame rather than offsetting inside it, which comes to the same
+        // place without the hosting view having to be oversized.
+        let drop = size.height * 0.05
+        captionView.frame = NSRect(x: slot.midX - size.width / 2,
+                                   y: slot.maxY - size.height - drop,
+                                   width: size.width, height: size.height)
+        captionView.isHidden = false
+    }
+
+    private func clearCaption() {
+        captionView.isHidden = true
+        captionView.frame = .zero
+    }
+
+    // OutlinedTextBlock.MeasureOverride's shrink-to-fit: whole-point steps down
+    // from the declared size, stopping at the first one that fits.
+    private static func captionFontSize(fitting text: String, within width: CGFloat) -> CGFloat {
+        var size = captionBaseFontSize
+        while size > 1 && captionSize(text, fontSize: size).width > width {
+            size -= 1
+        }
+        return size
+    }
+
+    private static func captionSize(_ text: String, fontSize: CGFloat) -> CGSize {
+        let font = NSFont(name: "ChunkFive", size: fontSize) ?? NSFont.systemFont(ofSize: fontSize)
+        return (text as NSString).size(withAttributes: [.font: font])
+    }
+
     func hide() {
         showGeneration += 1
         pendingShowWork?.cancel()
@@ -445,12 +595,15 @@ class CardTooltipPanel: NSPanel {
         maxDurationTimer?.invalidate()
         maxDurationTimer = nil
         currentCardId = nil
+        requestedCardId = nil
+        currentText = nil
         let w = Self.tooltipWidth
         let h = Self.tooltipHeight
         primaryImageView.image = nil
         goldenImageView.image = nil
         goldenImageView.frame = .zero
         primaryImageView.frame = NSRect(x: 0, y: 0, width: w, height: h)
+        clearCaption()
         orderOut(nil)
     }
 
@@ -469,42 +622,38 @@ class CardTooltipPanel: NSPanel {
         }
     }
 
+    /// The hovered element reporting that the cursor has left it.
+    ///
+    /// Matched against `requestedCardId` rather than `currentCardId`: those differ for the whole
+    /// show delay, and a hover that ends inside it - the cursor passing over a row on its way out
+    /// of the list - has to take the panel down all the same, whatever is still rendered on it.
+    /// A hide for anything else is a stale element's, and leaves both the panel and whichever
+    /// hover does own it alone: cancelling that hover's pending show here would swallow its
+    /// tooltip outright, since the cursor sweeps that drive this only act on changes and so would
+    /// never ask for it again.
     func hide(ifShowing cardId: String) {
+        guard requestedCardId == cardId else { return }
+        requestedCardId = nil
         pendingShowWork?.cancel()
         pendingShowWork = nil
         pendingGoldenWork?.cancel()
         pendingGoldenWork = nil
 
-        guard currentCardId == cardId else { return }
-        showGeneration += 1
-
         let work = DispatchWorkItem { [weak self] in
             guard let self = self else { return }
             self.pendingHideWork = nil
-            guard self.currentCardId == cardId else { return }
-            self.currentCardId = nil
-            let w = Self.tooltipWidth
-            let h = Self.tooltipHeight
-            self.primaryImageView.image = nil
-            self.goldenImageView.image = nil
-            self.goldenImageView.frame = .zero
-            self.primaryImageView.frame = NSRect(x: 0, y: 0, width: w, height: h)
-            self.orderOut(nil)
+            // Only a newer show can have claimed the panel since, and that cancels this work
+            // item on its way past - so there is nothing left to check for here.
+            self.hide()
         }
         pendingHideWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.hideDelay, execute: work)
     }
 
-    // Ports OverlayWindow.Tooltips.cs SetTooltip's geometry. HDT anchors to the
-    // hovered element, not the cursor: the tooltip is butted straight against the
-    // element's left or right edge (HorizontalOffset defaults to 0, and none of
-    // the ported styles set one) and centred on it vertically
-    // (AlignmentMode.Center, the default). It never follows the mouse.
-    //
-    // Falls back to the cursor only when there is no anchor, which should not
-    // happen - every show goes through RootOverlayWindow's registry match.
+    // Puts the panel where placedFrame says it goes. Falls back to the cursor
+    // only when there is no anchor, which should not happen - every show goes
+    // through RootOverlayWindow's registry match or a caller that hands one over.
     private func position(panelWidth: CGFloat) {
-        let h = Self.tooltipHeight
         let bounds = currentBounds ?? NSScreen.main?.visibleFrame ?? .zero
 
         guard let anchor = currentAnchor else {
@@ -512,11 +661,46 @@ class CardTooltipPanel: NSPanel {
             return
         }
 
+        let placed = Self.placedFrame(panelWidth: panelWidth, preferred: preferredPlacement,
+                                      anchor: anchor, bounds: bounds,
+                                      horizontalOffset: horizontalOffset,
+                                      verticalOffset: verticalOffset)
+        effectivePlacement = placed.placement
+        setFrame(placed.frame, display: true)
+
+        // SetTooltip hands what the clamp moved to IScreenBoundaryAware, and
+        // CardTooltip nudges its card image back by up to
+        // (ActualHeight - PrimaryImage.ActualHeight) / 2. That space is zero
+        // here - the panel is exactly one card tall - so there is nothing to
+        // nudge and no counterpart to port.
+    }
+
+    // Ports OverlayWindow.Tooltips.cs SetTooltip's geometry. HDT anchors to the
+    // hovered element, not the cursor: the tooltip is butted against one of the
+    // element's four edges, offset away from it by ToolTipService's
+    // Horizontal/VerticalOffset, and centred on the other axis
+    // (AlignmentMode.Center, the default - nothing ported asks for Start or
+    // End). It never follows the mouse.
+    //
+    // SetTooltip works in the overlay window's own client space, which is
+    // Y-down from the top; this works in screen coordinates, which are Y-up. So
+    // HDT's Bottom is the smaller Y here and its Top the larger, and each of
+    // its comparisons against 0 and ActualHeight turns into the opposite bound.
+    //
+    // Pure, and returns the side it settled on as well as the frame, because a
+    // caller that has to sit beside the tooltip needs both - see projectedFrame.
+    static func placedFrame(panelWidth: CGFloat, preferred: CardTooltipPlacement,
+                            anchor: NSRect, bounds: NSRect,
+                            horizontalOffset: CGFloat, verticalOffset: CGFloat)
+        -> (frame: NSRect, placement: CardTooltipPlacement) {
+        let h = tooltipHeight
+
         // "Correct placement if tooltip would go outside of window, and it fit on
         // the other side" - note the second half: HDT only flips when the far
         // side actually has room, otherwise it stays put and lets the clamp
-        // below deal with it.
-        var placement = preferredPlacement
+        // below deal with it. The offsets are left out of these tests, as they
+        // are in SetTooltip.
+        var placement = preferred
         switch placement {
         case .left:
             if anchor.minX - panelWidth < bounds.minX && anchor.maxX + panelWidth <= bounds.maxX {
@@ -526,27 +710,68 @@ class CardTooltipPanel: NSPanel {
             if anchor.maxX + panelWidth > bounds.maxX && anchor.minX - panelWidth >= bounds.minX {
                 placement = placement.flipped
             }
+        case .top:
+            if anchor.maxY + h > bounds.maxY && anchor.minY - h >= bounds.minY {
+                placement = placement.flipped
+            }
+        case .bottom:
+            if anchor.minY - h < bounds.minY && anchor.maxY + h <= bounds.maxY {
+                placement = placement.flipped
+            }
         }
 
-        effectivePlacement = placement
-
-        var origin = NSPoint(
-            x: placement == .right ? anchor.maxX : anchor.minX - panelWidth,
-            // targetPos.Y + targetHeight / 2 - tooltipHeight / 2, in a Y-up space.
-            y: anchor.midY - h / 2
-        )
+        var origin: NSPoint
+        switch placement {
+        case .left:
+            origin = NSPoint(x: anchor.minX - panelWidth - horizontalOffset,
+                             y: anchor.midY - h / 2 - verticalOffset)
+        case .right:
+            origin = NSPoint(x: anchor.maxX + horizontalOffset,
+                             y: anchor.midY - h / 2 - verticalOffset)
+        case .top:
+            origin = NSPoint(x: anchor.midX - panelWidth / 2 + horizontalOffset,
+                             y: anchor.maxY + verticalOffset)
+        case .bottom:
+            origin = NSPoint(x: anchor.midX - panelWidth / 2 + horizontalOffset,
+                             y: anchor.minY - h - verticalOffset)
+        }
         origin.x = min(bounds.maxX - panelWidth, max(bounds.minX, origin.x))
         origin.y = min(bounds.maxY - h, max(bounds.minY, origin.y))
-        setFrame(NSRect(origin: origin, size: CGSize(width: panelWidth, height: h)), display: true)
+        return (NSRect(origin: origin, size: CGSize(width: panelWidth, height: h)), placement)
+    }
+
+    /// The frame `show` will give the panel for this request, worked out without
+    /// waiting for the show delay or for any art to arrive.
+    ///
+    /// HDT draws the related-cards grid inside the same CardTooltip control as
+    /// the card image, so it is laid out beside it for free. HSTracker's grid is
+    /// a panel of its own (RelatedCardsTooltipPanel), so the deck lists have to
+    /// butt it against this one by hand - and they cannot do that from the
+    /// hovered row alone, because the tooltip picks its own side and doubles in
+    /// width when the card has a golden companion.
+    static func projectedFrame(for request: CardTooltipRequest, anchor: NSRect, bounds: NSRect) -> NSRect {
+        let (_, goldenCardId) = tooltipCards(for: request.cardId, showTriple: request.showTriple)
+        let panelWidth = goldenCardId != nil ? tooltipWidth * 2 : tooltipWidth
+        return placedFrame(panelWidth: panelWidth, preferred: request.placement,
+                           anchor: anchor, bounds: bounds,
+                           horizontalOffset: request.horizontalOffset,
+                           verticalOffset: request.verticalOffset).frame
     }
 
     private func positionNearMouse(panelWidth: CGFloat, within bounds: NSRect) {
         let mousePoint = NSEvent.mouseLocation
         let h = Self.tooltipHeight
-        var origin = NSPoint(
-            x: preferredPlacement == .right ? mousePoint.x + 20 : mousePoint.x - panelWidth - 20,
-            y: mousePoint.y - h / 2
-        )
+        var origin: NSPoint
+        switch preferredPlacement {
+        case .left:
+            origin = NSPoint(x: mousePoint.x - panelWidth - 20, y: mousePoint.y - h / 2)
+        case .right:
+            origin = NSPoint(x: mousePoint.x + 20, y: mousePoint.y - h / 2)
+        case .top:
+            origin = NSPoint(x: mousePoint.x - panelWidth / 2, y: mousePoint.y + 20)
+        case .bottom:
+            origin = NSPoint(x: mousePoint.x - panelWidth / 2, y: mousePoint.y - h - 20)
+        }
         origin.x = min(bounds.maxX - panelWidth, max(bounds.minX, origin.x))
         origin.y = min(bounds.maxY - h, max(bounds.minY, origin.y))
         setFrame(NSRect(origin: origin, size: CGSize(width: panelWidth, height: h)), display: true)
@@ -606,20 +831,26 @@ extension View {
 
 @available(macOS 10.15, *)
 private struct CardImageTooltipModifier: ViewModifier {
-    let cardId: String?
-    let showTriple: Bool
-    let baconTriple: Bool
-    let placement: CardTooltipPlacement
-    let baconCard: Bool?
+    // nil for a nil card id, which is how a caller turns the tooltip off.
+    let request: CardTooltipRequest?
 
     func body(content: Content) -> some View {
-        if let cardId = cardId {
-            content.background(CardHoverRepresentable(cardId: cardId, showTriple: showTriple,
-                                                      baconTriple: baconTriple, placement: placement,
-                                                      baconCard: baconCard))
+        if let request = request {
+            content.background(CardHoverRepresentable(tooltip: .card(request)))
         } else {
             content
         }
+    }
+}
+
+// The counters' equivalent: HDT hangs a GridCardImages off the same
+// IsOverlayHoverVisible element a CardTooltip would hang off.
+@available(macOS 10.15, *)
+private struct RelatedCardsTooltipModifier: ViewModifier {
+    let counter: BaseCounter
+
+    func body(content: Content) -> some View {
+        content.background(CardHoverRepresentable(tooltip: .relatedCards(counter: counter)))
     }
 }
 
@@ -628,9 +859,22 @@ extension View {
     // baconCard: pass false for constructed cards (the action history), which have no
     // Battlegrounds art, to save the 404 the tooltip would otherwise try first on every hover.
     func cardImageTooltip(cardId: String?, showTriple: Bool = true, baconTriple: Bool = false,
-                          baconCard: Bool? = nil, placement: CardTooltipPlacement = .right) -> some View {
-        modifier(CardImageTooltipModifier(cardId: cardId, showTriple: showTriple,
-                                          baconTriple: baconTriple, placement: placement,
-                                          baconCard: baconCard))
+                          baconCard: Bool? = nil,
+                          text: String? = nil,
+                          placement: CardTooltipPlacement = .right,
+                          horizontalOffset: CGFloat = 0,
+                          verticalOffset: CGFloat = 0) -> some View {
+        modifier(CardImageTooltipModifier(
+            request: cardId.map {
+                CardTooltipRequest(cardId: $0, showTriple: showTriple, baconTriple: baconTriple,
+                                   text: text, placement: placement,
+                                   horizontalOffset: horizontalOffset,
+                                   verticalOffset: verticalOffset,
+                                   baconCard: baconCard)
+            }))
+    }
+
+    func relatedCardsTooltip(counter: BaseCounter) -> some View {
+        modifier(RelatedCardsTooltipModifier(counter: counter))
     }
 }

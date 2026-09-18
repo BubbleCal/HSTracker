@@ -63,15 +63,16 @@ final class CoreManager: NSObject {
         let logPath = MirrorHelper.getLogSessionDir()
         logReaderManager = LogReaderManager(logPath: logPath, coreManager: self)
         
-        game.windowManager.playerActiveEffectsOverlay.setActiveEffects(game.activeEffects)
-        game.windowManager.opponentActiveEffectsOverlay.setActiveEffects(game.activeEffects)
         if #available(macOS 10.15, *) {
             game.windowManager.rootOverlay?.viewModel.playerCounters.setCounters(game.counterManager)
             game.windowManager.rootOverlay?.viewModel.opponentCounters.setCounters(game.counterManager)
-        }
-        game.activeEffects.effectsChanged = {
-            self.game.windowManager.playerActiveEffectsOverlay.updateVisibleEffects()
-            self.game.windowManager.opponentActiveEffectsOverlay.updateVisibleEffects()
+            game.windowManager.rootOverlay?.viewModel.playerActiveEffects.setActiveEffects(game.activeEffects)
+            game.windowManager.rootOverlay?.viewModel.opponentActiveEffects.setActiveEffects(game.activeEffects)
+            game.activeEffects.effectsChanged = { [weak game] in
+                guard let viewModel = game?.windowManager.rootOverlay?.viewModel else { return }
+                viewModel.playerActiveEffects.updateVisibleEffects()
+                viewModel.opponentActiveEffects.updateVisibleEffects()
+            }
         }
         
         timer.eventHandler = {
@@ -349,13 +350,13 @@ final class CoreManager: NSObject {
         Watchers.stop()
         MirrorHelper.destroy()
         let wm = game.windowManager
-        wm.constructedMulliganGuide.viewModel.reset()
-        wm.constructedMulliganGuidePreLobby.viewModel.reset()
         if #available(macOS 10.15, *) {
             game.stopMulliganLivePolling()
             wm.rootOverlay?.viewModel.battlegroundsHeroPicking.reset()
             wm.rootOverlay?.viewModel.battlegroundsQuestPicking.reset()
             wm.rootOverlay?.viewModel.battlegroundsTrinketPicking.reset()
+            wm.rootOverlay?.viewModel.mulliganGuidePreLobby.viewModel.reset()
+            wm.rootOverlay?.viewModel.mulliganGuide.reset()
             wm.rootOverlay?.viewModel.mulliganGuideV2.reset()
             wm.rootOverlay?.viewModel.constructedMulliganPreLobbyWidget.reset()
             wm.rootOverlay?.viewModel.mulliganGuideTrialsExhausted.isShown = false
@@ -668,17 +669,17 @@ final class CoreManager: NSObject {
             playerClass = DefaultDecks.DungeonRun.getUldumHeroPlayerClass(playerClass: loadout.playerClass)
         } else if isPVPDR {
             if info.heroClass.intValue != 0 {
-                playerClass = CardClass.at(info.heroClass.intValue) ?? .invalid
+                playerClass = CardClass.allCases[safeIndex: info.heroClass.intValue] ?? .invalid
 
             } else if info.heroCardDbId.intValue != 0, let cc = tryGetHeroClass(dbfId: info.heroCardDbId.intValue) {
                 playerClass = cc
             } else if info.playerSelectedHeroDbId.intValue != 0, let cc = tryGetHeroClass(dbfId: info.playerSelectedHeroDbId.intValue) {
                 playerClass = cc
             } else if info.heroCardClass.intValue != 0 {
-                playerClass = CardClass.at(info.heroCardClass.intValue) ?? .invalid
+                playerClass = CardClass.allCases[safeIndex: info.heroCardClass.intValue] ?? .invalid
             }
         } else {
-            playerClass = CardClass.at(info.heroClass.intValue != 0 ? info.heroClass.intValue : info.heroCardClass.intValue) ?? .invalid
+            playerClass = CardClass.allCases[safeIndex: info.heroClass.intValue != 0 ? info.heroClass.intValue : info.heroCardClass.intValue] ?? .invalid
         }
         var deck = RealmHelper.getDecks()?.filter({ x in x.isActive && (!isPVPDR && x.isDungeon || isPVPDR && x.isDuels)
                                                     &&  x.playerClass == playerClass
@@ -816,7 +817,7 @@ final class CoreManager: NSObject {
         
         let ret = Deck()
         ret.name = deck.title
-        ret.heroId = (CardClass.at(deck.clazz.intValue) ?? .neutral).defaultHeroCardId
+        ret.heroId = (CardClass.allCases[safeIndex: deck.clazz.intValue] ?? .invalid).defaultHeroCardId
         
         let tmpCards = Dictionary(grouping: deck.cards, by: { x in x }).compactMap { (key: NSNumber, value: [NSNumber]) -> RealmCard? in
             guard let card = Cards.by(dbfId: key.intValue, collectible: false) else {
