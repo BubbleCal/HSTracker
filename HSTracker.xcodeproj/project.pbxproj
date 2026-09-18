@@ -318,6 +318,7 @@
 		437B5BC51CD2568E00DE0A41 /* TrackersPreferences.xib in Resources */ = {isa = PBXBuildFile; fileRef = 437B5BC31CD2568E00DE0A41 /* TrackersPreferences.xib */; };
 		437C58301EBC7E8400FFD888 /* NSImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 437C582F1EBC7E8400FFD888 /* NSImage.swift */; };
 		437E56F01DAAB81400FC0FC1 /* Array.swift in Sources */ = {isa = PBXBuildFile; fileRef = 437E56E91DAAB81400FC0FC1 /* Array.swift */; };
+		CC5E1A0B2C9B10FF00AA1001 /* CaseIterable.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC5E1A0A2C9B10FF00AA1001 /* CaseIterable.swift */; };
 		437E56F11DAAB81400FC0FC1 /* Color.swift in Sources */ = {isa = PBXBuildFile; fileRef = 437E56EA1DAAB81400FC0FC1 /* Color.swift */; };
 		437E56F61DAAB81400FC0FC1 /* String.swift in Sources */ = {isa = PBXBuildFile; fileRef = 437E56EF1DAAB81400FC0FC1 /* String.swift */; };
 		43873CC11CA6E6C200F01CB4 /* WindowMove.xib in Resources */ = {isa = PBXBuildFile; fileRef = 43873CC01CA6E6C200F01CB4 /* WindowMove.xib */; };
@@ -2204,6 +2205,7 @@
 		437B5BC41CD2568E00DE0A41 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = Base.lproj/TrackersPreferences.xib; sourceTree = "<group>"; };
 		437C582F1EBC7E8400FFD888 /* NSImage.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = NSImage.swift; sourceTree = "<group>"; };
 		437E56E91DAAB81400FC0FC1 /* Array.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Array.swift; sourceTree = "<group>"; };
+		CC5E1A0A2C9B10FF00AA1001 /* CaseIterable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaseIterable.swift; sourceTree = "<group>"; };
 		437E56EA1DAAB81400FC0FC1 /* Color.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Color.swift; sourceTree = "<group>"; };
 		437E56EF1DAAB81400FC0FC1 /* String.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = String.swift; sourceTree = "<group>"; };
 		43873CC01CA6E6C200F01CB4 /* WindowMove.xib */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.xib; path = WindowMove.xib; sourceTree = "<group>"; };
@@ -4330,6 +4332,7 @@
 			isa = PBXGroup;
 			children = (
 				437E56E91DAAB81400FC0FC1 /* Array.swift */,
+				CC5E1A0A2C9B10FF00AA1001 /* CaseIterable.swift */,
 				437E56EA1DAAB81400FC0FC1 /* Color.swift */,
 				438B04F81E6F55720071594B /* Date.swift */,
 				434EAC951DBCD3E8009C7636 /* NSAlert.swift */,
@@ -7922,6 +7925,7 @@
 				B82901F52F0ED4A0002F96FB /* VolumizerBuffCounter.swift in Sources */,
 				B8DC11F024E6AF280088A755 /* BobsBuddyInvoker.swift in Sources */,
 				437E56F01DAAB81400FC0FC1 /* Array.swift in Sources */,
+				CC5E1A0B2C9B10FF00AA1001 /* CaseIterable.swift in Sources */,
 				B825F7972EDF874300032E75 /* AllYouCanEat.swift in Sources */,
 				B846CC542E09DB5600552F9C /* CallToArms.swift in Sources */,
 				B8AF0C772B85625200B65F63 /* Region.swift in Sources */,

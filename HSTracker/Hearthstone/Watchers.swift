@@ -70,7 +70,7 @@ class Watchers {
             AppDelegate.instance().coreManager.game.queueEvents.handle(args)
         }
         sceneWatcher.change = { _, args in
-            SceneHandler.onSceneUpdate(prevMode: Mode.allCases[args.prevMode], mode: Mode.allCases[args.mode], sceneLoaded: args.sceneLoaded, transitioning: args.transitioning)
+            SceneHandler.onSceneUpdate(prevMode: Mode.from(sceneMode: args.prevMode), mode: Mode.from(sceneMode: args.mode), sceneLoaded: args.sceneLoaded, transitioning: args.transitioning)
         }
     }
     

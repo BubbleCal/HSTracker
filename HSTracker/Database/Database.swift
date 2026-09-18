@@ -9,6 +9,20 @@
 import Foundation
 
 class Database {
+    /// A card set can ship a rarity, class or race this build has no case for. Dropping the
+    /// tag leaves that one field at its default instead of trapping while the database
+    /// loads; logged once per tag and value so the enum can be filled in later.
+    private static let unknownTagValuesLock = UnfairLock()
+    private static var loggedUnknownTagValues = Set<String>()
+
+    static func logUnknownTagValue(tag: Int, value: Int) {
+        unknownTagValuesLock.around {
+            if loggedUnknownTagValues.insert("\(tag):\(value)").inserted {
+                logger.warning("CardDefs tag \(GameTag(rawValue: tag).map { "\($0)" } ?? "\(tag)") has value \(value), which this build has no case for; ignoring it")
+            }
+        }
+    }
+
     static let mechanics: [Int: String] = [
         GameTag.windfury.rawValue: "WINDFURY",
         GameTag.taunt.rawValue: "TAUNT",
@@ -188,7 +202,11 @@ class Database {
         case GameTag.overload.rawValue:
             currentCard?.overload = intValue
         case GameTag.rarity.rawValue:
-            currentCard?.rarity = Rarity.allCases[intValue]
+            if let rarity = Rarity.at(intValue) {
+                currentCard?.rarity = rarity
+            } else {
+                Database.logUnknownTagValue(tag: id, value: intValue)
+            }
         case GameTag.collectible.rawValue:
             currentCard?.collectible = intValue > 0
         case GameTag.tech_level.rawValue:
@@ -207,11 +225,18 @@ class Database {
         case GameTag.cardtype.rawValue:
             currentCard?.type = CardType(rawValue: intValue) ?? .invalid
         case GameTag.class.rawValue:
-            currentCard?.playerClass = CardClass.allCases[intValue]
+            if let playerClass = CardClass.at(intValue) {
+                currentCard?.playerClass = playerClass
+            } else {
+                Database.logUnknownTagValue(tag: id, value: intValue)
+            }
         case GameTag.cardrace.rawValue:
-            let race = Race.allCases[intValue]
-            currentCard?.race = race
-            currentCard?.races.append(Race.allCases[intValue])
+            if let race = Race.at(intValue) {
+                currentCard?.race = race
+                currentCard?.races.append(race)
+            } else {
+                Database.logUnknownTagValue(tag: id, value: intValue)
+            }
         case GameTag.multi_class_group.rawValue:
             currentCard?.multiClassGroup = MultiClassGroup(rawValue: intValue) ?? .invalid
         case GameTag.lettuce_cooldown_config.rawValue:

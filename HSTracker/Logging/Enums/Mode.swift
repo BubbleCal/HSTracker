@@ -39,3 +39,28 @@ enum Mode: String, CaseIterable {
     lettuce_pack_opening,
     lucky_draw
 }
+
+extension Mode {
+    /// The scene the game reports through SceneMgr, as seen by HearthMirror.
+    ///
+    /// The ids are this enum's own order, which mirrors HDT's Mode. Hearthstone adds
+    /// scenes when it patches, and reads taken while it is still starting up are not
+    /// necessarily a scene at all, so anything this build has no case for is reported as
+    /// `.invalid` - the scene HSTracker already shows nothing for - rather than trapping
+    /// on the watcher's queue. Each unknown id is logged once, so a new scene can be
+    /// added here from a user's log.
+    static func from(sceneMode index: Int) -> Mode {
+        if let mode = Mode.at(index) {
+            return mode
+        }
+        unknownSceneModesLock.around {
+            if loggedUnknownSceneModes.insert(index).inserted {
+                logger.warning("Hearthstone reported scene mode \(index), which this build has no Mode for; treating it as invalid")
+            }
+        }
+        return .invalid
+    }
+
+    private static let unknownSceneModesLock = UnfairLock()
+    private static var loggedUnknownSceneModes = Set<Int>()
+}
