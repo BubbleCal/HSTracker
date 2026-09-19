@@ -31,6 +31,9 @@ struct CardTileView: View {
     /// Non-zero when this row's count just changed, and distinct from the last
     /// time it did - which is what makes the flash re-trigger rather than stay put.
     var flashToken: Int = 0
+    /// The synergy highlight worked out for this row by its list, which wins over
+    /// the card's own `highlightColor` - see `CardTileListView.highlight`.
+    var highlight: HighlightColor?
 
     /// The shared tile cache, observed so a row redraws when its art arrives.
     @ObservedObject private var artCache = CardTileArtCache.shared
@@ -373,7 +376,7 @@ struct CardTileView: View {
     }
 
     private var highlightFilename: String? {
-        switch card?.highlightColor {
+        switch highlight ?? card?.highlightColor {
         case .green: return "highlight_green.png"
         case .teal: return "highlight_teal.png"
         case .orange: return "highlight_orange.png"

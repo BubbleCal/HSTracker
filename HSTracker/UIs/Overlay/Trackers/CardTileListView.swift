@@ -30,12 +30,20 @@ struct CardTileListView: View {
     var version: Int = 0
     /// Which hover these rows raise - see `TrackerRowHoverKind`.
     var hoverKind: TrackerRowHoverKind = .none
+    /// The player deck's synergy highlight while a card is hovered - in hand, on
+    /// a Discover choice or in this list - `TrackerCardHoverHandler.deckHighlight`,
+    /// which the AppKit `AnimatedCardList.shouldHighlightCard` used to apply. Each
+    /// row still in the deck is asked against the rest of the deck; a row with
+    /// none left, or a jousted one, is never lit.
+    var highlight: ((Card, [Card]) -> HighlightColor)?
 
     var body: some View {
-        VStack(spacing: 0) {
+        let inDeck = cards.filter { $0.count > 0 }
+        return VStack(spacing: 0) {
             ForEach(rows, id: \.key) { row in
                 CardTileView(card: row.card, playerType: playerType, rowHeight: cardHeight,
-                             flashToken: flashing.contains(row.key) ? version : 0)
+                             flashToken: flashing.contains(row.key) ? version : 0,
+                             highlight: highlightColor(for: row.card, inDeck: inDeck))
                     .background(
                         GeometryReader { proxy in
                             Color.clear.preference(
@@ -52,6 +60,13 @@ struct CardTileListView: View {
         // The 10.15 form: there is no .animation(_:value:) before macOS 11, and
         // every change this list sees is a card arriving or leaving.
         .animation(reset ? nil : .easeInOut(duration: 0.5))
+    }
+
+    func highlightColor(for card: Card, inDeck: [Card]) -> HighlightColor? {
+        guard let highlight else {
+            return nil
+        }
+        return card.count <= 0 || card.jousted ? HighlightColor.none : highlight(card, inDeck)
     }
 
     private var rows: [Row] {

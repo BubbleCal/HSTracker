@@ -281,10 +281,13 @@ struct TrackerPanelView: View {
     }
 
     private func list(_ content: TrackerCardListContent, layout: TrackerPanelLayout) -> some View {
+        // Only the deck list itself lights up, as the AppKit tracker's cardsView
+        // did - never the top/bottom lenses or the opponent's list.
         CardTileListView(cards: content.cards, playerType: viewModel.playerType,
                          cardHeight: layout.cardHeight, reset: content.reset,
                          flashing: content.flashing, version: content.version,
-                         hoverKind: hoverKind)
+                         hoverKind: hoverKind,
+                         highlight: viewModel.playerType == .player ? hoverHandler.deckHighlight : nil)
     }
 
     private func lens(_ content: TrackerCardListContent, label: String, layout: TrackerPanelLayout,

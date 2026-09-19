@@ -350,6 +350,39 @@ class TrackerPanelLayoutTests: HSTrackerTests {
         return collected.rows
     }
 
+    // MARK: - Synergy highlight
+
+    /// Hovering a card in hand (or a Discover choice, or a deck row) lights up the deck rows that
+    /// go with it. The SwiftUI list dropped that when it replaced AnimatedCardList: the hover
+    /// handler still published the highlight, and nothing drew it.
+    func testDeckRowsTakeTheHoveredCardsHighlight() {
+        let deck = cards(3)
+        deck[1].count = 0
+        let jousted = Card()
+        jousted.id = "TEST_JOUSTED"
+        jousted.count = 1
+        jousted.jousted = true
+        let rows = deck + [jousted]
+
+        var askedWith = [[String]]()
+        let list = CardTileListView(cards: rows, playerType: .player, cardHeight: 34,
+                                    highlight: { card, inDeck in
+                                        askedWith.append(inDeck.map { $0.id })
+                                        return card.id == "TEST_2" ? .green : .none
+                                    })
+        let inDeck = rows.filter { $0.count > 0 }
+        XCTAssertEqual(list.highlightColor(for: deck[2], inDeck: inDeck), .green)
+        XCTAssertEqual(list.highlightColor(for: deck[0], inDeck: inDeck), HighlightColor.none)
+        XCTAssertEqual(list.highlightColor(for: deck[1], inDeck: inDeck), HighlightColor.none,
+                       "a card with none left in the deck is never lit")
+        XCTAssertEqual(list.highlightColor(for: jousted, inDeck: inDeck), HighlightColor.none)
+        XCTAssertEqual(askedWith.first, ["TEST_0", "TEST_2", "TEST_JOUSTED"])
+
+        // Nothing hovered: no override, the card's own colour stands
+        let idle = CardTileListView(cards: rows, playerType: .player, cardHeight: 34)
+        XCTAssertNil(idle.highlightColor(for: deck[2], inDeck: inDeck))
+    }
+
     private final class RowCollector {
         var rows: [TrackerRowHover] = []
     }
