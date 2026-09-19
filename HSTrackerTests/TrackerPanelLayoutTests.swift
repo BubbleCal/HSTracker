@@ -220,6 +220,37 @@ class TrackerPanelLayoutTests: HSTrackerTests {
         XCTAssertLessThanOrEqual(content, layout.boxHeight + 0.001)
     }
 
+    /// The frames shrink with the rows. They used to stay at their full 40pt while
+    /// only the rows gave way, so a long deck drew its counters twice the height of
+    /// a card row - and, since a row narrows as it shrinks, far wider too.
+    func testFramesShrinkWithTheCardRows() {
+        let model = playerModel(deck: 30, top: 2, height: 50)
+        model.showGraveyard = true
+        model.matchupMessage = "VS Mage: 1-0 (100%)"
+        let layout = TrackerPanelLayout(viewModel: model, canvasHeight: 1080)
+
+        XCTAssertLessThan(layout.fit, 1)
+        XCTAssertEqual(layout.cardHeight, CGFloat(kRowHeight) * layout.fit, accuracy: 0.001)
+        XCTAssertEqual(layout.smallFrameHeight, 40 * layout.fit, accuracy: 0.001)
+        XCTAssertEqual(layout.bigFrameHeight, 71 * layout.fit, accuracy: 0.001)
+        XCTAssertEqual(layout.contentWidth, layout.width * layout.fit, accuracy: 0.001)
+        // A frame keeps its authored proportion to a row
+        XCTAssertEqual(layout.smallFrameHeight / layout.cardHeight, 40 / CGFloat(kRowHeight), accuracy: 0.001)
+        // ... and the whole stack, frames included, just fills the box
+        let content = layout.sections.reduce(0) { $0 + $1.height }
+        XCTAssertEqual(content, layout.boxHeight, accuracy: 0.01)
+    }
+
+    /// With room to spare nothing is shrunk.
+    func testNothingShrinksWhenTheStackFits() {
+        let model = playerModel(deck: 5, height: 100)
+        let layout = TrackerPanelLayout(viewModel: model, canvasHeight: 2000)
+
+        XCTAssertEqual(layout.fit, 1)
+        XCTAssertEqual(layout.smallFrameHeight, 40)
+        XCTAssertEqual(layout.contentWidth, layout.width)
+    }
+
     /// ... and never past the card size the user picked, however much room there is.
     func testCardRowsNeverGrowPastTheChosenCardSize() {
         Settings.cardSize = .small

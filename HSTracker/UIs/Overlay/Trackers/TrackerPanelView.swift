@@ -79,9 +79,9 @@ struct TrackerPanelView: View {
         if viewModel.graveyardDetails,
            let counter = layout.offset(of: .deckPanel(.graveyard), centered: viewModel.isCentered) {
             regions.append(HoverRegion(id: viewModel.graveyardHoverRegionID,
-                                       rect: CGRect(x: originX,
+                                       rect: CGRect(x: originX + (layout.width - layout.contentWidth) / 2 * scale,
                                                     y: originY + counter.y * scale,
-                                                    width: width,
+                                                    width: layout.contentWidth * scale,
                                                     height: counter.height * scale)))
         }
         return regions
@@ -208,7 +208,7 @@ struct TrackerPanelView: View {
                 Spacer(minLength: 0)
                 CardTileView(card: heroCard, playerType: .hero,
                              playerName: viewModel.playerName,
-                             rowHeight: CGFloat(Settings.cardSize.rowHeight))
+                             rowHeight: CGFloat(Settings.cardSize.rowHeight) * layout.fit)
             }
         case .deckPanel(.wins):
             VStack(spacing: 0) {
@@ -231,7 +231,8 @@ struct TrackerPanelView: View {
                                   cardHeight: layout.cardHeight,
                                   frameHeight: layout.smallFrameHeight,
                                   reset: viewModel.sideboardsReset,
-                                  hoverKind: hoverKind)
+                                  hoverKind: hoverKind,
+                                  scale: layout.fit)
         case .deckPanel(.cardCounter):
             TrackerCardCounterView(handCount: viewModel.handCount,
                                    deckCount: viewModel.deckCount,
@@ -296,7 +297,7 @@ struct TrackerPanelView: View {
                             playerType: viewModel.playerType, cardHeight: layout.cardHeight,
                             frameHeight: layout.smallFrameHeight, reset: content.reset,
                             flashing: content.flashing, version: content.version,
-                            hoverKind: hoverKind)
+                            hoverKind: hoverKind, scale: layout.fit)
     }
 }
 
@@ -330,6 +331,14 @@ struct TrackerPanelLayout {
     let bigFrameHeight: CGFloat
     let boxHeight: CGFloat
     let sections: [Section]
+    /// How far the whole stack is shrunk to fit its box, 1 when it fits at its
+    /// authored size. The frames, the lens headers and the card rows all shrink
+    /// by it together - the rows used to shrink alone while every frame stayed at
+    /// its full 217x40, so a long deck drew its counters twice as tall and far
+    /// wider than the cards they sat between.
+    let fit: CGFloat
+    /// The width everything in the stack is drawn at, centred in `width`.
+    var contentWidth: CGFloat { width * fit }
 
     /// Where a section sits inside the box, in the stack's own units - the sum of
     /// what precedes it, plus the inset a centred stack starts at.
@@ -364,8 +373,8 @@ struct TrackerPanelLayout {
         case .huge: ratio = CGFloat(kRowHeight / kHighRowHeight); baseCardHeight = CGFloat(kHighRowHeight)
         case .big: ratio = 1.0; baseCardHeight = CGFloat(kRowHeight)
         }
-        smallFrameHeight = (40 / ratio).rounded()
-        bigFrameHeight = (71 / ratio).rounded()
+        let smallFrameHeight = (40 / ratio).rounded()
+        let bigFrameHeight = (71 / ratio).rounded()
 
         // PlayerStackHeight: the box the stack has to fit into, in its own units.
         let scale = max(CGFloat(viewModel.scaling) / 100.0, 0.01)
@@ -433,13 +442,14 @@ struct TrackerPanelLayout {
 
         let fixedHeight = kinds.reduce(0) { $0 + $1.fixed }
         let totalCards = kinds.reduce(0) { $0 + $1.cards }
-        if totalCards > 0 {
-            cardHeight = min(baseCardHeight, max((boxHeight - fixedHeight) / CGFloat(totalCards), 0))
-        } else {
-            cardHeight = baseCardHeight
-        }
+        let natural = fixedHeight + CGFloat(totalCards) * baseCardHeight
+        let fit = natural > boxHeight && natural > 0 ? max(boxHeight / natural, 0) : 1
+        self.fit = fit
+        self.smallFrameHeight = smallFrameHeight * fit
+        self.bigFrameHeight = bigFrameHeight * fit
+        cardHeight = baseCardHeight * fit
 
         let rowHeight = cardHeight
-        sections = kinds.map { Section(kind: $0.0, height: $0.fixed + CGFloat($0.cards) * rowHeight) }
+        sections = kinds.map { Section(kind: $0.0, height: $0.fixed * fit + CGFloat($0.cards) * rowHeight) }
     }
 }

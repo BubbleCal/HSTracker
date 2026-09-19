@@ -33,6 +33,9 @@ struct TrackerDeckLensView: View {
     var flashing: Set<RowKey> = []
     var version = 0
     var hoverKind: TrackerRowHoverKind = .none
+    /// `TrackerPanelLayout.fit`: the header's text, icon and padding shrink with
+    /// the rest of the stack.
+    var scale: CGFloat = 1
 
     /// `HSReplayNetPremiumGold` from HDT's App.xaml.
     static let premiumGold = Color(red: 1, green: 0.690, blue: 0.051)
@@ -46,22 +49,22 @@ struct TrackerDeckLensView: View {
                              reset: reset, flashing: flashing, version: version,
                              hoverKind: hoverKind)
             // DeckLens leaves five points below the list, inside the box.
-            Spacer(minLength: 5).frame(height: 5)
+            Spacer(minLength: 0).frame(height: 5 * scale)
         }
-        .frame(width: SizeHelper.trackerWidth)
+        .frame(width: SizeHelper.trackerWidth * scale)
         .background(Self.background)
     }
 
     private var header: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: 5 * scale) {
             iconView
             Text(verbatim: label)
-                .font(.system(size: 13))
+                .font(.system(size: 13 * scale))
                 .foregroundColor(isPremium ? Self.premiumGold : .white)
                 .lineLimit(1)
             Spacer(minLength: 0)
         }
-        .padding(.leading, 5)
+        .padding(.leading, 5 * scale)
         .frame(height: frameHeight)
     }
 
@@ -75,7 +78,7 @@ struct TrackerDeckLensView: View {
                 .resizable()
                 .renderingMode(.template)
                 .foregroundColor(isPremium ? Self.premiumGold : .white)
-                .frame(width: 17, height: 17)
+                .frame(width: 17 * scale, height: 17 * scale)
         case .arenasmith:
             // The mark is 74x42 and DeckLens.xaml draws it in a 19x12 box; WPF's
             // Image stretches Uniform, so fit rather than distort.
@@ -84,7 +87,7 @@ struct TrackerDeckLensView: View {
                 .renderingMode(.template)
                 .aspectRatio(contentMode: .fit)
                 .foregroundColor(isPremium ? Self.premiumGold : .white)
-                .frame(width: 19, height: 12)
+                .frame(width: 19 * scale, height: 12 * scale)
         }
     }
 }
@@ -100,6 +103,8 @@ struct TrackerSideboardsView: View {
     let frameHeight: CGFloat
     var reset = false
     var hoverKind: TrackerRowHoverKind = .none
+    /// `TrackerPanelLayout.fit`, as for `TrackerDeckLensView`.
+    var scale: CGFloat = 1
 
     var body: some View {
         VStack(spacing: 0) {
@@ -107,7 +112,7 @@ struct TrackerSideboardsView: View {
                 box(sideboard)
             }
         }
-        .frame(width: SizeHelper.trackerWidth)
+        .frame(width: SizeHelper.trackerWidth * scale)
     }
 
     /// `DeckSideboards` draws King of the Underbelly's box above E.T.C.'s.
@@ -121,12 +126,12 @@ struct TrackerSideboardsView: View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
                 Text(verbatim: title(for: sideboard))
-                    .font(.system(size: 13))
+                    .font(.system(size: 13 * scale))
                     .foregroundColor(.white)
                     .lineLimit(1)
                 Spacer(minLength: 0)
             }
-            .padding(.leading, 5)
+            .padding(.leading, 5 * scale)
             .frame(height: frameHeight)
             CardTileListView(cards: sideboard.cards, playerType: playerType,
                              cardHeight: cardHeight, reset: reset, hoverKind: hoverKind)
