@@ -1544,6 +1544,7 @@
 		B8DB12BB2EBAE85E004268FA /* Fatebreaker.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8DB12BA2EBAE85E004268FA /* Fatebreaker.swift */; };
 		B8DB12BD2EBAE8CF004268FA /* RuinousVelocidrake.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8DB12BC2EBAE8CF004268FA /* RuinousVelocidrake.swift */; };
 		B8DB12BF2EBAE910004268FA /* TinyRafaam.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8DB12BE2EBAE910004268FA /* TinyRafaam.swift */; };
+		A542EFEAB1D58BE6C831CB61 /* TimethiefRafaam.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D8BFA7665954A9710F66A81 /* TimethiefRafaam.swift */; };
 		B8DB12C12EBAEAD5004268FA /* GladiatorialCombat.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8DB12C02EBAEAD5004268FA /* GladiatorialCombat.swift */; };
 		B8DB12C32EBAEB38004268FA /* PrecursoryStrike.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8DB12C22EBAEB38004268FA /* PrecursoryStrike.swift */; };
 		B8DB12C52EBAEB6F004268FA /* UnleashTheCrocolisks.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8DB12C42EBAEB6F004268FA /* UnleashTheCrocolisks.swift */; };
@@ -3450,6 +3451,7 @@
 		B8DB12BA2EBAE85E004268FA /* Fatebreaker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Fatebreaker.swift; sourceTree = "<group>"; };
 		B8DB12BC2EBAE8CF004268FA /* RuinousVelocidrake.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuinousVelocidrake.swift; sourceTree = "<group>"; };
 		B8DB12BE2EBAE910004268FA /* TinyRafaam.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TinyRafaam.swift; sourceTree = "<group>"; };
+		2D8BFA7665954A9710F66A81 /* TimethiefRafaam.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimethiefRafaam.swift; sourceTree = "<group>"; };
 		B8DB12C02EBAEAD5004268FA /* GladiatorialCombat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GladiatorialCombat.swift; sourceTree = "<group>"; };
 		B8DB12C22EBAEB38004268FA /* PrecursoryStrike.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrecursoryStrike.swift; sourceTree = "<group>"; };
 		B8DB12C42EBAEB6F004268FA /* UnleashTheCrocolisks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnleashTheCrocolisks.swift; sourceTree = "<group>"; };
@@ -5348,6 +5350,7 @@
 				B8E1E6012D0CA25700383975 /* TamsinsPhylactery.swift */,
 				B837D7DB2EAEA5810070DB4B /* TamsinRoame.swift */,
 				B8DB12BE2EBAE910004268FA /* TinyRafaam.swift */,
+				2D8BFA7665954A9710F66A81 /* TimethiefRafaam.swift */,
 				B846CC6F2E0A05F600552F9C /* WallowTheWretched.swift */,
 				63456318B484EDA65F194AE7 /* AbductionRay.swift */,
 				C63553DE9B6D7DF03098A42A /* AvantGardening.swift */,
@@ -7431,6 +7434,7 @@
 				B8621F1C2746AF5E004DD0E9 /* HSReplayNetHelper.swift in Sources */,
 				B87216922F16ECBE00E848BA /* OverloadThisGameCounter.swift in Sources */,
 				B8DB12BF2EBAE910004268FA /* TinyRafaam.swift in Sources */,
+				A542EFEAB1D58BE6C831CB61 /* TimethiefRafaam.swift in Sources */,
 				439C7ECB1C777F8900D29859 /* LogReaderManager.swift in Sources */,
 				B8815BF0302162F50016D77A /* ICopiesDeathrattlesProxy.swift in Sources */,
 				4B8A44DBE702C0F6C3BB0CA6 /* IDeathrattleProxy.swift in Sources */,

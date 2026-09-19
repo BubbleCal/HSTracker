@@ -414,6 +414,32 @@ class TrackerPanelLayoutTests: HSTrackerTests {
         XCTAssertNil(idle.highlightColor(for: deck[2], inDeck: inDeck))
     }
 
+    /// Hovering Timethief Rafaam lights up the Rafaams it still needs played - HDT has no highlight
+    /// for it, so the deck stayed dark while every other Rafaam card lit its siblings.
+    func testTimethiefRafaamLightsUpTheOtherRafaams() {
+        if ReflectionHelper.getHighlightClasses().isEmpty {
+            ReflectionHelper.initialize()
+        }
+        XCTAssertTrue(ReflectionHelper.getHighlightClasses().contains { $0 == TimethiefRafaam.self },
+                      "the highlight is found at run time, like every other card's")
+
+        let highlight = TimethiefRafaam()
+        XCTAssertEqual(highlight.getCardId(), CardIds.Collectible.Warlock.TimethiefRafaam)
+        func card(_ id: String) -> Card {
+            let card = Card()
+            card.id = id
+            card.count = 1
+            return card
+        }
+        XCTAssertEqual(TimethiefRafaam.otherRafaams.count, 9)
+        for id in TimethiefRafaam.otherRafaams {
+            XCTAssertNotEqual(highlight.shouldHighlight(card: card(id), deck: []), HighlightColor.none, id)
+        }
+        XCTAssertEqual(highlight.shouldHighlight(card: card(CardIds.Collectible.Warlock.TimethiefRafaam), deck: []),
+                       HighlightColor.none, "it does not light itself")
+        XCTAssertEqual(highlight.shouldHighlight(card: card("CS2_062"), deck: []), HighlightColor.none)
+    }
+
     private final class RowCollector {
         var rows: [TrackerRowHover] = []
     }
