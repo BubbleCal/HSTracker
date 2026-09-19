@@ -69,6 +69,25 @@ struct MirrorHelper {
         return nil
     }
     
+    /// Runs `body` against the mirror and returns nil, instead of letting HSTracker be taken down,
+    /// when HearthMirror faults on memory it did not expect - see MirrorFaultGuard.h. Call it on
+    /// accessQueue. The mirror is fetched, and initialized if need be, outside the guarded part, so
+    /// only HearthMirror's own frames are ever abandoned.
+    private static func guarded<T>(_ call: String, _ body: (HearthMirror) -> T?) -> T? {
+        guard let mirror else {
+            return nil
+        }
+        var result: T?
+        let signal = HSTRunGuardingMemoryFaults {
+            result = body(mirror)
+        }
+        guard signal == 0 else {
+            logger.error("HearthMirror \(call) faulted with signal \(signal) reading Hearthstone's memory; treating it as no data")
+            return nil
+        }
+        return result
+    }
+
     /**
      * De-initializes the current mirror object, thus any further mirror calls will fail until the next initMirror
      */
@@ -178,7 +197,10 @@ struct MirrorHelper {
     static func getMatchInfo() -> MirrorMatchInfo? {
         var result: MirrorMatchInfo?
         MirrorHelper.accessQueue.sync {
-            result = mirror?.getMatchInfo()
+            // Reads every player's battle tag, and HearthMirror does not check the tag for null:
+            // a game account Hearthstone has not filled one in for faulted inside it and took
+            // HSTracker down on every game start (2026-09-19, Hearthstone 36.6.251952).
+            result = guarded("getMatchInfo") { $0.getMatchInfo() }
         }
         return result
     }

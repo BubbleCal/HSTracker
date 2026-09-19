@@ -327,6 +327,7 @@
 		4390FBBA1DAA72E700AE71BB /* Version.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4390FBB91DAA72E700AE71BB /* Version.swift */; };
 		439212151DEF5A5E0017AAE5 /* MultiClassGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 439212141DEF5A5E0017AAE5 /* MultiClassGroup.swift */; };
 		439BD8C91EBCD40200959F69 /* EnumTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 439BD8C81EBCD40200959F69 /* EnumTests.swift */; };
+		451B96F1A437F92708FD9F8C /* MirrorFaultGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 542163AC91BB644CA18DF355 /* MirrorFaultGuardTests.swift */; };
 		B8AA00022C00000100000002 /* OfficialBuildTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8AA00012C00000100000001 /* OfficialBuildTests.swift */; };
 		439C7E4C1C7772C000D29859 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 439C7E4B1C7772C000D29859 /* AppDelegate.swift */; };
 		439C7E851C777CFC00D29859 /* Deck.swift in Sources */ = {isa = PBXBuildFile; fileRef = 439C7E7D1C777CFC00D29859 /* Deck.swift */; };
@@ -1653,6 +1654,7 @@
 		BC69E89F6497109882E1D581 /* Pilfer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64766C6620143BC34DCA04BB /* Pilfer.swift */; };
 		BC78DD751E806B6F00DBA7C9 /* Algorithm.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC78DD741E806B6F00DBA7C9 /* Algorithm.swift */; };
 		BCA70F2A1E2C16DD00038A6C /* FileUtils.m in Sources */ = {isa = PBXBuildFile; fileRef = BCA70F291E2C16DD00038A6C /* FileUtils.m */; };
+		01D8FC70C03144D8B1EDB4CB /* MirrorFaultGuard.m in Sources */ = {isa = PBXBuildFile; fileRef = A52BF524AC5AAD928721B6E4 /* MirrorFaultGuard.m */; };
 		BCCCDB9E1EA54FF800C328D0 /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCCCDB9D1EA54FF800C328D0 /* NotificationManager.swift */; };
 		BD15E964884174104CD5307B /* Devolve.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77E8DEA075619457444DA642 /* Devolve.swift */; };
 		BD4C6A482745DFF813D7172D /* JadeGuardians.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C8D68FAB33461B137E85D36 /* JadeGuardians.swift */; };
@@ -2214,6 +2216,7 @@
 		439212141DEF5A5E0017AAE5 /* MultiClassGroup.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MultiClassGroup.swift; sourceTree = "<group>"; };
 		439B1DF51E86CC280098BBBC /* DatabaseTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DatabaseTests.swift; sourceTree = "<group>"; };
 		439BD8C81EBCD40200959F69 /* EnumTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EnumTests.swift; sourceTree = "<group>"; };
+		542163AC91BB644CA18DF355 /* MirrorFaultGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MirrorFaultGuardTests.swift; sourceTree = "<group>"; };
 		B8AA00012C00000100000001 /* OfficialBuildTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OfficialBuildTests.swift; sourceTree = "<group>"; };
 		439C7E481C7772C000D29859 /* HSTracker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HSTracker.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		439C7E4B1C7772C000D29859 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = HSTracker/AppDelegate.swift; sourceTree = "<group>"; };
@@ -3559,6 +3562,8 @@
 		BC8B1D91114052BF4AA39F19 /* FlameBehemoth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlameBehemoth.swift; sourceTree = "<group>"; };
 		BCA70F281E2C16DD00038A6C /* FileUtils.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = FileUtils.h; sourceTree = "<group>"; };
 		BCA70F291E2C16DD00038A6C /* FileUtils.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = FileUtils.m; sourceTree = "<group>"; };
+		DA2BC5DA94753DC6433F59D6 /* MirrorFaultGuard.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MirrorFaultGuard.h; sourceTree = "<group>"; };
+		A52BF524AC5AAD928721B6E4 /* MirrorFaultGuard.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MirrorFaultGuard.m; sourceTree = "<group>"; };
 		BCCCDB9D1EA54FF800C328D0 /* NotificationManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = NotificationManager.swift; sourceTree = "<group>"; };
 		BD015AEDF627E82A3264ECBF /* VanessaTheRingleader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VanessaTheRingleader.swift; sourceTree = "<group>"; };
 		BD498EA4F1E6AB61F7C66B19 /* DragonqueenAlexstrasza.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DragonqueenAlexstrasza.swift; sourceTree = "<group>"; };
@@ -3869,6 +3874,8 @@
 				4323C5F61E1BE28800C97896 /* BrawlInfo.swift */,
 				4323C5E71E16963200C97896 /* MatchInfo.swift */,
 				1CF204F81E83B74300037A42 /* MirrorHelper.swift */,
+				DA2BC5DA94753DC6433F59D6 /* MirrorFaultGuard.h */,
+				A52BF524AC5AAD928721B6E4 /* MirrorFaultGuard.m */,
 			);
 			path = HearthMirror;
 			sourceTree = "<group>";
@@ -4153,6 +4160,7 @@
 				1CCB4AE71E8A41E3003FD1AD /* PowerParserTests.swift */,
 				43640BE21E8A328700FAFD07 /* SecretTests.swift */,
 				439BD8C81EBCD40200959F69 /* EnumTests.swift */,
+				542163AC91BB644CA18DF355 /* MirrorFaultGuardTests.swift */,
 				B8AA00012C00000100000001 /* OfficialBuildTests.swift */,
 				1C561C981EC1EC6600007A46 /* ReplayUploadTests.swift */,
 			);
@@ -8602,6 +8610,7 @@
 				B846CCAE2E1C3B1600552F9C /* PrimalfinChallengerEnchantment.swift in Sources */,
 				B89865782D91AEF000BA5649 /* TrustyFishingRod.swift in Sources */,
 				BCA70F2A1E2C16DD00038A6C /* FileUtils.m in Sources */,
+				01D8FC70C03144D8B1EDB4CB /* MirrorFaultGuard.m in Sources */,
 				434D1CB11D0C507900222B8E /* ImageCompare.swift in Sources */,
 				B89865B92D91EF7A00BA5649 /* ChalkArtist.swift in Sources */,
 				B8B78FFE2C970C2F00DD33EC /* CultNeophyteEnchantment.swift in Sources */,
@@ -8755,6 +8764,7 @@
 				7A3E91C2D4B85F06A1C3E2F1 /* OverlayClickThroughTests.swift in Sources */,
 				43C1C9F71E96CCE9008C20B1 /* AlgorithmTests.swift in Sources */,
 				439BD8C91EBCD40200959F69 /* EnumTests.swift in Sources */,
+				451B96F1A437F92708FD9F8C /* MirrorFaultGuardTests.swift in Sources */,
 				B8AA00022C00000100000002 /* OfficialBuildTests.swift in Sources */,
 				43C1C9F81E96CCE9008C20B1 /* HSTrackerTests.swift in Sources */,
 				B8A1F0012FCD0001000A0001 /* LocalizationFormatTests.swift in Sources */,
