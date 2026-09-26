@@ -247,10 +247,8 @@ class ConstructedMulliganGuidePreLobbyViewModel: ViewModel {
             onPropertyChanged("formatType")
             onPropertyChanged("pageStatus")
             onPropertyChanged("pageStatusRows")
-            if #available(macOS 10.15.0, *) {
-                Task.detached {
-                    await self.ensureLoaded()
-                }
+            Task.detached {
+                await self.ensureLoaded()
             }
         }
     }
@@ -348,11 +346,9 @@ class ConstructedMulliganGuidePreLobbyViewModel: ViewModel {
     // with no deckstring at all are dropped: the API has nothing to say about
     // them and they would only ever come back NO_DATA.
     // Returns nil when the request failed, as opposed to an answer of no data.
-    @available(macOS 10.15.0, *)
     typealias StatusLoader = (_ gameType: BnetGameType, _ starLevel: Int?, _ decks: [DeckData]) async -> [String: SingleDeckState]?
 
     // Replaced in tests.
-    @available(macOS 10.15.0, *)
     var statusLoader: StatusLoader {
         get {
             return (_statusLoader as? StatusLoader) ?? { gameType, starLevel, decks in
@@ -364,7 +360,6 @@ class ConstructedMulliganGuidePreLobbyViewModel: ViewModel {
         }
     }
 
-    @available(macOS 10.15.0, *)
     private static func loadStatus(gameType: BnetGameType, starLevel: Int?, decks: [DeckData]) async -> [String: SingleDeckState]? {
         var seen = Set<String>()
         let distinctDecks = decks.filter { deck in
@@ -378,7 +373,6 @@ class ConstructedMulliganGuidePreLobbyViewModel: ViewModel {
             : await loadMulliganGuideStatus(gameType: gameType, starLevel: starLevel, decks: distinctDecks)
     }
 
-    @available(macOS 10.15.0, *)
     private static func loadMulliganGuideStatus(gameType: BnetGameType, starLevel: Int?, decks: [DeckData]) async -> [String: SingleDeckState]? {
         if decks.count == 0 {
             return [String: SingleDeckState]()
@@ -401,7 +395,6 @@ class ConstructedMulliganGuidePreLobbyViewModel: ViewModel {
     // Standard Ranked/Friendly decks are checked against the Mulligan G-V2
     // status endpoint instead, which needs each deck's dbfIds (not just its
     // deckstring) to evaluate partial coverage card-by-card.
-    @available(macOS 10.15.0, *)
     private static func loadMulliganV2Status(gameType: BnetGameType, starLevel: Int?, decks: [DeckData]) async -> [String: SingleDeckState]? {
         if decks.count == 0 {
             return [String: SingleDeckState]()
@@ -437,7 +430,6 @@ class ConstructedMulliganGuidePreLobbyViewModel: ViewModel {
         }, uniquingKeysWith: { first, _ in first })
     }
     
-    @available(macOS 10.15.0, *)
     func ensureLoaded() async {
         let alreadyRunning = _lock.around { () -> Bool in
             if _updateInFlight {
@@ -467,7 +459,6 @@ class ConstructedMulliganGuidePreLobbyViewModel: ViewModel {
         }
     }
     
-    @available(macOS 10.15.0, *)
     private func update(_ onlyVisibilePage: Bool = false) async {
         // visualsFormatType is snapshotted once here, and gameType/formatType
         // derived from that snapshot, because the deck picker watcher can

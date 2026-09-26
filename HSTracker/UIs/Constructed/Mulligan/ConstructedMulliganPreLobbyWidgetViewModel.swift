@@ -8,12 +8,10 @@
 
 import Foundation
 import AppKit
-import Preferences
 
 // UserState/RefreshSubscriptionState are declared in Tier7PreLobbyViewModel.swift
 // and reused here as-is - same shape HDT's own widget reuses from its Tier7
 // equivalent.
-@available(macOS 10.15, *)
 class ConstructedMulliganPreLobbyWidgetViewModel: ObservableObject {
     @Published var visualsFormatType: VisualsFormatType = .vft_unknown {
         didSet {
@@ -186,7 +184,7 @@ class ConstructedMulliganPreLobbyWidgetViewModel: ObservableObject {
     }
 
     func signIn() {
-        AppDelegate.instance().openPreferences(pane: Preferences.PaneIdentifier.hsreplay)
+        AppDelegate.instance().openPreferences(pane: PreferencePaneIdentifier.hsreplay)
     }
 
     func refreshAccount() {

@@ -555,7 +555,6 @@ struct MirrorHelper {
         case cardPlayableMouseOver = 7
     }
 
-    @available(macOS 10.15, *)
     static func getMulliganLiveState() -> MulliganLiveState? {
         var result: MirrorMulliganState?
         MirrorHelper.accessQueue.sync {
@@ -648,6 +647,14 @@ struct MirrorHelper {
         var result: MirrorBattlegroundsLobbyInfo?
         MirrorHelper.accessQueue.sync {
             result = mirror?.getBattlegroundsLobbyInfo()
+        }
+        return result
+    }
+
+    static func getBattlegroundsMinionPool() -> MirrorBattlegroundsMinionPool? {
+        var result: MirrorBattlegroundsMinionPool?
+        MirrorHelper.accessQueue.sync {
+            result = mirror?.getBattlegroundsMinionPool()
         }
         return result
     }

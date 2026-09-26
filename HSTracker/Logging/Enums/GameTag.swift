@@ -345,6 +345,7 @@ enum GameTag: Int, CaseIterable, Codable {
     zombeast = 823,
     modular = 849,
     overkill = 923,
+    amount_healed_this_game = 958,
     literally_unplayable = 1020,
     whizbang_deck_id = 1048,
     shrine = 1057,
@@ -414,6 +415,19 @@ enum GameTag: Int, CaseIterable, Codable {
     was_discover_option = 2509,
     bacon_buddy_enabled = 2518,
     bacon_evolution_card_id = 2519,
+    // BACON_SUBSET_* - the tribe a minion also belongs to in the in-game minion
+    // gallery, without actually carrying that race
+    bacon_subset_dragon = 1591,
+    bacon_subset_murloc = 1592,
+    bacon_subset_demon = 1593,
+    bacon_subset_beast = 1594,
+    bacon_subset_mech = 1595,
+    bacon_subset_pirate = 1596,
+    bacon_subset_elementals = 1688,
+    bacon_subset_quillboar = 1845,
+    bacon_subset_naga = 2272,
+    bacon_subset_undead = 2347,
+    bacon_subset_aberration = 4757,
     immolatestage = 2600,
     corpses_spent_this_game = 2639,
     bacon_card_dbid_reward = 2673,
@@ -445,6 +459,10 @@ enum GameTag: Int, CaseIterable, Codable {
     titan_ability_used_1 = 3140,
     titan_ability_used_2 = 3141,
     titan_ability_used_3 = 3142,
+    // Battlegrounds gold cap. HDT casts this raw as (GameTag)3148 because
+    // HearthDb has no named constant for it either; maxresources is a flat 99
+    // in Battlegrounds and never moves.
+    bacon_max_gold = 3148,
     is_bacon_duos_exclusive = 3166,
     tourist = 3228,
     gametag_3236 = 3236,
@@ -505,6 +523,8 @@ enum GameTag: Int, CaseIterable, Codable {
     prepare_revealed = 4459,
     bacon_free_refresh_count = 4536,
     gametag_4629 = 4629,
+    gametag_4468 = 4468,
+    gametag_4469 = 4469,
     gametag_4639 = 4639,
     bacon_fodders_in_refresh = 4664,
     gametag_4696 = 4696,
@@ -516,7 +536,18 @@ enum GameTag: Int, CaseIterable, Codable {
     hidden_script_data_6 = 4832,
     dark_gift_entity = 4865,
     bacon_activate_tooltip = 4867,
-    only_gold_in_guide = 4897
+    only_gold_in_guide = 4897,
+    // The Deity the whole lobby builds towards, on the game entity from CREATE_GAME on.
+    bacon_global_old_god_dbid = 4902,
+    // The Deity a Deity Sigil will summon: the sigil carries the Deity's current total
+    // stats, which start at 1/1 and grow with every "Give your Deity +X/+Y". The player
+    // entity carries the same pair as bacon_old_god_attack/bacon_old_god_health, but the
+    // sigil-local ones stay correct per player in duos.
+    bacon_evolution_card_overwrite_atk = 4906,
+    bacon_evolution_card_overwrite_health = 4907,
+    bacon_old_god = 4744,
+    bacon_old_god_attack = 4914,
+    bacon_old_god_health = 4915
 
     static var lookup = [String: GameTag]()
     

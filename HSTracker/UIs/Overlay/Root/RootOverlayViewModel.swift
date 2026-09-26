@@ -17,7 +17,6 @@ import SwiftUI
 // state pushed in here, so content authored at the 1080-tall reference
 // (matching the rest of HSTracker's overlay scaling convention) lines up
 // regardless of the window's aspect ratio.
-@available(macOS 10.15, *)
 class RootOverlayViewModel: ObservableObject {
     // HDT's two constructed mulligan guides, declared one after the other on
     // its own canvas. The V1 one covers every game type the V2 one does not -
@@ -104,6 +103,10 @@ class RootOverlayViewModel: ObservableObject {
     // side and the Mercenaries ability strips hanging off them.
     let boardOverlay = BoardOverlayViewModel()
 
+    // HDT's GridOpponentBoardOrder, GridPlayerBoardOrder and the two weapon
+    // badges: the order everything on the board entered it in.
+    let boardEntryOrder = BoardEntryOrderViewModel()
+
     // HDT's MercAbility1/2/3, the three card renders it shows down the right
     // edge while a Mercenaries board minion is hovered.
     let mercenariesAbilityHover = MercenariesAbilityHoverViewModel()
@@ -166,6 +169,14 @@ class RootOverlayViewModel: ObservableObject {
         if let windowsLockedObserver {
             NotificationCenter.default.removeObserver(windowsLockedObserver)
         }
+    }
+
+    // HDT's OverlayWindow.OnBattlegroundsMinionPoolLoaded.
+    @MainActor
+    func onBattlegroundsMinionPoolLoaded() {
+        battlegroundsMinionsGuide.onMinionPoolChanged()
+        battlegroundsMinionPinning.onMinionPoolChanged()
+        battlegroundsCompsGuides.onMinionPoolChanged()
     }
 
     // On-screen frames (in RootOverlayView's own coordinate space) of every

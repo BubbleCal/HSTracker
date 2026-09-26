@@ -10,7 +10,6 @@ import SwiftUI
 import Combine
 import Foundation
 
-@available(macOS 10.15, *)
 class RootOverlayWindow: OverWindowController {
     var hostingView: NSHostingView<RootOverlayView>!
     let viewModel = RootOverlayViewModel()
@@ -242,7 +241,6 @@ class RootOverlayWindow: OverWindowController {
     private var arenaDirectionArmPending = false
 
     private func updateArenaPanelHover(at viewPoint: NSPoint) {
-        guard #available(macOS 10.15, *) else { return }
         let hovering = viewModel.arenaBottomPanelFrame?.contains(viewPoint) ?? false
         let pickHelper = viewModel.arenaPickHelper
         guard pickHelper.hoveringPanel != hovering else { return }
@@ -270,7 +268,6 @@ class RootOverlayWindow: OverWindowController {
         return watcher
     }
 
-    @available(macOS 10.15, *)
     private func endArenaDirectionTrigger() {
         arenaDirectionWatcher.stop()
         arenaDirectionArmPending = false
@@ -278,7 +275,6 @@ class RootOverlayWindow: OverWindowController {
     }
 
     private func updateArenaDirectionTrigger(at viewPoint: NSPoint) {
-        guard #available(macOS 10.15, *) else { return }
         let pickHelper = viewModel.arenaPickHelper
         let shape = viewModel.arenaDirectionTriggerShape
         let inside = !shape.isEmpty && Self.polygon(shape, contains: viewPoint)
@@ -312,7 +308,6 @@ class RootOverlayWindow: OverWindowController {
     private var arenaCardListInside = [false, false, false]
     private var arenaCardListArmPending = [false, false, false]
 
-    @available(macOS 10.15, *)
     private func arenaCardListWatcher(_ index: Int) -> ArenaMouseDirectionWatcher {
         if let existing = _arenaCardListWatchers[safeIndex: index] as? ArenaMouseDirectionWatcher {
             return existing
@@ -330,7 +325,6 @@ class RootOverlayWindow: OverWindowController {
         return watchers[index]
     }
 
-    @available(macOS 10.15, *)
     private func endArenaCardListDirection(_ index: Int) {
         arenaCardListWatcher(index).stop()
         arenaCardListArmPending[index] = false
@@ -338,7 +332,6 @@ class RootOverlayWindow: OverWindowController {
     }
 
     private func updateArenaCardListTrigger(at viewPoint: NSPoint) {
-        guard #available(macOS 10.15, *) else { return }
         let pickHelper = viewModel.arenaPickHelper
 
         let onRail = viewModel.arenaCardListTriggerFrame?.contains(viewPoint) ?? false
@@ -374,7 +367,6 @@ class RootOverlayWindow: OverWindowController {
     // not the same as hit-test visible: the region reacts to the cursor without
     // taking the click, so this samples rather than flipping ignoresMouseEvents.
     private func updateArenaTooltipHover(at viewPoint: NSPoint) {
-        guard #available(macOS 10.15, *) else { return }
         // `last`, not `first`: regions are reported in view-tree order, so a later
         // sibling is the one drawn on top and the one WPF's hit-testing would pick.
         let match = viewModel.arenaTooltipRegions.last { $0.frame.contains(viewPoint) }
@@ -421,7 +413,7 @@ class RootOverlayWindow: OverWindowController {
     // Which row the cursor is on is TrackerCardHoverRegistry's own business -
     // see its row(under:in:).
     private func updateTrackerRowHover(isMasked: Bool) {
-        guard #available(macOS 10.15, *), let overlayWindow = window,
+        guard let overlayWindow = window,
               let hostingView = hostingView else {
             return
         }
@@ -451,7 +443,6 @@ class RootOverlayWindow: OverWindowController {
     // hovered one (a card leaves the deck, the tracker hides), and out(card:) has
     // to be delivered for it all the same.
     /// Which handler a row's kind reports to - see `TrackerRowHoverKind`.
-    @available(macOS 10.15, *)
     private func hoverTarget(for kind: TrackerRowHoverKind) -> TrackerRowHoverTarget? {
         switch kind {
         case .playerDeck: return viewModel.playerTrackerHover
@@ -461,13 +452,11 @@ class RootOverlayWindow: OverWindowController {
         }
     }
 
-    @available(macOS 10.15, *)
     private struct HoveredTrackerRow {
         let card: Card
         let handler: TrackerRowHoverTarget
     }
     private var _hoveredTrackerRow: Any?
-    @available(macOS 10.15, *)
     private var hoveredTrackerRow: HoveredTrackerRow? {
         get { _hoveredTrackerRow as? HoveredTrackerRow }
         set { _hoveredTrackerRow = newValue }
@@ -581,7 +570,6 @@ class RootOverlayWindow: OverWindowController {
     /// on screen, and locking it again starts from nothing hovered rather than
     /// from wherever the cursor was when the sweeps stopped.
     private func dismissHoverTooltips() {
-        guard #available(macOS 10.15, *) else { return }
         if let previous = hoveredTooltip {
             hoveredTooltip = nil
             hoveredView = nil

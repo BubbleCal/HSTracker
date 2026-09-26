@@ -8,7 +8,6 @@
 
 import Foundation
 import AppKit
-import Preferences
 
 // Not gated on the SwiftUI baseline: ConstructedMulliganPreLobbyWidgetViewModel
 // reuses both of these as-is, the same way HDT's own Constructed widget reuses
@@ -23,7 +22,6 @@ enum RefreshSubscriptionState: Int {
 
 // Port of HDT's Tier7PreLobbyViewModel
 // (Controls/Overlay/Battlegrounds/Tier7/Tier7PreLobbyViewModel.cs).
-@available(macOS 10.15, *)
 class Tier7PreLobbyViewModel: ObservableObject {
     // HDT drives this panel's presence with _tier7PreLobbyBehavior.Show()/Hide()
     // rather than a view-model flag; on the RootOverlay canvas there is no
@@ -137,11 +135,11 @@ class Tier7PreLobbyViewModel: ObservableObject {
     }
 
     func showSettings() {
-        AppDelegate.instance().openPreferences(pane: Preferences.PaneIdentifier.battlegrounds)
+        AppDelegate.instance().openPreferences(pane: PreferencePaneIdentifier.battlegrounds)
     }
 
     func signIn() {
-        AppDelegate.instance().openPreferences(pane: Preferences.PaneIdentifier.hsreplay)
+        AppDelegate.instance().openPreferences(pane: PreferencePaneIdentifier.hsreplay)
     }
 
     func subscribeNow() {

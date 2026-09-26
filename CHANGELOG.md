@@ -1,3 +1,19 @@
+# 3.6.13
+## Hearthstone
+- Added a Counters settings pane for choosing, separately for you and your opponent, whether each counter is always shown, never shown or shown only when it is relevant.
+- Added counters for Dragoncaller Alanna, Crystal Stag, Knight of the Wild and Frostsaber Matriarch, and the minions died and Imbue counters now also appear for Volcanic Lumberer and Hamuul Runetotem.
+- The settings window now lists its panes in a sidebar, grouped and with a search field that finds a setting by name, instead of a toolbar that had run out of room.
+- HSTracker's splash screen closes sooner when it starts.
+- The trackers now forget everything a Rewind from Semi-Stable Portal takes back, without the overlay flickering while they catch up, and games with a rewind still upload as replays.
+- Added an option in the Trackers settings to number every minion and weapon on the board by the order it entered play.
+## Battlegrounds
+- Added an All filter to the minion browser's card types, placed ahead of Other, and refreshed the Other icon.
+- Fixed the Aberration icon in the session panel's minion types going blank while the Deity's portrait was loading.
+- The minion browser now shows the match's own minion pool as the game has it, at the tiers it puts them, with banned cards darkened.
+- An orange dot in the minion browser now marks this match's Dark Paradox and the tier it is on, hovering that tier shows the card, and a Dark Paradox whose tier is not known is listed first under All.
+- Fixed the Comp Guides list not scrolling, so only the first few comps could be seen (thanks @djorno)
+## Bob's Buddy
+- Bob's Buddy now knows the stats your Volumizers have gained.
 # 3.6.12
 ## Hearthstone
 - The player and opponent deck trackers, the secret helper and the "know your opponent's deck?" prompt are now part of the overlay rather than windows of their own, so they sit where Hearthstone Deck Tracker puts them, keep their place when the game's resolution changes, and are cut away wherever Hearthstone draws over the board.
@@ -14,7 +30,25 @@
 - Fixed the board damage number sitting too high on its icon.
 - Fixed HSTracker quitting while a Battlegrounds hero, minion or trinket was being picked when it briefly could not tell how large the Hearthstone window was.
 - Only official HSTracker releases send crash reports and usage statistics to HearthSim.
+- Added deck highlighting for Arrival of the Old Gods and Arrival of the Titans.
+- The opponent's hand now shows the cost reductions from M.O.T.H.E.R.
+- Added related cards for Arfus, showing the Lich King cards it can give.
+- Added a Related Cards settings pane for choosing which cards are listed under the opponent's related cards, including ones they have not played yet.
+## Battlegrounds
+- The maximum resources widget now shows your Battlegrounds gold cap while it is raised above ten and your gold has not yet caught up to it, and has a Battlegrounds setting of its own.
+- Tavern pin markers no longer appear when the minion browser is turned off.
+- Flavor text no longer pops up over the board in Battlegrounds.
+- Fixed the overlay not showing fully during a Timewarp tavern.
+- The minion browser's minion type filter now lists the minion types in the current Battlegrounds season rather than every type in the card data, puts them in alphabetical order, and shows an icon for Aberration.
+- Fixed long comp names being cut short in the comp guides, and the guide text sitting too close to the headings above and below it.
+- Fixed the trinket guide tooltip not showing for some of the offered trinkets in the trinket shop.
+- Added a Battlegrounds setting for whether the Meta Snapshot link is offered between games.
+- Hovering a player on the leaderboard now also shows the Deity they were last seen building, and the size it had grown to, with its stats in white.
+- Added a counter for the size of your own Deity, which shows this game's Deity from the start and appears once it has grown large or you have three Aberrations on the board.
+- The session panel's available minion types now show this game's Deity in place of the Aberration icon.
 ## Bob's Buddy
+- Bob's Buddy now knows about the Deity a Deity Sigil will summon, and the stats it has grown to.
+- Fixed Bob's Buddy simulating your own objectives for your opponent instead of theirs.
 - Bob's Buddy now says it failed to load when an incomplete copy of the runtime it simulates with stops it running, instead of leaving the panel empty on every combat, and no longer sends the same failure to HearthSim over and over.
 
 # 3.6.11

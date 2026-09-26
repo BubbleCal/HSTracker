@@ -523,7 +523,6 @@ class HSReplayAPI {
         }
     }
     
-    @available(macOS 10.15.0, *)
     static func getAccountAsync() async -> GetAccountResult {
         await withCheckedContinuation { continuation in
             _ = getAccount().map { result in
@@ -533,7 +532,6 @@ class HSReplayAPI {
         }
     }
     
-    @available(macOS 10.15.0, *)
     static func getTier7HeroPickStats(parameters: BattlegroundsHeroPickStatsParams) async -> BattlegroundsHeroPickStats? {
         return await withCheckedContinuation { continuation in
             let encoder = JSONEncoder()
@@ -562,7 +560,6 @@ class HSReplayAPI {
         }
     }
     
-    @available(macOS 10.15.0, *)
     static func getTier7HeroPickStats(token: String?, parameters: BattlegroundsHeroPickStatsParams) async -> BattlegroundsHeroPickStats? {
         guard let token = token else {
             return nil
@@ -598,7 +595,6 @@ class HSReplayAPI {
         }
     }
     
-    @available(macOS 10.15.0, *)
     static func getTier7DuosHeroPickStats(parameters: BattlegroundsHeroPickStatsParams) async -> BattlegroundsHeroPickStats? {
         return await withCheckedContinuation { continuation in
             let encoder = JSONEncoder()
@@ -627,7 +623,6 @@ class HSReplayAPI {
         }
     }
     
-    @available(macOS 10.15.0, *)
     static func getTier7DuosHeroPickStats(token: String?, parameters: BattlegroundsHeroPickStatsParams) async -> BattlegroundsHeroPickStats? {
         guard let token = token else {
             return nil
@@ -663,7 +658,6 @@ class HSReplayAPI {
         }
     }
     
-    @available(macOS 10.15.0, *)
     static func getTier7QuestStats(parameters: BattlegroundsQuestPickParams) async -> [BattlegroundsQuestStats]? {
         return await withCheckedContinuation { continuation in
             let encoder = JSONEncoder()
@@ -691,7 +685,6 @@ class HSReplayAPI {
         }
     }
     
-    @available(macOS 10.15.0, *)
     static func getTier7QuestStats(token: String?, parameters: BattlegroundsQuestPickParams) async -> [BattlegroundsQuestStats]? {
         guard let token = token else {
             return nil
@@ -727,7 +720,6 @@ class HSReplayAPI {
         }
     }
     
-    @available(macOS 10.15.0, *)
     static func getAllTimeBGsMMR(hi: Int64, lo: Int) async -> Tier7AllTime? {
         return await withCheckedContinuation { continuation in
             startAuthorizedRequest("\(HSReplay.tier7AllTimeMMR)", method: .GET, parameters: ["account_hi": hi, "account_lo": lo], completionHandler: { result in
@@ -745,7 +737,6 @@ class HSReplayAPI {
         }
     }
     
-    @available(macOS 10.15.0, *)
     static func getPlayerTrialStatus(name: String, hi: Int64, lo: Int64) async -> PlayerTrialStatus? {
         return await withCheckedContinuation { continuation in
             startAuthorizedRequest("\(HSReplay.playerTrial)\(name)/?account_hi=\(hi)&account_lo=\(lo)", method: .GET, parameters: [:], completionHandler: { result in
@@ -769,7 +760,6 @@ class HSReplayAPI {
         }
     }
     
-    @available(macOS 10.15.0, *)
     static func activatePlayerTrial(name: String, hi: Int64, lo: Int64) async -> PlayerTrialActivation? {
         return await withCheckedContinuation { continuation in
             startAuthorizedRequest("\(HSReplay.playerTrial)\(name)/?account_hi=\(hi)&account_lo=\(lo)", method: .POST, parameters: [:], completionHandler: { result in
@@ -790,7 +780,6 @@ class HSReplayAPI {
         }
     }
     
-    @available(macOS 10.15.0, *)
     static func getMulliganGuideData(parameters: MulliganGuideParams) async -> MulliganGuideData? {
         return await withCheckedContinuation { continuation in
             let encoder = JSONEncoder()
@@ -827,7 +816,6 @@ class HSReplayAPI {
     // Trial-token variant for the V1 guide, HDT's
     // ApiWrapper.GetConstructedMulliganGuide(token, parameters): the same
     // request made without the OAuth session, carrying the trial token.
-    @available(macOS 10.15.0, *)
     static func getMulliganGuideData(token: String?, parameters: MulliganGuideParams) async -> MulliganGuideData? {
         guard let token else {
             return nil
@@ -862,7 +850,6 @@ class HSReplayAPI {
         }
     }
 
-    @available(macOS 10.15.0, *)
     static func getConstructedMulliganV2(parameters: MulliganV2Params) async -> MulliganV2Data? {
         return await withCheckedContinuation { continuation in
             let encoder = JSONEncoder()
@@ -899,7 +886,6 @@ class HSReplayAPI {
     // Trial-token variant, matching getTier7HeroPickStats(token:parameters:) -
     // an unauthenticated request carrying the trial token in a header
     // instead of the user's own OAuth session.
-    @available(macOS 10.15.0, *)
     static func getConstructedMulliganV2(token: String?, parameters: MulliganV2Params) async -> MulliganV2Data? {
         guard let token else {
             return nil
@@ -935,7 +921,30 @@ class HSReplayAPI {
         }
     }
 
-    @available(macOS 10.15.0, *)
+    // ApiWrapper.PostBattlegroundsTavernPoolObservation: fire and forget, with
+    // failures only logged in debug builds.
+    static func postBattlegroundsTavernPoolObservation(parameters: BattlegroundsTavernPoolObservationParams) {
+        guard let url = URL(string: HSReplay.battlegroundsTavernPoolObservationsUrl) else {
+            return
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        do {
+            request.httpBody = try JSONEncoder().encode(parameters)
+        } catch {
+            logger.error(error)
+            return
+        }
+        URLSession.shared.dataTask(with: request) { _, _, error in
+#if DEBUG
+            if let error {
+                logger.error(error)
+            }
+#endif
+        }.resume()
+    }
+
     static func getMulliganGuideStatus(parameters: MulliganGuideStatusParams) async -> MulliganGuideStatusData? {
         return await withCheckedContinuation { continuation in
             let encoder = JSONEncoder()
@@ -969,7 +978,6 @@ class HSReplayAPI {
         }
     }
 
-    @available(macOS 10.15.0, *)
     static func getMulliganV2Status(parameters: MulliganV2StatusParams) async -> MulliganV2StatusData? {
         return await withCheckedContinuation { continuation in
             let encoder = JSONEncoder()
@@ -1003,7 +1011,6 @@ class HSReplayAPI {
         }
     }
 
-    @available(macOS 10.15.0, *)
     static func getTier7CompStats(parameters: BattlegroundsCompStatsParams) async -> BattlegroundsCompStats? {
         return await withCheckedContinuation { continuation in
             let encoder = JSONEncoder()
@@ -1032,7 +1039,6 @@ class HSReplayAPI {
         }
     }
     
-    @available(macOS 10.15.0, *)
     static func getTier7CompStats(token: String?, parameters: BattlegroundsCompStatsParams) async -> BattlegroundsCompStats? {
         guard let token = token else {
             return nil
@@ -1071,7 +1077,6 @@ class HSReplayAPI {
     // Mirrors BattlegroundsInspirationViewModel.MakeRequest. Two variants, as
     // with the comp stats above: OAuth for accounts that own Tier7, an
     // X-Trial-Token header for accounts riding a trial.
-    @available(macOS 10.15.0, *)
     static func getBattlegroundsInspiration(parameters: BattlegroundsInspirationParams) async -> BattlegroundsInspiration? {
         return await withCheckedContinuation { continuation in
             var body: Data?
@@ -1096,7 +1101,6 @@ class HSReplayAPI {
         }
     }
 
-    @available(macOS 10.15.0, *)
     static func getBattlegroundsInspiration(token: String?, parameters: BattlegroundsInspirationParams) async -> BattlegroundsInspiration? {
         guard let token else {
             return nil
@@ -1144,7 +1148,6 @@ class HSReplayAPI {
         return query
     }
 
-    @available(macOS 10.15.0, *)
     static func getCompGuides(gameLanguage: String) async -> BattlegroundsCompGuidesData? {
         return await withCheckedContinuation { continuation in
             let http = Http(url: "\(HSReplay.compGuidesUrl)?game_language=\(gameLanguage)")
@@ -1162,7 +1165,6 @@ class HSReplayAPI {
         }
     }
 
-    @available(macOS 10.15.0, *)
     static func getTier7CompGuides(gameLanguage: String, minionTypes: [Int]) async -> BattlegroundsTier7CompGuidesData? {
         return await withCheckedContinuation { continuation in
             let url = "\(HSReplay.tier7CompGuidesUrl)\(compGuidesQuery(gameLanguage: gameLanguage, minionTypes: minionTypes))"
@@ -1181,7 +1183,6 @@ class HSReplayAPI {
         }
     }
 
-    @available(macOS 10.15.0, *)
     static func getTier7CompGuides(token: String?, gameLanguage: String, minionTypes: [Int]) async -> BattlegroundsTier7CompGuidesData? {
         guard let token = token else {
             return nil
@@ -1210,7 +1211,6 @@ class HSReplayAPI {
     // Arena trials are resolved server-side from account_lo plus deck_id, so an
     // anonymous request from a player with trials left is still served.
 
-    @available(macOS 10.15.0, *)
     /// `logResponse` dumps the raw body before decoding, for when the decoded
     /// model loses something the JSON text still has - key order, say, which is
     /// gone the moment an object becomes a Swift Dictionary. Off by default;
@@ -1267,7 +1267,6 @@ class HSReplayAPI {
         }
     }
 
-    @available(macOS 10.15.0, *)
     private static func getArenaJson<R: Decodable>(url: String, as: R.Type) async -> R? {
         return await withCheckedContinuation { continuation in
             let http = Http(url: url)
@@ -1285,28 +1284,23 @@ class HSReplayAPI {
         }
     }
 
-    @available(macOS 10.15.0, *)
     static func getArenaHeroPickStats(parameters: ArenaHeroPickParams) async -> ArenaHeroPickApiResponse? {
         return await postArena(url: HSReplay.arenaHeroPickUrl, parameters: parameters,
                                as: ArenaHeroPickApiResponse.self)
     }
 
-    @available(macOS 10.15.0, *)
     static func getArenaCardPickStats(parameters: ArenaCardPickParams) async -> ArenaCardPickApiResponse? {
         return await postArena(url: HSReplay.arenaCardPickUrl, parameters: parameters, as: ArenaCardPickApiResponse.self)
     }
 
-    @available(macOS 10.15.0, *)
     static func scoreArenaDeck(parameters: ArenaScoreDeckParams) async -> ArenaCardStats? {
         return await postArena(url: HSReplay.arenaScoreDeckUrl, parameters: parameters, as: ArenaCardStats.self)
     }
 
-    @available(macOS 10.15.0, *)
     static func getArenaTrialStatus(hi: Int64, lo: Int64) async -> ArenaTrialStatus? {
         return await getArenaJson(url: "\(HSReplay.arenaTrialsUrl)?account_hi=\(hi)&account_lo=\(lo)", as: ArenaTrialStatus.self)
     }
 
-    @available(macOS 10.15.0, *)
     static func getArenasmithStatus() async -> ArenasmithStatus? {
         return await getArenaJson(url: HSReplay.arenasmithStatusUrl, as: ArenasmithStatus.self)
     }
@@ -1315,7 +1309,6 @@ class HSReplayAPI {
     ///
     /// The account is the whole request here - the packages are the ones the server
     /// has for that player's current run - so this overload takes no parameters.
-    @available(macOS 10.15.0, *)
     static func getArenaPackages() async -> ArenaPackages? {
         return await withCheckedContinuation { continuation in
             startAuthorizedRequest(HSReplay.arenaCardPackagesUrl, method: .GET, parameters: [:], completionHandler: { result in
@@ -1335,7 +1328,6 @@ class HSReplayAPI {
     /// unauthenticated, and identified by the drafted deck instead. The caller is
     /// responsible for checking the deck is registered for a trial - see
     /// `ArenaPackagesManager.fetchPackages()`.
-    @available(macOS 10.15.0, *)
     static func getArenaPackages(deckId: Int64, accountLo: Int64, playerRegion: Int) async -> ArenaPackages? {
         let url = "\(HSReplay.arenaCardPackagesFreeUrl)?deck_id=\(deckId)&account_lo=\(accountLo)&player_region=\(playerRegion)"
         return await getArenaJson(url: url, as: ArenaPackages.self)
@@ -1344,7 +1336,6 @@ class HSReplayAPI {
     // Ports HSReplay-API-Client's two GetDiscoverPoolKeywords overloads: the premium path goes
     // through OAuth (OAuthClient.DataQueries), the trial path sends an X-Trial-Token header
     // (HsReplayClient). Both return the same keyword -> card-ids map.
-    @available(macOS 10.15.0, *)
     static func getDiscoverPoolKeywords() async -> [String: [String]]? {
         return await withCheckedContinuation { continuation in
             startAuthorizedRequest(HSReplay.discoverPoolKeywordsUrl, method: .GET, parameters: [:], completionHandler: { result in
@@ -1360,7 +1351,6 @@ class HSReplayAPI {
         }
     }
 
-    @available(macOS 10.15.0, *)
     static func getDiscoverPoolKeywords(token: String?) async -> [String: [String]]? {
         guard let token = token else {
             return nil
@@ -1381,7 +1371,6 @@ class HSReplayAPI {
         }
     }
 
-    @available(macOS 10.15.0, *)
     static func getHeroGuides(gameLanguage: String) async -> BattlegroundsHeroGuidesData? {
         return await withCheckedContinuation { continuation in
             let http = Http(url: "\(HSReplay.heroGuidesUrl)?game_language=\(gameLanguage)")
@@ -1399,7 +1388,6 @@ class HSReplayAPI {
         }
     }
 
-    @available(macOS 10.15.0, *)
     static func getTrinketGuides(gameLanguage: String) async -> BattlegroundsTrinketGuidesData? {
         return await withCheckedContinuation { continuation in
             let http = Http(url: "\(HSReplay.trinketGuidesUrl)?game_language=\(gameLanguage)")
@@ -1417,7 +1405,6 @@ class HSReplayAPI {
         }
     }
 
-    @available(macOS 10.15.0, *)
     static func getAnomalyGuides(gameLanguage: String) async -> BattlegroundsAnomalyGuidesData? {
         return await withCheckedContinuation { continuation in
             let http = Http(url: "\(HSReplay.anomalyGuidesUrl)?game_language=\(gameLanguage)")
@@ -1435,7 +1422,6 @@ class HSReplayAPI {
         }
     }
 
-    @available(macOS 10.15.0, *)
     static func getQuestGuides(gameLanguage: String) async -> BattlegroundsQuestGuidesData? {
         return await withCheckedContinuation { continuation in
             let http = Http(url: "\(HSReplay.questGuidesUrl)?game_language=\(gameLanguage)")
@@ -1453,7 +1439,6 @@ class HSReplayAPI {
         }
     }
 
-    @available(macOS 10.15.0, *)
     static func getTier7TrinketPickStats(parameters: BattlegroundsTrinketPickParams) async -> BattlegroundsTrinketPickStats? {
         return await withCheckedContinuation { continuation in
             let encoder = JSONEncoder()
@@ -1482,7 +1467,6 @@ class HSReplayAPI {
         }
     }
 
-    @available(macOS 10.15.0, *)
     static func getTier7TrinketPickStats(token: String?, parameters: BattlegroundsTrinketPickParams) async -> BattlegroundsTrinketPickStats? {
         guard let token = token else {
             return nil

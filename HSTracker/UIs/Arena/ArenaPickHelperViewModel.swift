@@ -26,7 +26,6 @@ enum ArenaScreenBehavior {
 }
 
 /// One row of the drafted-deck rail down the right of the screen.
-@available(macOS 10.15, *)
 final class ArenaDeckListTileViewModel: ObservableObject, Identifiable {
     let cardId: String
     let count: Int
@@ -94,7 +93,7 @@ final class ArenaDeckListTileViewModel: ObservableObject, Identifiable {
 /// rail.
 /// The Arenasmith state recorded with every draft pick, which HDT's Watchers.cs
 /// reads straight off `Core.Overlay.ArenaPickHelperViewModel`. It lives outside
-/// the view model so the watcher can carry one on macOS 10.14 too.
+/// the view model so `Watchers` can carry one without depending on it.
 struct ArenasmithPickState {
     var isOverlayVisible = false
     var isArenasmithAvailable = false
@@ -102,7 +101,6 @@ struct ArenasmithPickState {
     var arenasmithScores: [String: Float]?
 }
 
-@available(macOS 10.15, *)
 final class ArenaPickHelperViewModel: ObservableObject {
 
     // MARK: published state

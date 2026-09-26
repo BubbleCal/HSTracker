@@ -8,7 +8,6 @@
 
 import SwiftUI
 
-@available(macOS 10.15, *)
 struct BattlegroundsMinionsView: View {
     @ObservedObject var viewModel: BattlegroundsMinionsViewModel
     /// Threaded down to the per-row pin button, which mirrors AnimatedCard's
@@ -239,7 +238,6 @@ struct BattlegroundsMinionsView: View {
 // HDT rounds by 3 (CornerRadius="0,0,0,3"). Used to fill the background so the
 // corner is actually cut out of it, rather than a rounded stroke sitting on top
 // of a square fill.
-@available(macOS 10.15, *)
 private struct TierStripShape: Shape {
     static let cornerRadius: CGFloat = 3
 
@@ -266,7 +264,6 @@ private struct TierStripShape: Shape {
 // lands fully inside the frame: it is centred on the path, and the strip's
 // trailing .clipped() would otherwise shave off the outer half and leave a
 // half-weight line.
-@available(macOS 10.15, *)
 private struct TierStripBorder: Shape {
     func path(in rect: CGRect) -> Path {
         let radius = TierStripShape.cornerRadius
@@ -286,7 +283,6 @@ private struct TierStripBorder: Shape {
 
 // MARK: - Tier button strip
 
-@available(macOS 10.15, *)
 private struct MinionsViewTierButton: View {
     let button: BattlegroundsMinionsViewModel.TierButton
     let badgeSize: CGFloat
@@ -326,10 +322,25 @@ private struct MinionsViewTierButton: View {
                 }
             }
             .frame(width: badgeSize, height: badgeSize)
+            // Outside the 0.905 scaled grid, so it sits in the button's own
+            // corner rather than the badge's.
+            .overlay(darkParadoxDot, alignment: .topTrailing)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .onHover { hovering in isHovering = hovering }
+        // ToolTipService.Placement="Left" on the tier buttons, with the
+        // CardTooltip only set while ShowDarkParadoxTooltip. Their
+        // InitialShowDelay="300" is the tooltip's default.
+        .cardImageTooltip(cardId: button.showDarkParadoxTooltip ? button.darkParadox?.id : nil,
+                          showTriple: false, placement: .left)
+    }
+
+    @ViewBuilder
+    private var darkParadoxDot: some View {
+        if button.hasDarkParadox {
+            DarkParadoxDot()
+        }
     }
 
     // Ported verbatim from BattlegroundsTierButton.xaml.cs's IconOpacity.
@@ -359,7 +370,6 @@ private struct MinionsViewTierButton: View {
     }()
 }
 
-@available(macOS 10.15, *)
 struct MinionsViewTierBadge: View {
     let tier: Int
     let badgeSize: CGFloat

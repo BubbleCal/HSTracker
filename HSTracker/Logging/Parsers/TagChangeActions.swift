@@ -90,11 +90,13 @@ struct TagChangeActions {
                 self.cantPlayChange(eventHandler: eventHandler, id: id, value: value, previous: prevValue)
             case .health:
                 self.healthChange(eventHandler: eventHandler, id: id, value: value, previous: prevValue)
-                self.drBoomsMonsterRebornHealth(eventHandler: eventHandler, id: id, value: value)
             case .atk:
                 self.opponentMalorneAtkChange(eventHandler: eventHandler, id: id, value: value, previous: prevValue)
             case .maxresources:
                 self.maxResourcesChange(eventHandler: eventHandler, id: id, value: value, previous: prevValue)
+            // bacon_max_gold is the cap, resources the gold the game shows
+            case .bacon_max_gold, .resources:
+                self.maxGoldChange(eventHandler: eventHandler, id: id)
             case .maxhandsize:
                 self.maxHandSizeChange(eventHandler: eventHandler, id: id, value: value, previous: prevValue)
             case .corpses:
@@ -131,6 +133,10 @@ struct TagChangeActions {
                 self.onHeroEntityChange(eventHandler: eventHandler, playerEntityId: id, heroEntityId: value)
             case .next_opponent_player_id:
                 self.onNextOpponentPlayerId(eventHandler: eventHandler, id: id, value: value)
+            case .bacon_evolution_card_id:
+                self.onBaconEvolutionCardIdChange(eventHandler: eventHandler, id: id)
+            case .bacon_global_old_god_dbid:
+                self.updateSessionPlayerDeity(eventHandler)
             default:
                 break
             }
@@ -170,9 +176,24 @@ struct TagChangeActions {
     // Both of HDT's combat-setup handlers collapse BgsMinionPinningShop as
     // combat opens - the shop is gone, so its markers must be too.
     private func hideMinionPinningShop(_ eventHandler: PowerEventHandler) {
-        guard #available(macOS 10.15, *), let game = eventHandler as? Game else { return }
+        guard let game = eventHandler as? Game else { return }
         DispatchQueue.main.async {
             game.windowManager.rootOverlay?.viewModel.battlegroundsMinionPinning.setShopVisible(false)
+        }
+    }
+
+    private func onBaconEvolutionCardIdChange(eventHandler: PowerEventHandler, id: Int) {
+        guard eventHandler.isBattlegroundsMatch() else { return }
+        guard let entity = eventHandler.entities[id] else { return }
+        guard entity.cardId == CardIds.NonCollectible.Neutral.SecretDeityDnt
+                && entity.isControlled(by: eventHandler.player.id) else { return }
+        updateSessionPlayerDeity(eventHandler)
+    }
+
+    private func updateSessionPlayerDeity(_ eventHandler: PowerEventHandler) {
+        guard let game = eventHandler as? Game else { return }
+        DispatchQueue.main.async {
+            game.windowManager.rootOverlay?.viewModel.battlegroundsSession.updatePlayerDeity()
         }
     }
 
@@ -218,20 +239,6 @@ struct TagChangeActions {
         if value != 1 {
             return
         }
-    }
-    
-    private func drBoomsMonsterRebornHealth(eventHandler: PowerEventHandler, id: Int, value: Int) {
-        if !BobsBuddyInvoker.currentCombatHasDrBoomsMonster {
-            return
-        }
-        guard let entity = eventHandler.entities[id] else {
-            return
-        }
-        if entity.cardId != CardIds.NonCollectible.Neutral.DrBoomsMonster
-            && entity.cardId != CardIds.NonCollectible.Neutral.DrBoomsMonster_DrBoomsMonster1 {
-            return
-        }
-        BobsBuddyInvoker.instance(gameId: eventHandler.gameId, turn: eventHandler.turnNumber())?.updateDrBoomsMonsterReborn(entity[.creator], value, entity.isControlled(by: eventHandler.player.id))
     }
     
     private func opponentMalorneAtkChange(eventHandler: PowerEventHandler, id: Int, value: Int, previous: Int) {
@@ -427,10 +434,8 @@ struct TagChangeActions {
         }
 
         if entity.isPlayer(eventHandler: eventHandler) && Mulligan.done.rawValue == value {
-            if #available(macOS 10.15, *) {
-                Task.detached {
-                    await eventHandler.handlePlayerMulliganDone()
-                }
+            Task.detached {
+                await eventHandler.handlePlayerMulliganDone()
             }
         }
 
@@ -697,6 +702,23 @@ struct TagChangeActions {
             eventHandler.handlePlayerMaxManaChange(value)
         } else if entity.isControlled(by: eventHandler.opponent.id) || id == eventHandler.opponent.id {
             eventHandler.handleOpponentMaxManaChange(value)
+        }
+    }
+
+    private func maxGoldChange(eventHandler: PowerEventHandler, id: Int) {
+        if !eventHandler.isBattlegroundsMatch() {
+            return
+        }
+        guard let entity = eventHandler.entities[id] else {
+            return
+        }
+        if !entity.isControlled(by: eventHandler.player.id) {
+            return
+        }
+
+        let maxGold = entity[.bacon_max_gold]
+        if maxGold > 0 {
+            eventHandler.handlePlayerMaxGoldChange(maxGold)
         }
     }
 
@@ -1000,6 +1022,13 @@ struct TagChangeActions {
         }
     }
 
+    private func updateBoardOrder(eventHandler: PowerEventHandler, entity: Entity, value: Int, prevValue: Int) {
+        if value == Zone.play.rawValue && prevValue != Zone.play.rawValue {
+            eventHandler.boardOrderCounter += 1
+            entity.info.boardOrder = eventHandler.boardOrderCounter
+        }
+    }
+
     private func zoneChange(eventHandler: PowerEventHandler, id: Int, value: Int, prevValue: Int) {
         guard id > 3 else { return }
         guard let entity = eventHandler.entities[id] else { return }
@@ -1011,6 +1040,7 @@ struct TagChangeActions {
                 entity.info.originalZone = Zone(rawValue: value)
             }
         }
+        updateBoardOrder(eventHandler: eventHandler, entity: entity, value: value, prevValue: prevValue)
         
         let controller = entity[.controller]
         guard let zoneValue = Zone(rawValue: prevValue) else {

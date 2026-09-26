@@ -14,7 +14,6 @@ import SwiftUI
 // their "Favorable Minions" lists with this control at LayoutTransform
 // ScaleX/Y="0.9", rather than the flat square icon HSTracker used to show -
 // hence the `scale` parameter instead of a fixed size.
-@available(macOS 10.15, *)
 struct BattlegroundsTribeIconView: View {
     // HDT's BattlegroundsTribe.MinionTypeAvailability, which picks the ring
     // colour and whether the crossed-out overlay is drawn.
@@ -34,6 +33,15 @@ struct BattlegroundsTribeIconView: View {
     let race: Race
     var availability: Availability = .available
     var scale: CGFloat = 1.0
+    // HDT's Deity dependency property: the session panel binds the player's
+    // Deity so the Aberration slot shows it instead of the generic icon.
+    var deity: Card?
+
+    // A banned Aberration type never gets a Deity, so it keeps the generic icon.
+    private var shownDeity: Card? {
+        guard let deity, race == .aberration, availability == .available else { return nil }
+        return deity
+    }
 
     // BattlegroundsTribe.xaml's outer Canvas is 38x38 with a 2pt border ring
     // and a 34pt image ellipse inside it; the name label below is a 16pt-tall
@@ -45,11 +53,17 @@ struct BattlegroundsTribeIconView: View {
     var body: some View {
         VStack(spacing: 2 * scale) {
             ZStack {
-                Image(BattlegroundsMinionType.race(race).iconName)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: circleSize, height: circleSize)
-                    .clipShape(Circle())
+                if let shownDeity {
+                    // DeityVisibility: the Deity's portrait, keyed on its id so
+                    // a changed Deity loads its own art. The generic icon stays
+                    // up until that art has loaded.
+                    DeityPortrait(cardId: shownDeity.id, size: circleSize) {
+                        tribeIcon
+                    }
+                    .id(shownDeity.id)
+                } else {
+                    tribeIcon
+                }
                 // BorderColor defaults to "#16d220" (Availability.Available) -
                 // none of the guide call sites bind Availability, so there it's
                 // always the green ring; the session panel's banned list is the
@@ -77,5 +91,56 @@ struct BattlegroundsTribeIconView: View {
                 .frame(width: canvasSize, height: 16 * scale)
         }
         .fixedSize()
+    }
+
+    private var tribeIcon: some View {
+        Image(BattlegroundsMinionType.race(race).iconName)
+            .resizable()
+            .aspectRatio(contentMode: .fill)
+            .frame(width: circleSize, height: circleSize)
+            .clipShape(Circle())
+    }
+}
+
+// The Deity half of BattlegroundsTribe.xaml: a CardAssetType.Portrait ImageBrush
+// filling the 34pt ellipse under ScaleTransform ScaleX/Y="1.5" CenterX="18"
+// CenterY="13".
+//
+// Until the portrait has loaded it shows `placeholder` - the generic Aberration
+// icon - rather than an empty circle, as HDT's ShowsDeity waits on the asset's
+// IsLoaded.
+private struct DeityPortrait<Placeholder: View>: View {
+    let cardId: String
+    let size: CGFloat
+    @ViewBuilder let placeholder: () -> Placeholder
+
+    @SwiftUI.State private var portrait: NSImage?
+
+    var body: some View {
+        Group {
+            if let portrait {
+                Image(nsImage: portrait)
+                    .resizable()
+                    .frame(width: size, height: size)
+                    .scaleEffect(1.5, anchor: UnitPoint(x: 18.0 / 34.0, y: 13.0 / 34.0))
+            } else {
+                placeholder()
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+        .onAppear(perform: load)
+    }
+
+    private func load() {
+        if let cached = ImageUtils.cachedArt(cardId: cardId) {
+            portrait = cached
+            return
+        }
+        ImageUtils.art(for: cardId) { img in
+            DispatchQueue.main.async {
+                self.portrait = img
+            }
+        }
     }
 }

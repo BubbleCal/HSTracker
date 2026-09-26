@@ -130,7 +130,6 @@ struct MulliganGuideResult<T> {
     }
 }
 
-@available(macOS 10.15.0, *)
 final class MulliganGuideTrialState {
     typealias Activate = (_ hi: Int64, _ lo: Int64) async -> PlayerTrialActivation?
 

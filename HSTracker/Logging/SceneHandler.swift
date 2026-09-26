@@ -53,30 +53,24 @@ class SceneHandler {
             DispatchQueue.main.async {
                 game.updateMulliganGuidePreLobby()
             }
-            if #available(macOS 10.15, *) {
-                game.windowManager.rootOverlay?.viewModel.mulliganGuidePreLobby.viewModel.invlidateAllDecks()
-            }
+            game.windowManager.rootOverlay?.viewModel.mulliganGuidePreLobby.viewModel.invlidateAllDecks()
             Watchers.deckPickerWatcher.stop()
         } else if from == .bacon {
             DispatchQueue.main.async {
                 game.updateBattlegroundsSessionVisibility()
-                if #available(macOS 10.15, *) {
-                    game.updateTier7PreLobbyVisibility()
-                    game.updateBattlegroundsGuidesPreLobbyVisibility()
-                }
+                game.updateTier7PreLobbyVisibility()
+                game.updateBattlegroundsGuidesPreLobbyVisibility()
             }
             Watchers.baconWatcher.stop()
         } else if from == .draft {
             Watchers.arenaWatcher.stop()
             Watchers.arenaStateWatcher.stop()
             DispatchQueue.main.async {
-                if #available(macOS 10.15, *) {
-                    // HDT does the same from _arenaOverlayBehavior and
-                    // _arenaPreLobbyBehavior's HideCallbacks.
-                    let overlay = game.windowManager.rootOverlay?.viewModel
-                    overlay?.arenaPickHelper.reset()
-                    overlay?.arenaPreDraft.reset()
-                }
+                // HDT does the same from _arenaOverlayBehavior and
+                // _arenaPreLobbyBehavior's HideCallbacks.
+                let overlay = game.windowManager.rootOverlay?.viewModel
+                overlay?.arenaPickHelper.reset()
+                overlay?.arenaPreDraft.reset()
             }
         } else if from == .gameplay {
             game.updateBattlegroundsSessionVisibility()
@@ -109,12 +103,14 @@ class SceneHandler {
             
             DispatchQueue.main.async {
                 game.updateBattlegroundsSessionVisibility()
-                if #available(macOS 10.15, *) {
-                    game.updateTier7PreLobbyVisibility()
-                    game.updateBattlegroundsGuidesPreLobbyVisibility()
-                }
+                game.updateTier7PreLobbyVisibility()
+                game.updateBattlegroundsGuidesPreLobbyVisibility()
             }
             Watchers.baconWatcher.run()
+            // A season can roll over while the app is running, so the tag
+            // overrides BattlegroundsDb was built from are re-read here rather
+            // than only at launch.
+            RemoteConfig.loadBattlegroundsLiveMetaPeriod()
         } else if to == .draft {
             game.cacheArenaRating()
             Watchers.arenaWatcher.run()
@@ -130,11 +126,11 @@ class SceneHandler {
             Watchers.playZoneWatcher.run()
         }
         
-        if from == .bacon, #available(macOS 10.15, *) {
+        if from == .bacon {
             game.windowManager.rootOverlay?.viewModel.tier7PreLobby.invalidateUserState()
         }
 
-        if to == .draft, #available(macOS 10.15, *) {
+        if to == .draft {
             let preDraft = game.windowManager.rootOverlay?.viewModel.arenaPreDraft
             DispatchQueue.main.async {
                 preDraft?.invalidateUserState()

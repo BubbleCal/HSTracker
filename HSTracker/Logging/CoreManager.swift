@@ -63,16 +63,14 @@ final class CoreManager: NSObject {
         let logPath = MirrorHelper.getLogSessionDir()
         logReaderManager = LogReaderManager(logPath: logPath, coreManager: self)
         
-        if #available(macOS 10.15, *) {
-            game.windowManager.rootOverlay?.viewModel.playerCounters.setCounters(game.counterManager)
-            game.windowManager.rootOverlay?.viewModel.opponentCounters.setCounters(game.counterManager)
-            game.windowManager.rootOverlay?.viewModel.playerActiveEffects.setActiveEffects(game.activeEffects)
-            game.windowManager.rootOverlay?.viewModel.opponentActiveEffects.setActiveEffects(game.activeEffects)
-            game.activeEffects.effectsChanged = { [weak game] in
-                guard let viewModel = game?.windowManager.rootOverlay?.viewModel else { return }
-                viewModel.playerActiveEffects.updateVisibleEffects()
-                viewModel.opponentActiveEffects.updateVisibleEffects()
-            }
+        game.windowManager.rootOverlay?.viewModel.playerCounters.setCounters(game.counterManager)
+        game.windowManager.rootOverlay?.viewModel.opponentCounters.setCounters(game.counterManager)
+        game.windowManager.rootOverlay?.viewModel.playerActiveEffects.setActiveEffects(game.activeEffects)
+        game.windowManager.rootOverlay?.viewModel.opponentActiveEffects.setActiveEffects(game.activeEffects)
+        game.activeEffects.effectsChanged = { [weak game] in
+            guard let viewModel = game?.windowManager.rootOverlay?.viewModel else { return }
+            viewModel.playerActiveEffects.updateVisibleEffects()
+            viewModel.opponentActiveEffects.updateVisibleEffects()
         }
         
         timer.eventHandler = {
@@ -350,37 +348,81 @@ final class CoreManager: NSObject {
         Watchers.stop()
         MirrorHelper.destroy()
         let wm = game.windowManager
-        if #available(macOS 10.15, *) {
-            game.stopMulliganLivePolling()
-            wm.rootOverlay?.viewModel.battlegroundsHeroPicking.reset()
-            wm.rootOverlay?.viewModel.battlegroundsQuestPicking.reset()
-            wm.rootOverlay?.viewModel.battlegroundsTrinketPicking.reset()
-            wm.rootOverlay?.viewModel.mulliganGuidePreLobby.viewModel.reset()
-            wm.rootOverlay?.viewModel.mulliganGuide.reset()
-            wm.rootOverlay?.viewModel.mulliganGuideV2.reset()
-            wm.rootOverlay?.viewModel.constructedMulliganPreLobbyWidget.reset()
-            wm.rootOverlay?.viewModel.mulliganGuideTrialsExhausted.isShown = false
-            MulliganGuideTrial.clear()
-            // HDT clears both trials side by side when Hearthstone exits
-            // (Core.cs, the "Exited game" branch). Tier7Trial was never cleared
-            // here, so a trial token - and the cached trial status behind it -
-            // outlived the game session and made every later entitlement check
-            // (`Tier7Trial.token != nil`) read as premium.
-            Tier7Trial.clear()
-        }
-        if #available(macOS 10.15, *) {
-            DispatchQueue.main.async {
-                wm.rootOverlay?.viewModel.battlegroundsSession.setShown(false)
-                if let tier7PreLobby = wm.rootOverlay?.viewModel.tier7PreLobby, tier7PreLobby.isShown {
-                    tier7PreLobby.isShown = false
-                    tier7PreLobby.reset()
-                }
+        game.stopMulliganLivePolling()
+        wm.rootOverlay?.viewModel.battlegroundsHeroPicking.reset()
+        wm.rootOverlay?.viewModel.battlegroundsQuestPicking.reset()
+        wm.rootOverlay?.viewModel.battlegroundsTrinketPicking.reset()
+        wm.rootOverlay?.viewModel.mulliganGuidePreLobby.viewModel.reset()
+        wm.rootOverlay?.viewModel.mulliganGuide.reset()
+        wm.rootOverlay?.viewModel.mulliganGuideV2.reset()
+        wm.rootOverlay?.viewModel.constructedMulliganPreLobbyWidget.reset()
+        wm.rootOverlay?.viewModel.mulliganGuideTrialsExhausted.isShown = false
+        MulliganGuideTrial.clear()
+        // HDT clears both trials side by side when Hearthstone exits
+        // (Core.cs, the "Exited game" branch). Tier7Trial was never cleared
+        // here, so a trial token - and the cached trial status behind it -
+        // outlived the game session and made every later entitlement check
+        // (`Tier7Trial.token != nil`) read as premium.
+        Tier7Trial.clear()
+        DispatchQueue.main.async {
+            wm.rootOverlay?.viewModel.battlegroundsSession.setShown(false)
+            if let tier7PreLobby = wm.rootOverlay?.viewModel.tier7PreLobby, tier7PreLobby.isShown {
+                tier7PreLobby.isShown = false
+                tier7PreLobby.reset()
             }
         }
         game.updateBattlegroundsOverlays()
         game.currentRegion = .unknown
     }
-    
+
+    // MARK: - Rewind
+
+    /// A Semi-Stable Portal's Rewind took back everything since the play that
+    /// started at `playTime`. The log still has those lines, so drop them and
+    /// read the game again from its start without them. Reading from the start
+    /// is also what happens when HSTracker is launched mid-game, so the game is
+    /// reset the same way first.
+    ///
+    /// Called from the log reader's worker, which the reset has to stop and
+    /// wait for, so the reset itself runs on `queue`.
+    func handleRewind(playTime: LogDate, rewindTime: LogDate) {
+        guard rewindTime >= playTime else {
+            return
+        }
+        let reader: LogReaderManager = logReaderManager
+        reader.ignoredTimeRanges.append(playTime ... rewindTime)
+        reader.requestStop()
+
+        let generation = trackingGeneration
+        queue.async {
+            self.resetAndReprocess(reader: reader, generation: generation)
+        }
+    }
+
+    private func resetAndReprocess(reader: LogReaderManager, generation: Int) {
+        reader.stop(eraseLogFile: false)
+
+        // Keep the overlay as it is: the game is read back in a moment, and
+        // hiding everything in between would only make it flicker.
+        game.reset(updateUI: false)
+        game.clearPowerLog()
+
+        let newReader = LogReaderManager(logPath: reader.logPath, coreManager: self)
+        newReader.ignoredTimeRanges = reader.ignoredTimeRanges
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            // Hearthstone closed while the old reader was stopping.
+            guard generation == self.trackingGeneration, self.logReaderManager === reader else {
+                return
+            }
+            self.logReaderManager = newReader
+            newReader.start()
+        }
+    }
+
+    func handleGameEnd() {
+        logReaderManager.ignoredTimeRanges.removeAll()
+    }
+
     var triggers: [NSObjectProtocol] = []
 
     // MARK: - Events

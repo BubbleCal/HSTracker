@@ -18,7 +18,6 @@ class WindowManager {
     // opponentTracker / secretsPanel / linkOpponentDeck.
 
     private var _rootOverlay: Any?
-    @available(OSX 10.15, *)
     var rootOverlay: RootOverlayWindow? {
         if _rootOverlay == nil {
             _rootOverlay = RootOverlayWindow(windowNibName: "RootOverlayWindow")
@@ -26,7 +25,6 @@ class WindowManager {
         return (_rootOverlay as? RootOverlayWindow)
     }
 
-    @available(macOS 10.15, *)
     var tooltipGridCards: RelatedCardsTooltipPanel {
         RelatedCardsTooltipPanel.shared
     }
@@ -39,14 +37,12 @@ class WindowManager {
     func hideGameTrackers() {
 		// TODO: use not defered gui instead
         DispatchQueue.main.async { [weak self] in
-            if #available(macOS 10.15, *) {
-                self?.rootOverlay?.viewModel.secretsPanel.isShown = false
-                self?.rootOverlay?.viewModel.opponentHandMarkers.hide()
-                self?.rootOverlay?.viewModel.boardOverlay.isShown = false
-                self?.rootOverlay?.viewModel.flavorText.hide()
-                self?.tooltipGridCards.hide()
-                RelatedCardsBrowserPanel.shared.hide()
-            }
+            self?.rootOverlay?.viewModel.secretsPanel.isShown = false
+            self?.rootOverlay?.viewModel.opponentHandMarkers.hide()
+            self?.rootOverlay?.viewModel.boardOverlay.isShown = false
+            self?.rootOverlay?.viewModel.flavorText.hide()
+            self?.tooltipGridCards.hide()
+            RelatedCardsBrowserPanel.shared.hide()
         }
     }
 
@@ -58,11 +54,9 @@ class WindowManager {
             guard let self else {
                 return
             }
-            if #available(macOS 10.15, *) {
-                CardTooltipPanel.shared.hide()
-                SecretExclusionHintPanel.shared.hide()
-                self.tooltipGridCards.hide()
-            }
+            CardTooltipPanel.shared.hide()
+            SecretExclusionHintPanel.shared.hide()
+            self.tooltipGridCards.hide()
         }
     }
 

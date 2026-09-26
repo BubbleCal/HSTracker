@@ -8,7 +8,6 @@
 
 import Foundation
 
-@available(macOS 10.15.0, *)
 class Tier7Trial {
     // Same status handling as MulliganGuideTrial - see PlayerTrialStatusCache.update
     // for the HDT Update() semantics this had lost.

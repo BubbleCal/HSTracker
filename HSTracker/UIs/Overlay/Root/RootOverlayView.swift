@@ -13,7 +13,6 @@ import SwiftUI
 // NSHostingView's local coordinate space) of whichever child currently needs
 // real mouse interactivity. RootOverlayWindow reads this to know which
 // pixels should stop being click-through - see its mouse-tracking comment.
-@available(macOS 10.15, *)
 struct InteractiveRegionPreferenceKey: PreferenceKey {
     static var defaultValue: [CGRect] = []
     // Collected as a list rather than overwritten or unioned. Originally only
@@ -40,7 +39,6 @@ struct InteractiveRegionPreferenceKey: PreferenceKey {
 // Carries an id because several children want this at once and each needs to
 // know whether the cursor is over *it*: the top-bar mask, and one region per
 // offered hero and quest reward for their guide tooltips.
-@available(macOS 10.15, *)
 struct HoverRegion: Equatable {
     let id: String
     let rect: CGRect
@@ -48,7 +46,6 @@ struct HoverRegion: Equatable {
 
 // The ids the hover regions are matched by. Free functions rather than
 // stringly-typed call sites, since both ends have to agree on them.
-@available(macOS 10.15, *)
 enum HoverRegionID {
     static let bgsTopBarMask = "bgsTopBarMask"
 
@@ -67,7 +64,6 @@ enum HoverRegionID {
     static let mercenariesTasksButton = "mercenariesTasksButton"
 }
 
-@available(macOS 10.15, *)
 struct HoverRegionPreferenceKey: PreferenceKey {
     static var defaultValue: [HoverRegion] = []
     static func reduce(value: inout [HoverRegion], nextValue: () -> [HoverRegion]) {
@@ -75,7 +71,6 @@ struct HoverRegionPreferenceKey: PreferenceKey {
     }
 }
 
-@available(macOS 10.15, *)
 extension CoordinateSpace {
     static let rootOverlayCanvas = CoordinateSpace.named("rootOverlayCanvas")
 }
@@ -90,7 +85,6 @@ extension CoordinateSpace {
 // BattlegroundsOpponentInfoViewModel - the port of the method that computes it -
 // and RootOverlayView observes only RootOverlayViewModel, so something has to
 // observe it for the opacity to track it.
-@available(macOS 10.15, *)
 struct BattlegroundsLeaderboardHoverFade<Content: View>: View {
     @ObservedObject var viewModel: BattlegroundsOpponentInfoViewModel
     @ViewBuilder let content: () -> Content
@@ -103,7 +97,6 @@ struct BattlegroundsLeaderboardHoverFade<Content: View>: View {
     }
 }
 
-@available(macOS 10.15, *)
 struct RootOverlayView: View {
     /// Width of Hearthstone's 4:3 play area in canvas units - the canvas is the
     /// 1080-tall reference space, so this is fixed regardless of window size.
@@ -379,15 +372,17 @@ struct RootOverlayView: View {
                 BattlegroundsTrinketPickingView(viewModel: viewModel.battlegroundsTrinketPicking,
                                                 canvasWidth: canvasWidth)
 
-                // HDT's DiscoveryGuidesTooltipTrigger, laid over the game's
-                // own tooltip for a hovered quest reward or trinket.
-                // Declared after the pickers for the same reason the hero
-                // one is.
-                BattlegroundsDiscoveryGuideTriggerView(discoveryGuides: viewModel.battlegroundsDiscoveryGuides,
-                                                       trinketGuides: viewModel.battlegroundsTrinketGuides,
-                                                       questGuides: viewModel.battlegroundsQuestGuides,
-                                                       canvasWidth: canvasWidth,
-                                                       hoveredRegions: viewModel.hoveredRegionIds)
+                // The trinket/quest discovery guide trigger used to be
+                // declared here, but its card (positioned by
+                // Game.setTrinketGuidesTrigger to sit under the
+                // actually-hovered trinket) lands squarely inside the
+                // "DiscoverCard" region the opacity mask punches out for the
+                // row underneath it, so it got masked away along with
+                // everything else this ZStack draws there. HDT never hits
+                // this: its tooltip is a WPF Popup, a separate surface
+                // outside OverlayWindow's own OpacityMask entirely. Moved
+                // below, past the .mask(), to get the same immunity - see
+                // the comment there.
 
                 // The Tier7 Battlegrounds pre-lobby panel, declared ahead of
                 // BgsTopBar on HDT's own canvas (OverlayWindow.xaml) so the
@@ -613,6 +608,9 @@ struct RootOverlayView: View {
             OpponentHandMarkersView(viewModel: viewModel.opponentHandMarkers,
                                     canvasSize: geometry.size)
             BoardOverlayView(viewModel: viewModel.boardOverlay, canvasSize: geometry.size)
+            // The board entry order badges, which HDT declares right after
+            // the two board grids.
+            BoardEntryOrderView(viewModel: viewModel.boardEntryOrder, canvasSize: geometry.size)
             // The MercAbility stack, which HDT declares immediately before
             // the two board grids on its own canvas.
             MercenariesAbilityHoverView(viewModel: viewModel.mercenariesAbilityHover,
@@ -636,5 +634,21 @@ struct RootOverlayView: View {
         // themselves cut away. Inert unless
         // OverlayOpacityMask.debugShowRegions is flipped on.
         .overlay(RootOverlayOpacityMaskDebugView(mask: viewModel.opacityMask, size: geometry.size))
+        // HDT's DiscoveryGuidesTooltipTrigger, laid over the game's own
+        // tooltip for a hovered quest reward or trinket. Applied after the
+        // mask rather than declared inside the scaled subtree above -
+        // see the comment left in its place there for why - with the same
+        // scale/position transform that subtree carries so its
+        // canvasWidth-relative coordinates still land correctly.
+        .overlay(
+            BattlegroundsDiscoveryGuideTriggerView(discoveryGuides: viewModel.battlegroundsDiscoveryGuides,
+                                                   trinketGuides: viewModel.battlegroundsTrinketGuides,
+                                                   questGuides: viewModel.battlegroundsQuestGuides,
+                                                   canvasWidth: canvasWidth,
+                                                   hoveredRegions: viewModel.hoveredRegionIds)
+                .frame(width: canvasWidth, height: 1080)
+                .scaleEffect(scale, anchor: .center)
+                .position(x: geometry.size.width / 2, y: geometry.size.height / 2)
+        )
     }
 }

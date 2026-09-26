@@ -7,7 +7,6 @@
 
 import Foundation
 import SwiftUI
-import Preferences
 
 /// Where the player is relative to starting a draft. Only the first two put the
 /// panel on screen.
@@ -44,7 +43,6 @@ enum ArenaRefreshSubscriptionState {
 /// Port of HDT's `ArenaPreDraftViewModel`. Two independent gates decide what it
 /// says: whether HSReplay is serving Arenasmith at all, and what the player's
 /// account entitles them to.
-@available(macOS 10.15, *)
 final class ArenaPreDraftViewModel: ObservableObject {
 
     @Published private(set) var draftState = ArenaDraftState.other
@@ -310,7 +308,7 @@ final class ArenaPreDraftViewModel: ObservableObject {
     }
 
     func signIn() {
-        AppDelegate.instance().openPreferences(pane: Preferences.PaneIdentifier.hsreplay)
+        AppDelegate.instance().openPreferences(pane: PreferencePaneIdentifier.hsreplay)
     }
 
     func refreshAccount() {

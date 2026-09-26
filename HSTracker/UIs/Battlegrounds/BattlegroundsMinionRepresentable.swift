@@ -18,9 +18,16 @@ import SwiftUI
 // composite into whatever bounds it is given, so callers must size the slot at
 // that aspect (see `height(forWidth:)`) - a square slot renders every minion
 // visibly squashed.
-@available(macOS 10.15, *)
 struct BattlegroundsMinionRepresentable: NSViewRepresentable {
-    let entity: Entity
+    let display: BattlegroundsMinionDisplay
+
+    init(entity: Entity) {
+        display = BattlegroundsMinionDisplay(entity: entity)
+    }
+
+    init(display: BattlegroundsMinionDisplay) {
+        self.display = display
+    }
 
     // The 300x350 composite's aspect, as the height that goes with a given
     // slot width.
@@ -30,12 +37,12 @@ struct BattlegroundsMinionRepresentable: NSViewRepresentable {
 
     func makeNSView(context: Context) -> BattlegroundsMinionView {
         let view = BattlegroundsMinionView()
-        view.entity = entity
+        view.display = display
         return view
     }
 
     func updateNSView(_ nsView: BattlegroundsMinionView, context: Context) {
-        nsView.entity = entity
+        nsView.display = display
         nsView.needsDisplay = true
     }
 }

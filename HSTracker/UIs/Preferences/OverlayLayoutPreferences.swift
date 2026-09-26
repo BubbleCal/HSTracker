@@ -7,7 +7,6 @@
 //
 
 import AppKit
-import Preferences
 import SwiftUI
 
 /// The settings behind where the deck trackers and the secret helper sit on the
@@ -18,13 +17,22 @@ import SwiftUI
 /// Built in code rather than from a nib: the section sorter is a list whose rows
 /// move, which is what HDT's `ElementSorter` is, and there is nothing to gain
 /// from expressing that in a xib.
-@available(macOS 10.15, *)
 class OverlayLayoutPreferences: PreferencePaneController, PreferencePane {
-    var preferencePaneIdentifier = Preferences.PaneIdentifier.overlay_layout
+    var preferencePaneIdentifier = PreferencePaneIdentifier.overlay_layout
 
     var preferencePaneTitle = String.localizedString("Overlay_Layout", comment: "")
 
-    var toolbarItemIcon = NSImage(named: "settings-overlay-layout")!
+    var preferencePaneIcon = NSImage(named: "settings-overlay-layout")!
+
+    var preferencePaneSearchText: [String] {
+        ["Options_Overlay_General_Label_Reset", "Options_Overlay_General_Button_Reset",
+         "Options_Overlay_Player_Header", "Options_Overlay_Opponent_Header",
+         "Options_Overlay_Player_Label_Scaling", "Options_Overlay_Player_Label_Opacity",
+         "Options_Overlay_Player_CheckBox_CenterVertically", "Overlay_Layout_Section_Order",
+         "Secret_Helper", "Options_Overlay_Opponent_Label_SecretScaling"]
+            .map { String.localizedString($0, comment: "") }
+            + DeckPanel.allCases.map(\.localizedName)
+    }
 
     override func makeContentView() -> NSView? {
         let hosting = NSHostingView(rootView: OverlayLayoutPreferencesView())
@@ -33,12 +41,10 @@ class OverlayLayoutPreferences: PreferencePaneController, PreferencePane {
     }
 }
 
-@available(macOS 10.15, *)
-extension Preferences.PaneIdentifier {
+extension PreferencePaneIdentifier {
     static let overlay_layout = Self("overlay_layout")
 }
 
-@available(macOS 10.15, *)
 struct OverlayLayoutPreferencesView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -77,7 +83,6 @@ struct OverlayLayoutPreferencesView: View {
 }
 
 /// One side's block: scaling, opacity, vertical centring and the section order.
-@available(macOS 10.15, *)
 struct OverlayLayoutSideSection: View {
     let playerType: PlayerType
 
@@ -162,7 +167,6 @@ struct OverlayLayoutSideSection: View {
 /// HDT's `ElementSorter`: one row per section, each moved with an up and a down
 /// button. The per-section checkboxes its rows also carry are HSTracker's
 /// existing Player / Opponent pane options, so they are not repeated here.
-@available(macOS 10.15, *)
 struct DeckPanelSorterView: View {
     @Binding var order: [DeckPanel]
     let playerType: PlayerType
@@ -203,7 +207,6 @@ struct DeckPanelSorterView: View {
 
 /// HDT's secret panel scaling, the one thing about `SecretsContainer` that is not
 /// set by dragging it.
-@available(macOS 10.15, *)
 struct SecretHelperLayoutSection: View {
     @SwiftUI.State private var scaling: Double = Settings.secretsPanelScaling
 

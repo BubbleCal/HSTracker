@@ -31,7 +31,6 @@ import SwiftUI
 //
 // Every `Core.Game.Metrics.TavernMarkers*` assignment in the HDT source is
 // dropped: HSTracker has no ValueMoments/GameMetrics telemetry to write to.
-@available(macOS 10.15, *)
 final class BattlegroundsMinionPinningViewModel: ObservableObject {
 
     // MARK: - Pinned slots (the panel's grid)
@@ -262,7 +261,7 @@ final class BattlegroundsMinionPinningViewModel: ObservableObject {
     // INVALID and ALL and appends neither the Spells nor the Buddies sentinel,
     // because a tribe pin matches on a card's race.
     var minionTypeButtons: [BattlegroundsMinionsViewModel.MinionTypeButton] {
-        var races = availableRaces ?? BattlegroundsDbSingleton.instance.races.sorted { "\($0)" < "\($1)" }
+        var races = availableRaces ?? BattlegroundsDbSingleton.current.races.sorted { "\($0)" < "\($1)" }
         races.removeAll { $0 == .invalid || $0 == .all }
 
         let hasActiveSelection = !selectedRaces.isEmpty
@@ -329,11 +328,12 @@ final class BattlegroundsMinionPinningViewModel: ObservableObject {
         guard let compsGuides else { return }
 
         // The lobby's pool, plus the two catch-all races a card can carry.
-        var races: Set<Race> = availableRaces.map { Set($0) } ?? BattlegroundsDbSingleton.instance.races
+        let db = BattlegroundsDbSingleton.current
+        var races: Set<Race> = availableRaces.map { Set($0) } ?? db.races
         races.insert(.all)
         races.insert(.invalid)
         let availableDbfIds = Set(
-            BattlegroundsDbSingleton.instance.getCardsByRaces(Array(races), isDuos).map { $0.dbfId }
+            db.getCardsByRaces(Array(races), isDuos).map { $0.dbfId }
         )
 
         let allGuides: [BattlegroundsCompGuideViewModel]
@@ -476,6 +476,9 @@ final class BattlegroundsMinionPinningViewModel: ObservableObject {
         let userHasTier7 = (HSReplayAPI.accountData?.is_tier7 ?? false) || Tier7Trial.token != nil
         let shouldShow = game.isBattlegroundsMatch()
             && !game.gameEnded
+            // The pins are placed from the minion browser, so with the browser
+            // turned off the markers can only ever be empty.
+            && Settings.showBattlegroundsBrowser
             && Settings.showBattlegroundsTavernMarkers
             && game.isBattlegroundsHeroPickingDone
             && game.setupDone
@@ -524,6 +527,16 @@ final class BattlegroundsMinionPinningViewModel: ObservableObject {
             let allowed = Set(races)
             selectedRaces = selectedRaces.filter { allowed.contains($0) }
         }
+        if enableRecommended {
+            recomputeRecommendedFromGuides()
+        }
+        updatePinnedFlags()
+    }
+
+    // OnMinionPoolChanged. HDT also recomputes _racePinnedCardIds here, which
+    // is not ported (see the note above isDuos).
+    func onMinionPoolChanged() {
+        objectWillChange.send()
         if enableRecommended {
             recomputeRecommendedFromGuides()
         }

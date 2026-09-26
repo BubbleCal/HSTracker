@@ -51,6 +51,8 @@ protocol PowerEventHandler: AnyObject {
 	var lastCardPlayed: Int { get set }
     
     var lastEntityChosenOnDiscover: Int { get set }
+
+    var lastPlayBlockTime: LogDate? { get set }
 	
 	var playerUsedHeroPower: Bool { get set }
 	
@@ -114,7 +116,6 @@ protocol PowerEventHandler: AnyObject {
     
     func handleBeginMulligan()
     
-    @available(macOS 10.15.0, *)
     func handlePlayerMulliganDone() async
     
     func playerFatigue(value: Int)
@@ -242,6 +243,7 @@ protocol PowerEventHandler: AnyObject {
     func handlePlayerUnknownCardAddedToDeck()
     
     var dredgeCounter: Int { get set }
+    var boardOrderCounter: Int { get set }
     
     func handleOpponentSecretRemove(entity: Entity, cardId: String?, turn: Int)
     
@@ -293,6 +295,7 @@ protocol PowerEventHandler: AnyObject {
     func handleOpponentMaxManaChange(_ value: Int)
     func handlePlayerMaxHandSizeChange(_ value: Int)
     func handleOpponentMaxHandSizeChange(_ value: Int)
+    func handlePlayerMaxGoldChange(_ value: Int)
     func handlePlayerCorpsesLeftChange(_ value: Int)
     func handleOpponentCorpsesLeftChange(_ value: Int)
 

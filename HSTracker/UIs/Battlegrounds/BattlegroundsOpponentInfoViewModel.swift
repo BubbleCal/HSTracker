@@ -21,7 +21,6 @@ import SwiftUI
 // They share this one view model because they share their trigger: HDT drives
 // both from _leaderboardHoveredEntityId in a single UpdateBattlegroundsOverlay
 // pass, which is what update() below is the port of.
-@available(macOS 10.15, *)
 final class BattlegroundsOpponentInfoViewModel: ObservableObject {
     // One leaderboard slot's triples/tavern-up state, which is what a
     // BattlegroundsTierTriples control renders.
@@ -66,6 +65,9 @@ final class BattlegroundsOpponentInfoViewModel: ObservableObject {
     @Published var tiers = (1...6).map { TierTriples(tier: $0, qty: 0, turn: 0) }
     // The quest badges, empty when the opponent has none.
     @Published var quests = [Quest]()
+    // DeityPanel's single BattlegroundsMinion, nil while the hovered player has no
+    // known Deity - which is also how HDT collapses the panel.
+    @Published var deity: BattlegroundsMinionDisplay?
 
     // Per leaderboard slot (0 = first place), the number of turns that player
     // has been dead, or nil for a slot with nobody dead in it.
@@ -206,7 +208,17 @@ final class BattlegroundsOpponentInfoViewModel: ObservableObject {
         game.battlegroundsMinionsOnHeroPowers(heroPowers)
 
         setBoard(board, game: game)
+        setDeity(game.getBattlegroundsDeityFor(id: hero.id))
         isShown = true
+    }
+
+    // BgsOpponentInfo.UpdateDeity.
+    @MainActor
+    private func setDeity(_ snapshot: DeitySnapshot?) {
+        deity = snapshot.map {
+            BattlegroundsMinionDisplay(card: $0.card, attack: $0.attack, health: $0.health,
+                                       isPremium: $0.isGolden, highlightBuffedStats: false)
+        }
     }
 
     @MainActor
@@ -245,5 +257,6 @@ final class BattlegroundsOpponentInfoViewModel: ObservableObject {
         boardAgeText = ""
         tiers = (1...6).map { TierTriples(tier: $0, qty: 0, turn: 0) }
         quests = []
+        deity = nil
     }
 }

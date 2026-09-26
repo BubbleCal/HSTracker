@@ -6,17 +6,16 @@
 //
 
 import Foundation
-import Preferences
 
 /// Arenasmith options. Mirrors HDT's `FlyoutControls/Options/Overlay/OverlayArena`,
 /// which lives under its Overlay page; HSTracker gives each game mode its own
 /// pane, so this follows BattlegroundsPreferences instead.
 class ArenaPreferences: PreferencePaneController, PreferencePane {
-    var preferencePaneIdentifier = Preferences.PaneIdentifier.arena
+    var preferencePaneIdentifier = PreferencePaneIdentifier.arena
 
     var preferencePaneTitle = String.localizedString("Arena", comment: "")
 
-    var toolbarItemIcon = NSImage(named: "settings-arena")!
+    var preferencePaneIcon = NSImage(named: "settings-arena")!
 
     @IBOutlet var enableArenasmithOverlay: NSButton!
     @IBOutlet var showArenasmithPreLobby: NSButton!
@@ -84,16 +83,14 @@ class ArenaPreferences: PreferencePaneController, PreferencePane {
 
         // The overlay reads these settings directly, so a change while the draft
         // screen is up needs to redraw rather than wait for the next pick.
-        if #available(macOS 10.15, *) {
-            let overlay = AppDelegate.instance().coreManager?.game.windowManager.rootOverlay?.viewModel
-            overlay?.arenaPickHelper.settingsChanged()
-            overlay?.arenaPreDraft.settingsChanged()
-        }
+        let overlay = AppDelegate.instance().coreManager?.game.windowManager.rootOverlay?.viewModel
+        overlay?.arenaPickHelper.settingsChanged()
+        overlay?.arenaPreDraft.settingsChanged()
     }
 }
 
 // MARK: - Preferences
 
-extension Preferences.PaneIdentifier {
+extension PreferencePaneIdentifier {
     static let arena = Self("arena")
 }

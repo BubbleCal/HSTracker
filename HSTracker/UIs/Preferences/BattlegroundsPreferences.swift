@@ -7,14 +7,13 @@
 //
 
 import Foundation
-import Preferences
 
 class BattlegroundsPreferences: PreferencePaneController, PreferencePane {
-    var preferencePaneIdentifier = Preferences.PaneIdentifier.battlegrounds
+    var preferencePaneIdentifier = PreferencePaneIdentifier.battlegrounds
     
     var preferencePaneTitle = String.localizedString("Battlegrounds", comment: "")
     
-    var toolbarItemIcon = NSImage(named: "settings-battlegrounds")!
+    var preferencePaneIcon = NSImage(named: "settings-battlegrounds")!
 
     @IBOutlet var enableTier7Overlay: NSButton!
     @IBOutlet var showTier7PreLobby: NSButton!
@@ -24,12 +23,16 @@ class BattlegroundsPreferences: PreferencePaneController, PreferencePane {
     @IBOutlet var showBobsBuddyDuringCombat: NSButton!
     @IBOutlet var showBobsBuddyDuringShopping: NSButton!
     @IBOutlet var showTurnCounter: NSButton!
+    // HDT's CheckboxShowBattlegroundsMaxResourcesWidget.
+    @IBOutlet var showMaxResources: NSButton!
     @IBOutlet var showAverageDamage: NSButton!
     @IBOutlet var showOpponentWarband: NSButton!
     @IBOutlet var showTiers: NSButton!
     @IBOutlet var showBattlegroundsGuides: NSButton!
     // HDT's CheckboxShowMinionBrowserBetweenGames.
     @IBOutlet var showBattlegroundsGuidesPreLobby: NSButton!
+    // HDT's CheckboxShowBattlegroundsMetaSnapshot.
+    @IBOutlet var showBattlegroundsMetaSnapshot: NSButton!
     // HDT's CheckboxShowBattlegroundsTavernMarkers and the two it gates
     // (OverlayBattlegrounds.xaml).
     @IBOutlet var showTavernPinning: NSButton!
@@ -67,11 +70,13 @@ class BattlegroundsPreferences: PreferencePaneController, PreferencePane {
         showBobsBuddyDuringCombat.state = Settings.showBobsBuddyDuringCombat ? .on : .off
         showBobsBuddyDuringShopping.state = Settings.showBobsBuddyDuringShopping ? .on : .off
         showTurnCounter.state = Settings.showTurnCounter ? .on : .off
+        showMaxResources.state = Settings.showBattlegroundsMaxResources ? .on : .off
         showAverageDamage.state = Settings.showAverageDamage ? .on : .off
         showOpponentWarband.state = Settings.showOpponentWarband ? .on : .off
         showTiers.state = Settings.showBattlegroundsBrowser ? .on : .off
         showBattlegroundsGuides.state = Settings.showBattlegroundsGuides ? .on : .off
         showBattlegroundsGuidesPreLobby.state = Settings.showBattlegroundsGuidesPreLobby ? .on : .off
+        showBattlegroundsMetaSnapshot.state = Settings.showBattlegroundsMetaSnapshot ? .on : .off
         showTavernPinning.state = Settings.showBattlegroundsTavernMarkers ? .on : .off
         autoEnableTavernPinningRecommended.state = Settings.autoEnableTavernMarkersRecommended ? .on : .off
         // Checked only while *neither* half has been dismissed, matching HDT's
@@ -108,47 +113,47 @@ class BattlegroundsPreferences: PreferencePaneController, PreferencePane {
             Settings.showBobsBuddyDuringShopping = showBobsBuddyDuringShopping.state == .on
         } else if sender == showTurnCounter {
             Settings.showTurnCounter = showTurnCounter.state == .on
+        } else if sender == showMaxResources {
+            Settings.showBattlegroundsMaxResources = sender.state == .on
+            // HDT flips the widget's Visibility straight from the checkbox
+            // rather than waiting for the next overlay tick.
+            game.updatePlayerResorucesWidgetVisibility()
         } else if sender == showAverageDamage {
             Settings.showAverageDamage = showAverageDamage.state == .on
         } else if sender == showOpponentWarband {
             Settings.showOpponentWarband = showOpponentWarband.state == .on
         } else if sender == showTiers {
             Settings.showBattlegroundsBrowser = showTiers.state == .on
+            updateEnablement()
         } else if sender == showBattlegroundsGuides {
             Settings.showBattlegroundsGuides = showBattlegroundsGuides.state == .on
             updateEnablement()
         } else if sender == showBattlegroundsGuidesPreLobby {
             Settings.showBattlegroundsGuidesPreLobby = showBattlegroundsGuidesPreLobby.state == .on
-            if #available(macOS 10.15, *) {
-                game.updateBattlegroundsGuidesPreLobbyVisibility()
-            }
+            updateEnablement()
+            game.updateBattlegroundsGuidesPreLobbyVisibility()
+        } else if sender == showBattlegroundsMetaSnapshot {
+            Settings.showBattlegroundsMetaSnapshot = showBattlegroundsMetaSnapshot.state == .on
         } else if sender == showTavernPinning {
             Settings.showBattlegroundsTavernMarkers = sender.state == .on
             updateEnablement()
-            if #available(macOS 10.15, *) {
-                // HDT re-evaluates ShouldShowBgsMinionPinning() from the
-                // checkbox handler rather than waiting for the next tick, so the
-                // panel appears or clears immediately mid-match.
-                game.windowManager.rootOverlay?.viewModel.battlegroundsMinionPinning.updateVisibility()
-            }
+            // HDT re-evaluates ShouldShowBgsMinionPinning() from the
+            // checkbox handler rather than waiting for the next tick, so the
+            // panel appears or clears immediately mid-match.
+            game.windowManager.rootOverlay?.viewModel.battlegroundsMinionPinning.updateVisibility()
         } else if sender == autoEnableTavernPinningRecommended {
             Settings.autoEnableTavernMarkersRecommended = sender.state == .on
         } else if sender == showTavernPinningQuickGuides {
             // One checkbox over both dismissed flags: ticking it re-arms the
             // quick guides (HDT's ShowQuickGuide, which also re-arms the
             // auto-enable prompt), unticking dismisses both.
-            if #available(macOS 10.15, *) {
-                let pinning = game.windowManager.rootOverlay?.viewModel.battlegroundsMinionPinning
-                if sender.state == .on {
-                    pinning?.showGuide()
-                } else {
-                    Settings.dismissedTavernMarkerQuickGuide = true
-                    Settings.dismissedCompGuidesMarkerQuickGuide = true
-                    pinning?.refreshQuickGuideState()
-                }
+            let pinning = game.windowManager.rootOverlay?.viewModel.battlegroundsMinionPinning
+            if sender.state == .on {
+                pinning?.showGuide()
             } else {
-                Settings.dismissedTavernMarkerQuickGuide = sender.state != .on
-                Settings.dismissedCompGuidesMarkerQuickGuide = sender.state != .on
+                Settings.dismissedTavernMarkerQuickGuide = true
+                Settings.dismissedCompGuidesMarkerQuickGuide = true
+                pinning?.refreshQuickGuideState()
             }
         } else if sender == showBDonTiers {
             Settings.showBattlecryDeathrattleOnTiers = sender.state == .on
@@ -201,22 +206,16 @@ class BattlegroundsPreferences: PreferencePaneController, PreferencePane {
         } else if sender == enableTier7Overlay {
             Settings.enableTier7Overlay = sender.state == .on
             updateEnablement()
-            if #available(macOS 10.15, *) {
-                game.updateTier7PreLobbyVisibility()
-            }
+            game.updateTier7PreLobbyVisibility()
         } else if sender == showTier7PreLobby {
             Settings.showBattlegroundsTier7PreLobby = sender.state == .on
-            if #available(macOS 10.15, *) {
-                game.updateTier7PreLobbyVisibility()
-            }
+            game.updateTier7PreLobbyVisibility()
         } else if sender == showHeroPicking {
             Settings.showBattlegroundsHeroPicking = sender.state == .on
         } else if sender == showQuestPicking {
             Settings.showBattlegroundsQuestPicking = sender.state == .on
             if game.isBattlegroundsMatch() {
-                if #available(macOS 10.15, *) {
-                    game.windowManager.rootOverlay?.viewModel.battlegroundsQuestPicking.visibility = sender.state == .on
-                }
+                game.windowManager.rootOverlay?.viewModel.battlegroundsQuestPicking.visibility = sender.state == .on
             }
         } else if sender == showBattlegroundsCompStats {
             Settings.showBattlegroundsTier7SessionCompStats = sender.state == .on
@@ -225,33 +224,27 @@ class BattlegroundsPreferences: PreferencePaneController, PreferencePane {
             Settings.alwaysShowTier7 = sender.state == .on
         } else if sender == autoShowBattlegroundsTrinketPicking {
             Settings.autoShowBattlegroundsTrinketPicking = sender.state == .on
-            if #available(macOS 10.15, *) {
-                AppDelegate.instance().coreManager.game.windowManager.rootOverlay?.viewModel.battlegroundsTrinketPicking.statsVisibility = Settings.autoShowBattlegroundsTrinketPicking
-            }
+            AppDelegate.instance().coreManager.game.windowManager.rootOverlay?.viewModel.battlegroundsTrinketPicking.statsVisibility = Settings.autoShowBattlegroundsTrinketPicking
         }
     }
     
     @IBAction func sliderChanged(_ sender: Any) {
         Settings.battlegroundsSessionScaling = scalingSlider.doubleValue / 100.0
         scalingValue.doubleValue = scalingSlider.doubleValue / 100.0
-        if #available(macOS 10.15, *) {
-            AppDelegate.instance().coreManager.game.windowManager.rootOverlay?
-                .viewModel.battlegroundsSession.updateScaling()
-        }
+        AppDelegate.instance().coreManager.game.windowManager.rootOverlay?
+            .viewModel.battlegroundsSession.updateScaling()
     }
 
     // The session panel keeps every section's visibility in its view model, so a
     // settings change has to be pushed into it rather than picked up on the next
     // redraw.
     private func updateSession() {
-        if #available(macOS 10.15, *) {
-            guard let session = AppDelegate.instance().coreManager.game.windowManager.rootOverlay?
-                .viewModel.battlegroundsSession else {
-                return
-            }
-            session.updateSectionsVisibilities()
-            session.update()
+        guard let session = AppDelegate.instance().coreManager.game.windowManager.rootOverlay?
+            .viewModel.battlegroundsSession else {
+            return
         }
+        session.updateSectionsVisibilities()
+        session.update()
     }
     
     private func updateEnablement() {
@@ -279,6 +272,11 @@ class BattlegroundsPreferences: PreferencePaneController, PreferencePane {
         alwaysShowTavernTier7.isEnabled = showTiers.state == .on
         showBattlegroundsGuides.isEnabled = showTiers.state == .on
         showBattlegroundsGuidesPreLobby.isEnabled = showTiers.state == .on
+        // The meta snapshot only ever shows in the guides panel of the pre-lobby
+        // browser, so all three of its hosts have to be on for it to mean anything.
+        showBattlegroundsMetaSnapshot.isEnabled = showTiers.state == .on
+            && showBattlegroundsGuides.state == .on
+            && showBattlegroundsGuidesPreLobby.state == .on
 
         // IsEnabled="{Binding IsChecked, ElementName=CheckboxShowBattlegroundsTavernMarkers}"
         // on both of the pinning sub-options.
@@ -307,6 +305,6 @@ class BattlegroundsPreferences: PreferencePaneController, PreferencePane {
 
 // MARK: - Preferences
 
-extension Preferences.PaneIdentifier {
+extension PreferencePaneIdentifier {
     static let battlegrounds = Self("battlegrounds")
 }

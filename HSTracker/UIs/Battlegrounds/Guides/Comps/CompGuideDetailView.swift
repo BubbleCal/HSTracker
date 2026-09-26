@@ -9,7 +9,6 @@
 import SwiftUI
 
 // Mirrors HDT's CompGuide.xaml.
-@available(macOS 10.15, *)
 struct CompGuideDetailView: View {
     @ObservedObject var viewModel: BattlegroundsCompsGuidesViewModel
     let comp: BattlegroundsCompGuideViewModel
@@ -80,10 +79,14 @@ struct CompGuideDetailView: View {
 
     private var header: some View {
         HStack(spacing: 8) {
+            // TextWrapping="Wrap" TextTrimming="None" on CompGuide.xaml's
+            // OutlinedTextBlock: a long comp name ("Undead - Attack Scaling")
+            // wraps onto a second line inside the 48pt header rather than
+            // being cut off with an ellipsis.
             Text(comp.compGuide.name)
                 .chunkFive(size: 13)
                 .outlinedText()
-                .lineLimit(1)
+                .fixedSize(horizontal: false, vertical: true)
                 // Without this, the Text's reported ideal width comes from
                 // .outlinedText()'s internal ZStack (which stacks 9 offset
                 // copies for the outline effect) rather than negotiating

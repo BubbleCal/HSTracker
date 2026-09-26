@@ -19,7 +19,6 @@ import SwiftUI
 // @MainActor: the counter-changed listener fires from the log reader queue,
 // and the call sites (AppDelegate's lock/unlock menu item, Game) are plain
 // synchronous code.
-@available(macOS 10.15, *)
 class CountersOverlayViewModel: ObservableObject {
     // HDT's IsPlayer on the two CountersOverlay instances.
     let isPlayer: Bool
@@ -46,9 +45,26 @@ class CountersOverlayViewModel: ObservableObject {
     // counter changing in the background must not overwrite them.
     private var showingExamples = false
 
+    private var visibilityOverridesObserver: NSObjectProtocol?
+
     init(isPlayer: Bool) {
         self.isPlayer = isPlayer
         placement = OverlayWidgetPlacement(widget: .counters, isPlayer: isPlayer)
+
+        // Subscribed here rather than from the settings pane so the overlay refreshes no
+        // matter who changed a setting - HDT hooks CounterVisibilitySettings.Changed up in
+        // CountersOverlay's constructor the same way.
+        visibilityOverridesObserver = NotificationCenter.default.addObserver(
+            forName: Notification.Name(rawValue: Settings.counter_visibility_overrides),
+            object: nil, queue: .main) { [weak self] _ in
+            self?.updateVisibleCounters()
+        }
+    }
+
+    deinit {
+        if let visibilityOverridesObserver {
+            NotificationCenter.default.removeObserver(visibilityOverridesObserver)
+        }
     }
 
     func setCounters(_ counterManager: CounterManager) {

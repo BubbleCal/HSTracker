@@ -45,10 +45,6 @@ class BobsBuddyInvoker {
     var input: InputProxy?
     var output: OutputProxy?
     
-    // True while the current Battlegrounds combat contains a Dr. Boom's Monster, so the per-HEALTH-change reborn
-    // detection in TagChangeActions can skip the entity lookup for the (vast majority of) combats without one.
-    static var currentCombatHasDrBoomsMonster = false
-    
     // True in games where an opponent Malorne can be summoned during the current combat (the Bring in the Buddies anomaly)
     static var currentCombatMayHaveOpponentMalorne = false
     
@@ -124,9 +120,7 @@ class BobsBuddyInvoker {
     // baseline this file is not - hence the protocol, and the optional every
     // call site below goes through.
     private static var bobsBuddyDisplay: BobsBuddyDisplay? {
-        if #available(macOS 10.15, *) {
-            return AppDelegate.instance().coreManager.game.windowManager.rootOverlay?.viewModel.bobsBuddy
-        }
+        return AppDelegate.instance().coreManager.game.windowManager.rootOverlay?.viewModel.bobsBuddy
         return nil
     }
     
@@ -146,6 +140,11 @@ class BobsBuddyInvoker {
     }
     
     static func instance(gameId: String, turn: Int, createInstanceIfNoneFound: Bool = true) -> BobsBuddyInvoker? {
+        // Mono starts in the background after launch. Until it is up, every caller carries on
+        // without Bob's Buddy, the same as it does for a turn with no instance.
+        guard MonoHelper.isReady else {
+            return nil
+        }
         if _currentGameId != gameId {
             logger.debug("New GameId. Clearing instances...")
             _instances.removeAll()
@@ -1109,6 +1108,33 @@ class BobsBuddyInvoker {
         return objective
     }
     
+    /// Builds the Deity that a Deity Sigil will summon. The Deity has no entity of its
+    /// own until it awakens, so until then it exists only as tags on the sigil: the card
+    /// it is going to be, plus the stats it has accumulated.
+    static func getDeityFromSigil(sim: SimulatorProxy, player: Bool, sigil: Entity) -> MinionProxy? {
+        guard let card = Cards.by(dbfId: sigil[.bacon_evolution_card_id], collectible: false) else {
+            return nil
+        }
+
+        // Deliberately the base card id. A Deity is only ever Golden through Mask of
+        // Ancient Ones, which the sigil applies itself from the trinket.
+        let deity = sim.minionFactory.createFromCardid(id: card.id, player: player)
+
+        // These are the Deity's current total stats, not a bonus on top of the printed
+        // ones: they start at 1/1 when the sigil is created and grow with every "Give
+        // your Deity +X/+Y". The player entity carries the same pair as
+        // bacon_old_god_attack/bacon_old_god_health, but the sigil-local tags stay
+        // correct per player in duos.
+        let attack = Int32(sigil[.bacon_evolution_card_overwrite_atk])
+        let health = Int32(sigil[.bacon_evolution_card_overwrite_health])
+        deity.baseAttack = attack
+        deity.maxAttack = attack
+        deity.baseHealth = health
+        deity.maxHealth = health
+
+        return deity
+    }
+
     static func getTrinketFromEntity(factory: TrinketFactoryProxy, player: Bool, entity: Entity) -> TrinketProxy {
         // Use LatestCardId, not CardId. A Lesser/Greater Crystal Ball that has transformed into a
         // copy of a trinket keeps its stale token CardId (BACON trinket entities are not updated by
@@ -1259,9 +1285,18 @@ class BobsBuddyInvoker {
             MonoHelper.addToList(list: inputPlayer.trinkets, element: BobsBuddyInvoker.getTrinketFromEntity(factory: simulator.trinketFactory, player: friendly, entity: trinket))
         }
         let playerObjectives = inputPlayer.objectives
-        for objective in game.player.objectives {
+        for objective in gamePlayer.objectives {
             // TODO: [Duos] Check if friendly translates to player correctly
-            MonoHelper.addToList(list: playerObjectives, element: BobsBuddyInvoker.getObjectiveFromEntity(factory: simulator.objectiveFactory, player: friendly, entity: objective))
+            let inputObjective = BobsBuddyInvoker.getObjectiveFromEntity(factory: simulator.objectiveFactory, player: friendly, entity: objective)
+
+            // The Deity Sigil carries the Deity it will summon, which is not an entity
+            // anywhere in the game until it awakens mid-combat.
+            if objective.cardId == CardIds.NonCollectible.Neutral.SecretDeityDnt,
+               let deity = BobsBuddyInvoker.getDeityFromSigil(sim: simulator, player: friendly, sigil: objective) {
+                inputObjective.setAttachedMinion(deity)
+            }
+
+            MonoHelper.addToList(list: playerObjectives, element: inputObjective)
         }
         
         let playerSide = BobsBuddyInvoker.getOrderedMinions(board: gamePlayer.board).filter { e in e.isControlled(by: gamePlayer.id) }.map { e in BobsBuddyInvoker.getMinionFromEntity(sim: simulator, player: friendly, entity: e, attachedEntities: getAttachedEntities(entityId: e.id), allEntities: game.entities)}
@@ -1470,6 +1505,9 @@ class BobsBuddyInvoker {
         inputPlayer.tavernSpellCounter = Int32(readPlayerCounter(.gametag_3088)) // direct or transfer
         
         inputPlayer.deathrattleCounter = Int32(readPlayerCounter(.gametag_4639)) // direct or transfer
+
+        inputPlayer.volumizerAtkBuff = Int32(readPlayerCounter(.gametag_4468)) // direct or transfer
+        inputPlayer.volumizerHealthBuff = Int32(readPlayerCounter(.gametag_4469)) // direct or transfer
          
         if let pHaunted = playerAttached.first(where: { x in x.cardId == CardIds.NonCollectible.Neutral.HauntedCarapace_HauntedCarapacePlayerEnchantDnt }) {
             inputPlayer.hauntedAtkBuff = Int32(pHaunted[GameTag.tag_script_data_num_1]) // attached
@@ -1556,24 +1594,6 @@ class BobsBuddyInvoker {
                 
         self.input = input
         self._turn = turn
-        
-        // Flag checking for Dr. Boom's Monster (to optimize redundantly checking in TagChangeAction)
-        // Predicate for MinionProxy objects (board)
-        let boomCheckMinion: (MinionProxy) -> Bool = { minion in
-            guard minion.get() != nil else { return false } // Ensure the underlying MonoObject is not nil
-            return minion.cardID == CardIds.NonCollectible.Neutral.DrBoomsMonster || minion.cardID == CardIds.NonCollectible.Neutral.DrBoomsMonster_DrBoomsMonster1
-        }
-        
-        // Predicate for CardEntityProxy objects (hand)
-        let boomCheckCard: (CardEntityProxy) -> Bool = { cardEntity in
-            guard cardEntity.get() != nil else { return false } // Ensure the underlying MonoObject is not nil
-            return cardEntity.id == CardIds.NonCollectible.Neutral.DrBoomsMonster || cardEntity.id == CardIds.NonCollectible.Neutral.DrBoomsMonster_DrBoomsMonster1
-        }
-        
-        BobsBuddyInvoker.currentCombatHasDrBoomsMonster = MonoList<MinionProxy>(input.player.side).contains(where: boomCheckMinion) ||
-                                                          MonoList<MinionProxy>(input.opponent.side).contains(where: boomCheckMinion) ||
-                                                          MonoList<CardEntityProxy>(input.player.hand).contains(where: boomCheckCard) ||
-                                                          MonoList<CardEntityProxy>(input.opponent.hand).contains(where: boomCheckCard)
         
         // Flag checking it's possible to summon Malorne during combat (to optimize redundantly checking in TagChangeAction).
         BobsBuddyInvoker.currentCombatMayHaveOpponentMalorne = input.anomaly.get() != nil && input.anomaly.cardID == CardIds.NonCollectible.Neutral.BringInTheBuddies
@@ -2073,34 +2093,6 @@ class BobsBuddyInvoker {
     }
 
     static let timewarpedMagnanimooseEnchantment = "BACON_FAKE_Magnanimoose_Enchantment"
-    
-    func updateDrBoomsMonsterReborn(_ sourceEntityId: Int, _ rebornMaxHealth: Int, _ isPlayerMinion: Bool) {
-        guard let input, updateRevealedEntityValidStates else {
-            return
-        }
-        MonoHelper.withMonoThread {
-            // We need to know the magnetized count when a Dr. Boom's Monster is reborn
-            let targetPlayer = isPlayerMinion ? input.player : input.opponent
-            if targetPlayer.magnetizeCounter.get() != nil {
-                return
-            }
-
-            guard let source = MonoList<MinionProxy>(targetPlayer.side).first(where: { m in m.game_id == sourceEntityId
-                && (m.cardID == CardIds.NonCollectible.Neutral.DrBoomsMonster || m.cardID == CardIds.NonCollectible.Neutral.DrBoomsMonster_DrBoomsMonster1) }) else {
-                return
-            }
-
-            let statsGrantedPerMagnetize = source.golden ? 4 : 2
-            var count = (rebornMaxHealth - statsGrantedPerMagnetize) / statsGrantedPerMagnetize
-            if count <= 0 {
-                return
-            }
-
-            let boxedInt = mono_value_box(MonoHelper._monoInstance, mono_get_int32_class(), &count)
-            targetPlayer.magnetizeCounter = MonoHandle(obj: boxedInt)
-            tryRerun()
-        }
-    }
     
     func updateOpponentResourcesSpentThisGame(_ malorneEntityId: Int, _ prevAtk: Int, _ atk: Int, _ golden: Bool) {
         guard let input, updateRevealedEntityValidStates else {
