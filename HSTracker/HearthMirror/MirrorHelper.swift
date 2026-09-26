@@ -651,12 +651,26 @@ struct MirrorHelper {
         return result
     }
 
+    // Upstream reads this through HearthMirror 1a6012b, which libs.hearthsim.net does not serve
+    // (NoSuchKey on 2026-09-27), so the fork stays on 912e88e and has no pool to read. The
+    // Battlegrounds database then falls back to the assembled one, as it does when the pool is
+    // late. Once 1a6012b downloads, restore the mirror call and drop the stand-ins below.
     static func getBattlegroundsMinionPool() -> MirrorBattlegroundsMinionPool? {
-        var result: MirrorBattlegroundsMinionPool?
-        MirrorHelper.accessQueue.sync {
-            result = mirror?.getBattlegroundsMinionPool()
-        }
-        return result
+        return nil
     }
+}
+
+// Stand-ins for HearthMirror 1a6012b's pool types, with the members HSTracker uses.
+final class MirrorBattlegroundsMinionPoolEntry: NSObject {
+    var dbfId = 0
+    var tier = 0
+    var cardType = 0
+    var minionTypes: [NSNumber] = []
+    var banned = false
+}
+
+final class MirrorBattlegroundsMinionPool: NSObject {
+    var cards: [MirrorBattlegroundsMinionPoolEntry] = []
+    var activeMinionTypes: [NSNumber] = []
 }
 
