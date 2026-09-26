@@ -55,7 +55,7 @@ class TheCeaselessExpanseCounter: NumericCounter {
             return
         }
         
-        let currentBlock = AppDelegate.instance().coreManager.logReaderManager.powerGameStateParser.currentBlock
+        let currentBlock = AppDelegate.instance().coreManager?.logReaderManager.powerGameStateParser.currentBlock
         
         if discountIfCantPlay(tag: tag, value: value, entity: entity) {
             return

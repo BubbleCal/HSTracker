@@ -126,7 +126,7 @@ class AnimalCompanionCounter: NumericCounter {
             return false
         }
 
-        guard let currentBlock = AppDelegate.instance().coreManager.logReaderManager.powerGameStateParser.currentBlock, relatedCards.contains(currentBlock.cardId ?? "") else {
+        guard let currentBlock = AppDelegate.instance().coreManager?.logReaderManager.powerGameStateParser.currentBlock, relatedCards.contains(currentBlock.cardId ?? "") else {
             return false
         }
 

@@ -21,6 +21,11 @@ class CounterVisibilitySettingsTests: HSTrackerTests {
         super.setUp()
         database = Database()
         database.loadDatabase(splashscreen: nil, withLanguages: [.enUS])
+        // The catalog lists the counter classes ReflectionHelper found. The app does that at
+        // launch, which the test host skips (AppDelegate.isRunningUnitTests).
+        if ReflectionHelper.getCounterClasses().isEmpty {
+            ReflectionHelper.initialize()
+        }
     }
 
     override func setUp() {

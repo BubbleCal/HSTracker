@@ -69,7 +69,7 @@ class PlayedSpellsCounter: NumericCounter {
         guard game.isTraditionalHearthstoneMatch else { return }
         guard tag == .zone else { return }
         guard value == Zone.play.rawValue || value == Zone.secret.rawValue else { return }
-        guard AppDelegate.instance().coreManager.logReaderManager.powerGameStateParser.currentBlock?.type == "PLAY" else { return }
+        guard AppDelegate.instance().coreManager?.logReaderManager.powerGameStateParser.currentBlock?.type == "PLAY" else { return }
         guard entity.isSpell else { return }
         
         guard !_ignoredCards.contains(entity.info.latestCardId) else { return }

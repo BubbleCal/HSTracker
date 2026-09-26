@@ -43,7 +43,7 @@ class CardsPlayedFor2ManaCounter: NumericCounter {
         guard entity.isControlled(by: game.player.id) == isPlayerCounter else { return }
         guard !discountIfCantPlay(tag: tag, value: value, entity: entity) else { return }
         guard tag == .num_resources_spent_this_game else { return }
-        guard let currentBlock = AppDelegate.instance().coreManager.logReaderManager.powerGameStateParser.currentBlock, currentBlock.type == "PLAY" else { return }
+        guard let currentBlock = AppDelegate.instance().coreManager?.logReaderManager.powerGameStateParser.currentBlock, currentBlock.type == "PLAY" else { return }
         guard value - prevValue == 2 else { return }
 
         let playedCard = Card(id: currentBlock.cardId ?? "")

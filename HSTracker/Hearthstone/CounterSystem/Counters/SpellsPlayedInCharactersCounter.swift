@@ -57,7 +57,7 @@ class SpellsPlayedInCharactersCounter: NumericCounter {
             return
         }
 
-        guard let currentBlock = AppDelegate.instance().coreManager.logReaderManager.powerGameStateParser.currentBlock, currentBlock.type == "PLAY" else { return }
+        guard let currentBlock = AppDelegate.instance().coreManager?.logReaderManager.powerGameStateParser.currentBlock, currentBlock.type == "PLAY" else { return }
         guard entity.isSpell else { return }
 
         guard entity.has(tag: .card_target),

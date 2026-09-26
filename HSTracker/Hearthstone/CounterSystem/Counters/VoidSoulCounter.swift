@@ -52,7 +52,7 @@ class VoidSoulCounter: NumericCounter {
         
         // C# pattern matching check: value is not (int)Zone.PLAY || gameState.CurrentBlock?.Type != "PLAY"
         guard value == Zone.play.rawValue else { return }
-        guard AppDelegate.instance().coreManager.logReaderManager.powerGameStateParser.currentBlock?.type == "PLAY" else { return }
+        guard AppDelegate.instance().coreManager?.logReaderManager.powerGameStateParser.currentBlock?.type == "PLAY" else { return }
 
         lastEntityToCount = entity
         counter += 1

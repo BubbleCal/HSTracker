@@ -60,7 +60,7 @@ class PaladinCardsPlayedCounter: NumericCounter {
             return
         }
 
-        let currentBlock = AppDelegate.instance().coreManager.logReaderManager.powerGameStateParser.currentBlock
+        let currentBlock = AppDelegate.instance().coreManager?.logReaderManager.powerGameStateParser.currentBlock
         
         if currentBlock?.type != "PLAY" {
             return

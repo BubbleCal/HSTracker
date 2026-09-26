@@ -85,7 +85,7 @@ class CardsPlayedThisTurnCounter: NumericCounter {
         }
 
         if value == Zone.play.rawValue || value == Zone.secret.rawValue,
-           AppDelegate.instance().coreManager.logReaderManager.powerGameStateParser.currentBlock?.type == "PLAY" {
+           AppDelegate.instance().coreManager?.logReaderManager.powerGameStateParser.currentBlock?.type == "PLAY" {
             lastEntityToCount = entity
             counter += 1
         }

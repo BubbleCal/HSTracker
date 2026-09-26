@@ -119,7 +119,7 @@ class MinionTypesPlayedThisGameCounter: NumericCounter {
         guard tag == .zone else { return }
         guard value == Zone.play.rawValue else { return }
         guard prevValue == Zone.hand.rawValue else { return }
-        guard AppDelegate.instance().coreManager.logReaderManager.powerGameStateParser.currentBlock?.type == "PLAY" else { return }
+        guard AppDelegate.instance().coreManager?.logReaderManager.powerGameStateParser.currentBlock?.type == "PLAY" else { return }
 
         let types = MinionTypesPlayedThisGameCounter.getTypes(entity.latestCard)
         if types.isEmpty { return }

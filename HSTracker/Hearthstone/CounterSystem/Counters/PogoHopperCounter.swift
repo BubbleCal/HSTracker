@@ -45,7 +45,7 @@ class PogoHopperCounter: NumericCounter {
 
     override func handleTagChange(tag: GameTag, entity: Entity, value: Int, prevValue: Int) {
         guard game.isTraditionalHearthstoneMatch else { return }
-        guard tag == .zone && AppDelegate.instance().coreManager.logReaderManager.powerGameStateParser.currentBlock?.type == "PLAY" else { return }
+        guard tag == .zone && AppDelegate.instance().coreManager?.logReaderManager.powerGameStateParser.currentBlock?.type == "PLAY" else { return }
 
         let isCurrentController = isPlayerCounter ? entity.isControlled(by: game.player.id) : entity.isControlled(by: game.opponent.id)
 

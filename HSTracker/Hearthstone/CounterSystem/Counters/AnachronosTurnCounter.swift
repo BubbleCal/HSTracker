@@ -87,7 +87,7 @@ class AnachronosTurnCounter: NumericCounter {
                 onCounterChanged()
                 
                 if anachronosPowerBlockId == -1 {
-                    anachronosPowerBlockId = AppDelegate.instance().coreManager.logReaderManager.powerGameStateParser.currentBlock?.id ?? -1
+                    anachronosPowerBlockId = AppDelegate.instance().coreManager?.logReaderManager.powerGameStateParser.currentBlock?.id ?? -1
                 }
             } else if value == Zone.graveyard.rawValue {
                 anachronosEnchantmentsInPlay -= 1
@@ -111,7 +111,7 @@ class AnachronosTurnCounter: NumericCounter {
     }
     
     private func handleMinions(tag: GameTag, entity: Entity, value: Int, prevValue: Int) {
-        guard AppDelegate.instance().coreManager.logReaderManager.powerGameStateParser.currentBlock?.id == anachronosPowerBlockId,
+        guard AppDelegate.instance().coreManager?.logReaderManager.powerGameStateParser.currentBlock?.id == anachronosPowerBlockId,
               entity.isMinion,
               tag == GameTag.zone,
               prevValue == Zone.play.rawValue,

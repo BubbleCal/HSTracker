@@ -72,7 +72,7 @@ class PlayedDragonsCounter: NumericCounter {
             return
         }
         
-        if AppDelegate.instance().coreManager.logReaderManager.powerGameStateParser.currentBlock?.type != "PLAY" {
+        if AppDelegate.instance().coreManager?.logReaderManager.powerGameStateParser.currentBlock?.type != "PLAY" {
             return
         }
         

@@ -83,7 +83,7 @@ class PlayedSpellSchoolsCounter: NumericCounter {
         }
         guard tag == .zone else { return }
         guard value == Zone.play.rawValue || value == Zone.secret.rawValue else { return }
-        guard AppDelegate.instance().coreManager.logReaderManager.powerGameStateParser.currentBlock?.type == "PLAY" else { return }
+        guard AppDelegate.instance().coreManager?.logReaderManager.powerGameStateParser.currentBlock?.type == "PLAY" else { return }
         guard entity.isSpell else { return }
 
         let spellSchoolTag = entity[.spell_school]

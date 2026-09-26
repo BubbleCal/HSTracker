@@ -52,7 +52,7 @@ class TimethiefRafaamCounter: NumericCounter {
     override func handleTagChange(tag: GameTag, entity: Entity, value: Int, prevValue: Int) {
         guard game.isTraditionalHearthstoneMatch else { return }
 
-        if tag != .zone || AppDelegate.instance().coreManager.logReaderManager.powerGameStateParser.currentBlock?.type != "PLAY" {
+        if tag != .zone || AppDelegate.instance().coreManager?.logReaderManager.powerGameStateParser.currentBlock?.type != "PLAY" {
             return
         }
 

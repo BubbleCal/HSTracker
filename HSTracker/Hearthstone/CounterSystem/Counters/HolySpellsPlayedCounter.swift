@@ -57,7 +57,7 @@ class HolySpellsPlayedCounter: NumericCounter {
             return
         }
 
-        guard AppDelegate.instance().coreManager.logReaderManager.powerGameStateParser.currentBlock?.type == "PLAY" else { return }
+        guard AppDelegate.instance().coreManager?.logReaderManager.powerGameStateParser.currentBlock?.type == "PLAY" else { return }
         guard entity.isSpell else { return }
 
         if entity[.spell_school] != SpellSchool.holy.rawValue {
