@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		14029F20A64FB3E4BB7CD009 /* RecordStatsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C38F2226D77177A24038CA24 /* RecordStatsTests.swift */; };
+		7A1C3E5B9D2F4A6C8E0B1D3F /* CardLegalityCheckerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B2D4F6A0C3E5B7D9F1A2C4E /* CardLegalityCheckerTests.swift */; };
 		D58D46CB44DCA34BF2293EB9 /* RecordStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3850E6EE079AE2B92940A82B /* RecordStats.swift */; };
 		B6DB639B1D0C384FC38ACBD2 /* MulliganRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = D52835FB3C4F3C5F3D83A2E9 /* MulliganRecord.swift */; };
 		8B3037838F49193872700E7D /* DefaultDeckStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BA72A1B9DC53C87BAA265D0 /* DefaultDeckStats.swift */; };
@@ -1918,6 +1919,7 @@
 
 /* Begin PBXFileReference section */
 		C38F2226D77177A24038CA24 /* RecordStatsTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = RecordStatsTests.swift; sourceTree = "<group>"; };
+		8B2D4F6A0C3E5B7D9F1A2C4E /* CardLegalityCheckerTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = CardLegalityCheckerTests.swift; sourceTree = "<group>"; };
 		3850E6EE079AE2B92940A82B /* RecordStats.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = RecordStats.swift; path = Statistics/RecordStats.swift; sourceTree = "<group>"; };
 		D52835FB3C4F3C5F3D83A2E9 /* MulliganRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MulliganRecord.swift; sourceTree = "<group>"; };
 		8BA72A1B9DC53C87BAA265D0 /* DefaultDeckStats.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DefaultDeckStats.swift; sourceTree = "<group>"; };
@@ -4262,6 +4264,7 @@
 				E37377C1AC01A926B98E3110 /* RewoundEntityCreationFilterTests.swift */,
 				C94596811D174FBA008CD47A /* StatsTests.swift */,
 				C38F2226D77177A24038CA24 /* RecordStatsTests.swift */,
+				8B2D4F6A0C3E5B7D9F1A2C4E /* CardLegalityCheckerTests.swift */,
 				439C7E621C7772C100D29859 /* Info.plist */,
 				439B1DF51E86CC280098BBBC /* DatabaseTests.swift */,
 				1CCB4AE71E8A41E3003FD1AD /* PowerParserTests.swift */,
@@ -8885,6 +8888,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				14029F20A64FB3E4BB7CD009 /* RecordStatsTests.swift in Sources */,
+				7A1C3E5B9D2F4A6C8E0B1D3F /* CardLegalityCheckerTests.swift in Sources */,
 				4142FD5EA176D4723926F589 /* ActionHistoryLineParserTests.swift in Sources */,
 				7F2C43A935A0A68DA5952807 /* ActionHistoryVisibilityTests.swift in Sources */,
 				5E1D7A2C9B3F4E60A8C1D2E4 /* HoverPopupTests.swift in Sources */,

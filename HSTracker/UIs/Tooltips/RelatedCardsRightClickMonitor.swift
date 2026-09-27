@@ -50,6 +50,9 @@ final class RelatedCardsRightClickMonitor {
     /// SetHoveredLargePool(Card?, List<Card>?), including the same nil/empty-pool "nothing
     /// hovered" state used to clear it.
     func setHoveredLargePool(card: Card?, pool: [Card], anchorFrame: NSRect) {
+        if card?.id != hoveredCard?.id || pool.count != hoveredPool.count {
+            logger.debug("RightClick: hovered large pool \(card?.id ?? "none") (\(pool.count) cards)")
+        }
         hoveredCard = card
         hoveredPool = pool
         self.anchorFrame = anchorFrame
@@ -100,11 +103,20 @@ final class RelatedCardsRightClickMonitor {
         // large-pool card is actually hovered right now. HDT checks Config.Instance.OutfinderEnabled
         // alone here; showPlayerRelatedCards is kept alongside it because the pool that would be
         // browsed only ever gets set by a tooltip that setting already gates.
-        guard CoreManager.isHearthstoneActive() else { return }
-        guard Settings.outfinderEnabled else { return }
-        guard Settings.showPlayerRelatedCards else { return }
-        guard let card = hoveredCard, !hoveredPool.isEmpty else { return }
+        guard CoreManager.isHearthstoneActive() else {
+            logger.debug("RightClick: ignored, Hearthstone is not the active app")
+            return
+        }
+        guard Settings.outfinderEnabled, Settings.showPlayerRelatedCards else {
+            logger.debug("RightClick: ignored, the OutFinder or the player's related cards are off")
+            return
+        }
+        guard let card = hoveredCard, !hoveredPool.isEmpty else {
+            logger.debug("RightClick: ignored, no large pool hovered")
+            return
+        }
 
+        logger.debug("RightClick: showing the pool of \(card.id) (\(hoveredPool.count) cards) near \(anchorFrame)")
         RelatedCardsBrowserPanel.shared.show(sourceCard: card, relatedCards: hoveredPool, near: anchorFrame)
     }
 }

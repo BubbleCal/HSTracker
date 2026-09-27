@@ -48,7 +48,7 @@ class DiscoveryOfMagic: ICardWithDynamicRelatedCardsSummary {
     private func getFilteredPool(player: Player) -> [Card] {
         let gt = PoolContext.getGameType()
         let format = PoolContext.getFormatType()
-        let key = "\(gt.rawValue)|\(format.rawValue)"
+        let key = CardLegalityChecker.poolKey(gameType: gt, format: format)
         var pool = DiscoveryOfMagic.poolCache[key]
         if pool == nil {
             pool = Cards.collectible()

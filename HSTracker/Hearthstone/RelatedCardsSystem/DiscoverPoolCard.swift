@@ -117,7 +117,7 @@ class DiscoverPoolCard: ICardWithRelatedCardsSummary {
     private static var sharedBasePoolCache = [String: [Card]]()
 
     private func getBasePoolForClass(_ playerClass: CardClass?, _ gt: GameType, _ format: FormatType) -> [Card] {
-        let key = "\(String(describing: type(of: self)))|\(gt.rawValue)|\(format.rawValue)|\(playerClass?.rawValue ?? "")"
+        let key = "\(String(describing: type(of: self)))|\(CardLegalityChecker.poolKey(gameType: gt, format: format))|\(playerClass?.rawValue ?? "")"
         if let cached = DiscoverPoolCard.sharedBasePoolCache[key] {
             return cached
         }

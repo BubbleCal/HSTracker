@@ -215,7 +215,7 @@ class RelativeCostPoolCard: ICardWithDynamicRelatedCardsSummary {
     private static var sharedPoolCache = [String: [String: [Card]]]()
 
     private func getBasePool(gt: GameType, format: FormatType) -> [Card] {
-        let key = "\(gt.rawValue)|\(format.rawValue)"
+        let key = CardLegalityChecker.poolKey(gameType: gt, format: format)
         if let cached = RelativeCostPoolCard.sharedPoolCache[poolCacheKey]?[key] {
             return cached
         }

@@ -57,7 +57,7 @@ class ShadowedInformant: ICardWithDynamicRelatedCardsSummary {
     private func getFilteredPool(player: Player, className: CardClass?) -> [Card] {
         let gt = PoolContext.getGameType()
         let format = PoolContext.getFormatType()
-        let key = "\(className?.rawValue ?? "")|\(gt.rawValue)|\(format.rawValue)"
+        let key = "\(className?.rawValue ?? "")|\(CardLegalityChecker.poolKey(gameType: gt, format: format))"
         var pool = ShadowedInformant.poolCache[key]
         if pool == nil {
             pool = Cards.collectible()

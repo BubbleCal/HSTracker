@@ -5546,6 +5546,7 @@ class Game: NSObject, PowerEventHandler {
             // player hand
             if hoveredCard.isHand && isTraditionalHearthstoneMatch {
                 let relatedCards = getRelatedCards(player: player, cardId: hoveredCard.cardId, inHand: true, handPosition: hoveredCard.zonePosition)
+                logger.debug("RightClick: hand hover \(hoveredCard.cardId) at \(hoveredCard.zonePosition), \(relatedCards.count) related cards")
                 // HDT's SetRelatedCardsTrigger(BigCardState): OutfinderInHand gates the hand hover.
                 if relatedCards.count > 0 && Settings.showPlayerRelatedCards &&
                     !relatedCardsManager.isOutfinderSuppressed(cardId: hoveredCard.cardId, surfaceEnabled: Settings.outfinderInHand) {

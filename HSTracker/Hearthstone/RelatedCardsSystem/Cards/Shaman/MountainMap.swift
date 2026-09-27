@@ -48,7 +48,7 @@ class MountainMap: ICardWithDynamicRelatedCardsSummary {
         let gt = PoolContext.getGameType()
         let format = PoolContext.getFormatType()
         let playerClass = player.currentClass
-        let key = "\(playerClass?.rawValue ?? "")|\(gt.rawValue)|\(format.rawValue)"
+        let key = "\(playerClass?.rawValue ?? "")|\(CardLegalityChecker.poolKey(gameType: gt, format: format))"
         var pool = MountainMap.poolCache[key]
         if pool == nil {
             pool = Cards.collectible()

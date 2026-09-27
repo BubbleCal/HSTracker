@@ -20,9 +20,26 @@ class CardLegalityChecker {
     // MARK: - Load legal cards
     static func loadCardsByFormat(gameType: GameType, format: FormatType) {
         makeRequest(gameType: gameType, format: format) { legalCards in
-            if legalCards.isEmpty { return }
-            legalCardsByFormat[FormatKey(gameType: gameType, format: format)] = Set(legalCards)
+            store(legalCards, gameType: gameType, format: format)
         }
+    }
+
+    static func store(_ legalCards: [String], gameType: GameType, format: FormatType) {
+        if legalCards.isEmpty { return }
+        legalCardsByFormat[FormatKey(gameType: gameType, format: format)] = Set(legalCards)
+    }
+
+    static func clearLegalCards() {
+        legalCardsByFormat.removeAll()
+    }
+
+    /// The game type and format part of the key of a pool worked out with isCardLegal. It also
+    /// says whether HSReplay's list was in yet, so a pool worked out from the card sets while the
+    /// list was still loading - the deck list works out its rows' pools at game start, before it
+    /// arrives - is worked out again once it has.
+    static func poolKey(gameType: GameType, format: FormatType) -> String {
+        let source = legalCardsByFormat[FormatKey(gameType: gameType, format: format)] != nil ? "list" : "sets"
+        return "\(gameType.rawValue)|\(format.rawValue)|\(source)"
     }
 
     // MARK: - HTTP request
@@ -39,17 +56,20 @@ class CardLegalityChecker {
     }
 
     // MARK: - Card legality checks
-    fileprivate static func isCardLegal(cardId: String, gameType: GameType, format: FormatType) -> Bool {
+    /// - Parameter card: the card itself when the caller has it, for its set in the fallback
+    fileprivate static func isCardLegal(cardId: String, card: Card? = nil, gameType: GameType, format: FormatType) -> Bool {
         let key = FormatKey(gameType: gameType, format: format)
         if let legalCards = legalCardsByFormat[key] {
             return legalCards.contains(cardId)
         }
-        return isCardFromFormatFallback(card: Card(id: cardId), format: format)
+        // The card from the database: a bare Card(id:) has no set, which made every card illegal
+        // until HSReplay's list arrived
+        return isCardFromFormatFallback(card: card ?? Cards.cardsById[cardId], format: format)
     }
 
     // MARK: - Fallback
-    private static func isCardFromFormatFallback(card: Card, format: FormatType?) -> Bool {
-        guard let cardSet = card.set else {
+    private static func isCardFromFormatFallback(card: Card?, format: FormatType?) -> Bool {
+        guard let cardSet = card?.set else {
             return false
         }
         switch format {
@@ -69,7 +89,7 @@ class CardLegalityChecker {
 
 extension Card {
     func isCardLegal(gameType: GameType, format: FormatType) -> Bool {
-        return CardLegalityChecker.isCardLegal(cardId: id, gameType: gameType, format: format)
+        return CardLegalityChecker.isCardLegal(cardId: id, card: self, gameType: gameType, format: format)
     }
 }
 
