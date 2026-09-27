@@ -406,7 +406,6 @@
 		43F204111E93C2E600E0BC4A /* Shaman.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43F204031E93C2E600E0BC4A /* Shaman.swift */; };
 		43F204121E93C2E600E0BC4A /* Warlock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43F204041E93C2E600E0BC4A /* Warlock.swift */; };
 		43F204131E93C2E600E0BC4A /* Warrior.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43F204051E93C2E600E0BC4A /* Warrior.swift */; };
-		43F4D0491EB7A23E006B4479 /* HeroPower.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43F4D0481EB7A23D006B4479 /* HeroPower.swift */; };
 		444DEEFAA370D2EF6F676349 /* SpotTheDifference.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07579DF3B72E3BAC3BFFFF28 /* SpotTheDifference.swift */; };
 		455BD7D41883ECBDA138F4D8 /* JandiceBarov.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC90FCEE97A5235C927CCFDD /* JandiceBarov.swift */; };
 		45ADF32BCF11833FBC4EE69A /* RingToss.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F046BBB20996C352EEA418C /* RingToss.swift */; };
@@ -2328,7 +2327,6 @@
 		43F204031E93C2E600E0BC4A /* Shaman.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Shaman.swift; sourceTree = "<group>"; };
 		43F204041E93C2E600E0BC4A /* Warlock.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Warlock.swift; sourceTree = "<group>"; };
 		43F204051E93C2E600E0BC4A /* Warrior.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Warrior.swift; sourceTree = "<group>"; };
-		43F4D0481EB7A23D006B4479 /* HeroPower.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = HeroPower.swift; sourceTree = "<group>"; };
 		43F8265A1E0A674000422F4F /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		4449619B241E5022242D982D /* SkyRaider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkyRaider.swift; sourceTree = "<group>"; };
 		445F45CD97E95841BF673357 /* UnpopularHasBeen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnpopularHasBeen.swift; sourceTree = "<group>"; };
@@ -4039,7 +4037,6 @@
 				4349104F1D09770000B22DB2 /* PlayerBoard.swift */,
 				434910511D09773D00B22DB2 /* IBoardEntity.swift */,
 				434910531D097B0500B22DB2 /* EntityHelper.swift */,
-				43F4D0481EB7A23D006B4479 /* HeroPower.swift */,
 			);
 			path = BoardDamage;
 			sourceTree = "<group>";
@@ -8485,7 +8482,6 @@
 				B89BCE182FF47D5A0095F011 /* Moragg.swift in Sources */,
 				B8E1E5D62D0C958300383975 /* RaiseDead.swift in Sources */,
 				B89865842D91B0AA00BA5649 /* VolumeUp.swift in Sources */,
-				43F4D0491EB7A23E006B4479 /* HeroPower.swift in Sources */,
 				B8B790082C974CB200DD33EC /* KindlingElementalEnchantment.swift in Sources */,
 				B8B61C242AEBEB2C00990359 /* RemoteArenaSettings.swift in Sources */,
 				439DD8FA1DB236A4004EBE47 /* ThemeElement.swift in Sources */,

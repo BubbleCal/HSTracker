@@ -9,8 +9,8 @@
 import Foundation
 
 class BoardState {
-    private(set) var player: PlayerBoard
-    private(set) var opponent: PlayerBoard
+    let player: PlayerBoard
+    let opponent: PlayerBoard
 
     /// Steps of a turn in which the current player can still attack. MAIN_READY is left out because
     /// that is when NUM_TURNS_IN_PLAY, EXHAUSTED and NUM_ATTACKS_THIS_TURN are reset, and MAIN_END,
@@ -18,15 +18,16 @@ class BoardState {
     static let actingSteps = Set([Step.main_start_triggers, .main_start, .main_action, .main_combat,
                                   .main_pre_action, .main_post_action].map { $0.rawValue })
 
-    /// Tags whose change on an entity in play can change a board damage number
+    /// Tags whose change on an entity in play can change a board damage number. DAMAGE and HEALTH are
+    /// here for the weapon's durability.
     private static let inPlayTags: Set<GameTag> = [
         .num_attacks_this_turn, .extra_attacks_this_turn, .exhausted, .frozen, .atk, .damage, .health,
         .charge, .rush, .windfury, .mega_windfury, .cant_attack, .cannot_attack_heroes, .dormant, .titan,
-        .titan_ability_used_1, .titan_ability_used_2, .titan_ability_used_3, .heropower_activations_this_turn,
-        .hero_power_disabled, .silenced, .hide_stats, .just_played, .controller, .cost, .armor
+        .titan_ability_used_1, .titan_ability_used_2, .titan_ability_used_3, .silenced, .hide_stats,
+        .just_played, .controller
     ]
-    /// Turn and mana tags, which live on the game and player entities
-    private static let turnTags: Set<GameTag> = [.step, .current_player, .resources, .resources_used, .temp_resources]
+    /// Turn tags, which live on the game and player entities
+    private static let turnTags: Set<GameTag> = [.step, .current_player]
 
     init(player: PlayerBoard, opponent: PlayerBoard) {
         self.player = player
@@ -42,7 +43,7 @@ class BoardState {
     /// - Parameters:
     ///   - player: the player's entities in play
     ///   - opponent: the opponent's entities in play
-    ///   - playerEntity: the player's player entity, holding CURRENT_PLAYER and the mana tags
+    ///   - playerEntity: the player's player entity, holding CURRENT_PLAYER
     ///   - opponentEntity: the opponent's player entity
     ///   - step: the GameEntity's STEP
     convenience init(player: [Entity], opponent: [Entity], playerEntity: Entity?, opponentEntity: Entity?, step: Int) {
@@ -91,7 +92,6 @@ class BoardState {
     private class func createBoard(list: [Entity], playerEntity: Entity?, step: Int) -> PlayerBoard {
         let current = BoardState.isCurrent(playerEntity: playerEntity)
         return PlayerBoard(list: list, isCurrent: current,
-                           isActing: BoardState.isActing(isCurrent: current, step: step),
-                           playerEntity: playerEntity)
+                           isActing: BoardState.isActing(isCurrent: current, step: step))
     }
 }

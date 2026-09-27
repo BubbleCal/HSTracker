@@ -9,62 +9,48 @@
 import Foundation
 
 /// One side's board damage: what it can still deal to the enemy hero this turn (damageNow) and what
-/// its board could deal on its next own turn if nothing changes (damageNextTurn).
+/// its board could deal on its next own turn if nothing changes (damageNextTurn). Like HDT, only the
+/// Attack of the minions and the hero (with its weapon) counts, never the hero power.
 class PlayerBoard {
     /// Minions, then the hero
-    private(set) var cards: [IBoardEntity] = []
-    private(set) var hero: BoardHero?
-    private(set) var heroPower: HeroPower?
+    let cards: [IBoardEntity]
+    let hero: BoardHero?
     let isCurrent: Bool
     let isActing: Bool
 
-    private(set) var heroPowerDamageNow = 0
-    private(set) var heroPowerDamageNextTurn = 0
-
-    var damageNow: Int {
-        return cards.map { $0.damageNow }.reduce(heroPowerDamageNow, +)
-    }
-
-    var damageNextTurn: Int {
-        return cards.map { $0.damageNextTurn }.reduce(heroPowerDamageNextTurn, +)
-    }
-
-    var hasInfiniteDamageNow: Bool {
-        return cards.any { $0.hasInfiniteDamageNow }
-    }
-
-    var hasInfiniteDamageNextTurn: Bool {
-        return cards.any { $0.hasInfiniteDamageNextTurn }
-    }
+    let damageNow: Int
+    let damageNextTurn: Int
+    let hasInfiniteDamageNow: Bool
+    let hasInfiniteDamageNextTurn: Bool
 
     /// - Parameters:
     ///   - list: the side's entities in play
     ///   - isCurrent: the side has CURRENT_PLAYER
     ///   - isActing: the side is current and in a step where it can still attack
-    ///   - playerEntity: the side's player entity, for the mana the hero power needs this turn
-    init(list: [Entity], isCurrent: Bool, isActing: Bool, playerEntity: Entity? = nil) {
+    init(list: [Entity], isCurrent: Bool, isActing: Bool) {
         self.isCurrent = isCurrent
         self.isActing = isActing
 
         let inPlay = list.filter { $0.isInPlay }
-        let weapon = getWeapon(list: inPlay)
-
-        for minion in inPlay where minion.isMinion {
-            cards.append(BoardCard(entity: minion, isCurrent: isCurrent, isActing: isActing))
+        var cards: [IBoardEntity] = inPlay.filter { $0.isMinion }.map {
+            BoardCard(entity: $0, isCurrent: isCurrent, isActing: isActing)
         }
+        var hero: BoardHero?
         if let heroEntity = inPlay.filter({ $0.isHero }).min(by: { $0.id < $1.id }) {
-            let hero = BoardHero(hero: heroEntity, weapon: weapon, isCurrent: isCurrent, isActing: isActing)
-            self.hero = hero
-            cards.append(hero)
+            let boardHero = BoardHero(hero: heroEntity, weapon: PlayerBoard.getWeapon(list: inPlay),
+                                      isCurrent: isCurrent, isActing: isActing)
+            hero = boardHero
+            cards.append(boardHero)
         }
-        if let heroPowerEntity = inPlay.filter({ $0.isHeroPower }).last {
-            let heroPower = HeroPower(entity: heroPowerEntity)
-            self.heroPower = heroPower
-            computeHeroPowerDamage(heroPower: heroPower, playerEntity: playerEntity)
-        }
+        self.cards = cards
+        self.hero = hero
+        damageNow = cards.reduce(0) { $0 + $1.damageNow }
+        damageNextTurn = cards.reduce(0) { $0 + $1.damageNextTurn }
+        hasInfiniteDamageNow = cards.contains { $0.hasInfiniteDamageNow }
+        hasInfiniteDamageNextTurn = cards.contains { $0.hasInfiniteDamageNextTurn }
     }
 
-    func getWeapon(list: [Entity]) -> Entity? {
+    static func getWeapon(list: [Entity]) -> Entity? {
         let weapons = list.filter { $0.isWeapon }
         if weapons.count <= 1 {
             return weapons.first
@@ -73,57 +59,4 @@ class PlayerBoard {
         // HDT gives up when none is; the newest id is the likelier survivor.
         return weapons.first { $0[.just_played] == 1 } ?? weapons.max { $0.id < $1.id }
     }
-
-    /// The hero power's damage keeps what HSTracker always added on top of the board (HDT counts
-    /// none), now gated by whether it can still be used this turn and whether its damage can land.
-    private func computeHeroPowerDamage(heroPower: HeroPower, playerEntity: Entity?) {
-        let entity = heroPower._entity
-        let damage = heroPower.damage
-        if damage <= 0 || entity[.hero_power_disabled] == 1 {
-            return
-        }
-        // Garrison Commander allows a second use each turn
-        let usesPerTurn = cards.any { $0.cardId == CardIds.Collectible.Neutral.GarrisonCommander } ? 2 : 1
-        var needsHeroAttack = false
-        // A limit on the uses besides the activations
-        var maxUses = Int.max
-        switch heroPower.kind {
-        case .direct:
-            break
-        case .heroAttack:
-            needsHeroAttack = true
-        case .weapon:
-            // A second dagger only replaces the first, and replacing a weapon already equipped (which
-            // the hero term counts) adds nothing
-            if hero?.hasWeapon != false {
-                return
-            }
-            needsHeroAttack = true
-            maxUses = 1
-        case .chargeMinion:
-            // Each use needs a free board slot, and dormant minions take one as well
-            let minions = cards.filter { $0 is BoardCard }.count
-            maxUses = max(PlayerBoard.maxMinions - minions, 0)
-        }
-
-        if isActing && (!needsHeroAttack || hero?.canAttackNow == true) {
-            // The game sets EXHAUSTED once no activation is left this turn
-            var uses = entity[.exhausted] == 1 ? 0
-                : min(max(usesPerTurn - entity[.heropower_activations_this_turn], 0), maxUses)
-            if heroPower.cost > 0 {
-                let mana = playerEntity.map {
-                    $0[.resources] + $0[.temp_resources] - $0[.resources_used]
-                } ?? 0
-                uses = min(uses, max(mana, 0) / heroPower.cost)
-            }
-            heroPowerDamageNow = uses * damage
-        }
-
-        // Next turn's mana is assumed to be enough
-        if !needsHeroAttack || hero?.canAttackNextTurn == true {
-            heroPowerDamageNextTurn = min(usesPerTurn, maxUses) * damage
-        }
-    }
-
-    static let maxMinions = 7
 }

@@ -45,12 +45,12 @@ class BoardDamageTests: HSTrackerTests {
         return entity(.weapon, all)
     }
 
-    private func acting(_ list: [Entity], playerEntity: Entity? = nil) -> PlayerBoard {
-        return PlayerBoard(list: list, isCurrent: true, isActing: true, playerEntity: playerEntity)
+    private func acting(_ list: [Entity]) -> PlayerBoard {
+        return PlayerBoard(list: list, isCurrent: true, isActing: true)
     }
 
-    private func notCurrent(_ list: [Entity], playerEntity: Entity? = nil) -> PlayerBoard {
-        return PlayerBoard(list: list, isCurrent: false, isActing: false, playerEntity: playerEntity)
+    private func notCurrent(_ list: [Entity]) -> PlayerBoard {
+        return PlayerBoard(list: list, isCurrent: false, isActing: false)
     }
 
     private func assertDamage(_ board: PlayerBoard, now: Int, next: Int,
@@ -357,109 +357,35 @@ class BoardDamageTests: HSTrackerTests {
 
     // MARK: - Hero power
 
-    private func steadyShot(_ tags: [GameTag: Int] = [:]) -> Entity {
-        var all: [GameTag: Int] = [.cost: 2]
-        all.merge(tags) { $1 }
-        return entity(.hero_power, cardId: CardIds.NonCollectible.Hunter.SteadyShot, all)
-    }
-
-    private func mana(_ resources: Int, used: Int = 0) -> Entity {
-        return entity(.player, [.resources: resources, .resources_used: used])
-    }
-
-    func testHeroPower() {
-        assertDamage(acting([hero(), steadyShot()], playerEntity: mana(5)), now: 2, next: 2)
-        let used = steadyShot([.exhausted: 1, .heropower_activations_this_turn: 1])
-        assertDamage(acting([hero(), used], playerEntity: mana(5)), now: 0, next: 2)
-        assertDamage(acting([hero(), steadyShot()], playerEntity: mana(5, used: 4)), now: 0, next: 2)
-        assertDamage(notCurrent([hero(), steadyShot()], playerEntity: mana(5)), now: 0, next: 2)
-        assertDamage(acting([hero(), steadyShot([.hero_power_disabled: 1])], playerEntity: mana(5)), now: 0, next: 0)
-    }
-
-    func testHeroPowerTemporaryMana() {
-        let player = entity(.player, [.resources: 1, .temp_resources: 1])
-        XCTAssertEqual(acting([hero(), steadyShot()], playerEntity: player).damageNow, 2)
-    }
-
-    func testHeroPowerWithGarrisonCommander() {
-        let commander = minion(atk: 2, [.num_turns_in_play: 0, .exhausted: 1])
-        commander.cardId = CardIds.Collectible.Neutral.GarrisonCommander
-        let power = steadyShot([.heropower_activations_this_turn: 1, .exhausted: 0])
-        assertDamage(acting([hero(), commander, power], playerEntity: mana(2)), now: 2, next: 2 + 4)
-    }
-
-    func testShapeshiftNeedsTheHeroToAttack() {
+    /// The hero power adds nothing to either number, as in HDT: they are the board's Attack. They used
+    /// to count Shapeshift's +1, which made the Druid board below read 0(11).
+    func testHeroPowerIsNotCounted() {
         let shapeshift = entity(.hero_power, cardId: CardIds.NonCollectible.Druid.Shapeshift, [.cost: 2])
-        assertDamage(acting([hero(), shapeshift], playerEntity: mana(3)), now: 1, next: 1)
-        let attacked = hero(atk: 0, [.num_attacks_this_turn: 1, .exhausted: 1])
-        assertDamage(acting([attacked, shapeshift], playerEntity: mana(3)), now: 0, next: 1)
-        let cantAttack = hero(atk: 0, [.cant_attack: 1])
-        assertDamage(acting([cantAttack, shapeshift], playerEntity: mana(3)), now: 0, next: 0)
+        let steadyShot = entity(.hero_power, cardId: CardIds.NonCollectible.Hunter.SteadyShot, [.cost: 2])
+        assertDamage(acting([hero(), shapeshift]), now: 0, next: 0)
+        assertDamage(notCurrent([hero(), steadyShot, minion(atk: 3)]), now: 0, next: 3)
     }
 
-    /// A hero power with a current id only the card database knows by its English name
-    private func heroPower(named name: String, cardId: String, cost: Int = 2) -> Entity {
-        let previous = Cards.cardsById[cardId]
-        addTeardownBlock { Cards.cardsById[cardId] = previous }
-        let card = Card()
-        card.id = cardId
-        card.enName = name
-        Cards.cardsById[cardId] = card
-        return entity(.hero_power, cardId: cardId, [.cost: cost])
-    }
-
-    func testCurrentHeroPowersMatchedByName() {
-        let steadyShot = HeroPower(entity: heroPower(named: "Steady Shot", cardId: "HERO_05dbp"))
-        XCTAssertEqual(steadyShot.damage, 2)
-        XCTAssertEqual(steadyShot.kind, .direct)
-        let demonsBite = HeroPower(entity: heroPower(named: "Demon's Bite", cardId: "HERO_10bp2", cost: 1))
-        XCTAssertEqual(demonsBite.damage, 2)
-        XCTAssertEqual(demonsBite.kind, .heroAttack)
-        let lifeTap = HeroPower(entity: heroPower(named: "Life Tap", cardId: "HERO_07bp"))
-        XCTAssertEqual(lifeTap.damage, 0)
-    }
-
-    func testDemonClawsNeedsTheHeroToAttack() {
-        let claws = heroPower(named: "Demon Claws", cardId: "HERO_10bp", cost: 1)
-        assertDamage(acting([hero(), claws, minion(atk: 4)], playerEntity: mana(3)), now: 5, next: 5)
-        let attacked = hero(atk: 0, [.num_attacks_this_turn: 1, .exhausted: 1])
-        assertDamage(acting([attacked, claws, minion(atk: 4)], playerEntity: mana(3)), now: 4, next: 5)
-    }
-
-    func testDaggerMasteryOnlyWithoutAWeapon() {
-        let dagger = heroPower(named: "Dagger Mastery", cardId: "HERO_03bp")
-        assertDamage(acting([hero(), dagger], playerEntity: mana(2)), now: 1, next: 1)
-        assertDamage(notCurrent([hero(), dagger], playerEntity: mana(2)), now: 0, next: 1)
-        // Replacing the weapon adds nothing, and Garrison Commander's second use only re-equips it
-        assertDamage(acting([hero(atk: 3), weapon(atk: 3, health: 2), dagger], playerEntity: mana(2)), now: 3, next: 3)
-        let commander = minion(atk: 0)
-        commander.cardId = CardIds.Collectible.Neutral.GarrisonCommander
-        assertDamage(acting([hero(), commander, dagger], playerEntity: mana(4)), now: 1, next: 1)
-    }
-
-    func testGhoulChargeNeedsABoardSlot() {
-        let ghoul = heroPower(named: "Ghoul Charge", cardId: "HERO_11bp")
-        let six = (0..<6).map { _ in minion(atk: 0) }
-        assertDamage(acting([hero(), ghoul] + six, playerEntity: mana(2)), now: 1, next: 1)
-        assertDamage(acting([hero(), ghoul, minion(atk: 0)] + six, playerEntity: mana(2)), now: 0, next: 0)
-
-        let commander = minion(atk: 0)
-        commander.cardId = CardIds.Collectible.Neutral.GarrisonCommander
-        let five = (0..<5).map { _ in minion(atk: 0) }
-        assertDamage(acting([hero(), ghoul, commander] + five, playerEntity: mana(4)), now: 1, next: 1)
-        assertDamage(acting([hero(), ghoul, commander], playerEntity: mana(4)), now: 2, next: 2)
+    /// Three minions played this turn and Shapeshift already used: nothing more this turn, and
+    /// 1 + 4 + 5 next turn.
+    func testMinionsPlayedThisTurnWithShapeshiftUsed() {
+        let sick: [GameTag: Int] = [.num_turns_in_play: 0, .exhausted: 1]
+        let shapeshift = entity(.hero_power, cardId: CardIds.NonCollectible.Druid.Shapeshift,
+                                [.cost: 2, .exhausted: 1, .heropower_activations_this_turn: 1])
+        let druid = hero(atk: 0, [.armor: 1])
+        assertDamage(acting([druid, shapeshift, minion(atk: 1, sick), minion(atk: 4, sick), minion(atk: 5, sick)]),
+                     now: 0, next: 10)
     }
 
     // MARK: - Weapon choice (HDT PlayerBoardTest)
 
     func testWeaponChoice() {
-        let board = PlayerBoard(list: [], isCurrent: false, isActing: false)
         let old = weapon(atk: 1, health: 2)
         let new = weapon(atk: 3, health: 2, [.just_played: 1])
-        XCTAssertNil(board.getWeapon(list: []))
-        XCTAssertTrue(board.getWeapon(list: [old]) === old)
-        XCTAssertTrue(board.getWeapon(list: [new, old]) === new)
-        XCTAssertTrue(board.getWeapon(list: [old, new]) === new)
+        XCTAssertNil(PlayerBoard.getWeapon(list: []))
+        XCTAssertTrue(PlayerBoard.getWeapon(list: [old]) === old)
+        XCTAssertTrue(PlayerBoard.getWeapon(list: [new, old]) === new)
+        XCTAssertTrue(PlayerBoard.getWeapon(list: [old, new]) === new)
 
         let buried = weapon(atk: 5, health: 2, [.zone: Zone.graveyard.rawValue])
         assertDamage(notCurrent([hero(), buried]), now: 0, next: 0)
@@ -496,6 +422,10 @@ class BoardDamageTests: HSTrackerTests {
                                                      prevValue: Zone.deck.rawValue, value: Zone.hand.rawValue))
         XCTAssertTrue(BoardState.affectsBoardDamage(entity: inPlay, tag: .extra_attacks_this_turn, prevValue: 0, value: 1))
         XCTAssertTrue(BoardState.affectsBoardDamage(entity: inPlay, tag: .rush, prevValue: 0, value: 1))
+        // Mana and the hero power no longer count, so spending mana doesn't recount the board
+        XCTAssertFalse(BoardState.affectsBoardDamage(entity: inHand, tag: .resources_used, prevValue: 1, value: 3))
+        XCTAssertFalse(BoardState.affectsBoardDamage(entity: inPlay, tag: .heropower_activations_this_turn,
+                                                     prevValue: 0, value: 1))
     }
 
     /// Counts the board damage refreshes the parser asks for

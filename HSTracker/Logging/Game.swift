@@ -906,8 +906,7 @@ class Game: NSObject, PowerEventHandler {
             let board = BoardState(game: self)
 
             // n(m): what each side can still deal to the enemy hero this turn, then what its
-            // board could deal on its next turn. BoardState works out both, hero power and
-            // Garrison Commander included.
+            // board could deal on its next turn - the minions' and the hero's Attack, as in HDT.
             if showPlayer {
                 viewModel.playerBoardAttack.update(
                     now: board.player.hasInfiniteDamageNow ? Int.max : board.player.damageNow,
