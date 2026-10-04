@@ -8,10 +8,9 @@ import Foundation
 /// Collects the local player's mulligan and later draws from the parsed log, and turns
 /// them into the MulliganRecord stored with the game.
 ///
-/// MulliganState is not used for this: its offered-cards snapshot is taken by the
-/// Mulligan Guide in a detached task that polls STEP and gives up once the mulligan is
-/// past BEGIN_MULLIGAN, so a slow poll or a reconnect leaves it empty. This recorder
-/// is fed synchronously from the log stream instead, at points that always happen:
+/// It is fed synchronously from the log stream, at points that always happen (the
+/// mulligan guide's polled snapshot, which this fork has since removed, could come out
+/// empty after a slow poll or a reconnect):
 ///
 /// - the MULLIGAN choice and its EntitiesChosen echo (GameState lines, ChoicesHandler),
 /// - each player's MULLIGAN_STATE reaching DONE (PowerTaskList, TagChangeActions),

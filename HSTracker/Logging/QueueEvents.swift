@@ -29,9 +29,6 @@ class QueueEvents {
         if !QueueEvents.modes.contains(_game.currentMode ?? Mode.invalid) && !QueueEvents.lettuceModes.contains(_game.currentMode ?? Mode.invalid) {
             return
         }
-        if _game.currentMode == .tournament {
-            _game.setConstructedQueue(e.isInQueue)
-        }
         if _game.currentMode == .bacon {
             _game.setBaconQueue(e.isInQueue)
         }

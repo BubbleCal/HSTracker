@@ -348,18 +348,11 @@ final class CoreManager: NSObject {
         Watchers.stop()
         MirrorHelper.destroy()
         let wm = game.windowManager
-        game.stopMulliganLivePolling()
         wm.rootOverlay?.viewModel.battlegroundsHeroPicking.reset()
         wm.rootOverlay?.viewModel.battlegroundsQuestPicking.reset()
         wm.rootOverlay?.viewModel.battlegroundsTrinketPicking.reset()
-        wm.rootOverlay?.viewModel.mulliganGuidePreLobby.viewModel.reset()
-        wm.rootOverlay?.viewModel.mulliganGuide.reset()
-        wm.rootOverlay?.viewModel.mulliganGuideV2.reset()
-        wm.rootOverlay?.viewModel.constructedMulliganPreLobbyWidget.reset()
-        wm.rootOverlay?.viewModel.mulliganGuideTrialsExhausted.isShown = false
-        MulliganGuideTrial.clear()
-        // HDT clears both trials side by side when Hearthstone exits
-        // (Core.cs, the "Exited game" branch). Tier7Trial was never cleared
+        // HDT clears its trials when Hearthstone exits (Core.cs, the "Exited
+        // game" branch). Tier7Trial was never cleared
         // here, so a trial token - and the cached trial status behind it -
         // outlived the game session and made every later entitlement check
         // (`Tier7Trial.token != nil`) read as premium.

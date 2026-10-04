@@ -17,7 +17,6 @@ class Watchers {
     static let battlegroundsTeammateBoardStateWatcher = BattlegroundsTeammateBoardStateWatcher()
     static let bigCardWatcher = BigCardWatcher()
     static let choicesWatcher = ChoicesWatcher()
-    static let deckPickerWatcher = DeckPickerWatcher()
     static let discoverStateWatcher = DiscoverStateWatcher()
     static let mulliganTooltipWatcher = MulliganTooltipWatcher()
     static let dungeonRunDeckWatcher = DungeonRunDeckWatcher()
@@ -51,7 +50,6 @@ class Watchers {
         specialShopChoicesStateWatcher.change = { _, args in
             AppDelegate.instance().coreManager.game.handleSpecialShop(args)
         }
-        deckPickerWatcher.change = onDeckPickerChange
         discoverStateWatcher.change = onDiscoverStateChange
         mulliganTooltipWatcher.change = onMulliganTooltipChange
         dungeonRunDeckWatcher.dungeonRunMatchStarted = { newrun, set in
@@ -88,7 +86,6 @@ class Watchers {
         bigCardWatcher.stop()
         choicesWatcher.stop()
         specialShopChoicesStateWatcher.stop()
-        deckPickerWatcher.stop()
         discoverStateWatcher.stop()
         mulliganTooltipWatcher.stop()
         dungeonRunDeckWatcher.stop()
@@ -301,10 +298,6 @@ class Watchers {
                                   tooltipOnRight: args.isTooltipOnRight,
                                   cards: args.tooltipCards,
                                   buddiesEnabled: buddiesEnabled)
-    }
-    
-    private static func onDeckPickerChange(_ sender: DeckPickerWatcher, _ args: DeckPickerEventArgs) {
-        AppDelegate.instance().coreManager.game.setDeckPickerState(args.selectedFormatType, args.decksOnPage, args.isModalOpen)
     }
     
     private static func onDiscoverStateChange(_ sender: DiscoverStateWatcher, _ args: DiscoverStateArgs) {

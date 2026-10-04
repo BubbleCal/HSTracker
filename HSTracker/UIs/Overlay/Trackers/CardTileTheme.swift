@@ -67,7 +67,6 @@ struct CardTileTheme {
     static let frameRect = CGRect(x: 0, y: 0, width: 217, height: 34)
     static let gemRect = CGRect(x: 0, y: 0, width: 34, height: 34)
     static let boxRect = CGRect(x: 183, y: 0, width: 34, height: 34)
-    static let mulliganWinrateBoxRect = CGRect(x: 136, y: 4, width: 54, height: 26)
     static let defaultImageRect = CGRect(x: 83, y: 0, width: 134, height: 34)
     static let countTextRect = CGRect(x: 196, y: 9, width: 14, height: 34)
     static let costTextRect = CGRect(x: 0, y: 9, width: 34, height: 34)
@@ -75,7 +74,6 @@ struct CardTileTheme {
 
     static let countFontSize: CGFloat = 17
     static let costFontSize: CGFloat = 20
-    static let mulliganWinRateFontSize: CGFloat = 15
 
     /// `CardBar.countTextColor`.
     static let countTextColor = Color(red: 0.9221, green: 0.7215, blue: 0.2226)

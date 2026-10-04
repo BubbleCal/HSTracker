@@ -405,36 +405,15 @@ final class Settings {
     static var autoDeckDetection: Bool
     @UserDefault(key: Settings.show_experience_counter, defaultValue: true)
     static var showExperienceCounter: Bool
-    @UserDefault(key: Settings.show_mulligan_toast, defaultValue: true)
-    static var showMulliganToast: Bool
     @UserDefault(key: Settings.show_flavor_text, defaultValue: true)
     static var showFlavorText: Bool
     @UserDefault(key: Settings.show_board_entry_order, defaultValue: false)
     static var showBoardEntryOrder: Bool
-    @UserDefault(key: Settings.enable_mulligan_guide, defaultValue: true)
-    static var enableMulliganGuide: Bool
-    @UserDefault(key: Settings.enable_mulligan_gv2, defaultValue: true)
-    static var enableMulliganGV2: Bool
-    @UserDefault(key: Settings.show_mulligan_guide_pre_lobby, defaultValue: true)
-    static var showMulliganGuidePreLobby: Bool
-    @UserDefault(key: Settings.auto_show_mulligan_guide, defaultValue: true)
-    static var autoShowMulliganGuide: Bool
-    @UserDefault(key: Settings.mulligan_gv2_onboarding_seen, defaultValue: false)
-    static var mulliganGV2OnboardingSeen: Bool
     // The traditional-format sale's own id (RemoteConfig.data.sales.traditional.id)
     // once the user dismisses that sale's tooltip - stays hidden until a
     // newer sale (higher id) comes along.
     @UserDefault(key: Settings.ignore_traditional_sale_id, defaultValue: -1)
     static var ignoreTraditionalSaleId: Int
-    // JSON-encoded MulliganGuideTrialData (token/gameHandle/lastTrialAlertPending)
-    // - see MulliganGuideTrial.swift.
-    @UserDefault(key: Settings.mulligan_guide_trial_data, defaultValue: nil)
-    static var mulliganGuideTrialData: String?
-    // The "trials exhausted" alert is a one-time heads-up, not a recurring
-    // reminder - shown at most once ever, matching HDT's own
-    // SeenMulliganGuideTrialsExhausted.
-    @UserDefault(key: Settings.seen_mulligan_guide_trials_exhausted, defaultValue: false)
-    static var seenMulliganGuideTrialsExhausted: Bool
 
     // MARK: - Battlegrounds
     @UserDefault(key: Settings.show_bobs_buddy, defaultValue: true)
@@ -984,30 +963,6 @@ final class Settings {
     static var hsReplayUsername: String?
     @UserDefault(key: Settings.hsreplay_id, defaultValue: nil)
     static var hsReplayId: Int?
-    @UserDefault(key: Settings.hsreplay_auto_synchronize_matches, defaultValue: true)
-    static var hsReplaySynchronizeMatches: Bool
-    @UserDefault(key: Settings.hsreplay_show_push_notification, defaultValue: true)
-    static var showHSReplayPushNotification: Bool
-    @UserDefault(key: Settings.hsreplay_auto_synchronize_ranked_matches, defaultValue: true)
-    static var hsReplayUploadRankedMatches: Bool
-    @UserDefault(key: Settings.hsreplay_auto_synchronize_casual_matches, defaultValue: true)
-    static var hsReplayUploadCasualMatches: Bool
-    @UserDefault(key: Settings.hsreplay_auto_synchronize_arena_matches, defaultValue: true)
-    static var hsReplayUploadArenaMatches: Bool
-    @UserDefault(key: Settings.hsreplay_auto_synchronize_brawl_matches, defaultValue: true)
-    static var hsReplayUploadBrawlMatches: Bool
-    @UserDefault(key: Settings.hsreplay_auto_synchronize_friendly_matches, defaultValue: true)
-    static var hsReplayUploadFriendlyMatches: Bool
-    @UserDefault(key: Settings.hsreplay_auto_synchronize_adventure_matches, defaultValue: true)
-    static var hsReplayUploadAdventureMatches: Bool
-    @UserDefault(key: Settings.hsreplay_auto_synchronize_spectator_matches, defaultValue: false)
-    static var hsReplayUploadSpectatorMatches: Bool
-    @UserDefault(key: Settings.hsreplay_auto_synchronize_battlegrounds_matches, defaultValue: true)
-    static var hsReplayUploadBattlegroundsMatches: Bool
-    @UserDefault(key: Settings.hsreplay_auto_synchronize_duels_matches, defaultValue: true)
-    static var hsReplayUploadDuelsMatches: Bool
-    @UserDefault(key: Settings.hsreplay_auto_synchronize_mercenaries_matches, defaultValue: true)
-    static var hsReplayUploadMercenariesMatches: Bool
 
     @UserDefault(key: Settings.theme_token, defaultValue: "dark")
     static var theme: String
@@ -1093,17 +1048,9 @@ extension Settings {
     static let prefer_golden_cards = "prefer_golden_cards"
     static let auto_deck_detection = "auto_deck_detection"
     static let show_experience_counter = "show_experience_counter"
-    static let show_mulligan_toast = "show_mulligan_toast"
     static let show_flavor_text = "show_flavor_text"
     static let show_board_entry_order = "show_board_entry_order"
-    static let enable_mulligan_guide = "enable_mulligan_guide"
-    static let enable_mulligan_gv2 = "enable_mulligan_gv2"
-    static let show_mulligan_guide_pre_lobby = "show_mulligan_guide_pre_lobby"
-    static let auto_show_mulligan_guide = "auto_show_mulligan_guide"
-    static let mulligan_gv2_onboarding_seen = "mulligan_gv2_onboarding_seen"
     static let ignore_traditional_sale_id = "ignore_traditional_sale_id"
-    static let mulligan_guide_trial_data = "mulligan_guide_trial_data"
-    static let seen_mulligan_guide_trials_exhausted = "seen_mulligan_guide_trials_exhausted"
 
     // MARK: Battlegrounds
     static let show_bobs_buddy = "show_bobs_buddy"
@@ -1303,16 +1250,4 @@ extension Settings {
     static let hsreplay_oauth_token_expiration = "hsreplay_oauth_token_expiration"
     static let hsreplay_oauth_refresh_token = "hsreplay_oauth_refresh_token"
     static let hsreplay_oauth_scope = "hsreplay_oauth_scope"
-    static let hsreplay_show_push_notification = "hsreplay_show_push_notification"
-    static let hsreplay_auto_synchronize_matches = "hsreplay_auto_synchronize_matches"
-    static let hsreplay_auto_synchronize_ranked_matches = "hsreplay_auto_synchronize_ranked_matches"
-    static let hsreplay_auto_synchronize_casual_matches = "hsreplay_auto_synchronize_casual_matches"
-    static let hsreplay_auto_synchronize_arena_matches = "hsreplay_auto_synchronize_arena_matches"
-    static let hsreplay_auto_synchronize_brawl_matches = "hsreplay_auto_synchronize_brawl_matches"
-    static let hsreplay_auto_synchronize_friendly_matches = "hsreplay_auto_synchronize_friendly_matches"
-    static let hsreplay_auto_synchronize_adventure_matches = "hsreplay_auto_synchronize_adventure_matches"
-    static let hsreplay_auto_synchronize_spectator_matches = "hsreplay_auto_synchronize_spectator_matches"
-    static let hsreplay_auto_synchronize_battlegrounds_matches = "hsreplay_auto_synchronize_battlegrounds_matches"
-    static let hsreplay_auto_synchronize_duels_matches = "hsreplay_auto_synchronize_duels_matches"
-    static let hsreplay_auto_synchronize_mercenaries_matches = "hsreplay_auto_synchronize_mercenaries_matches"
 }

@@ -2,16 +2,15 @@
 //  PlayerTrialStatusCache.swift
 //  HSTracker
 //
-//  Shared by MulliganGuideTrial and Tier7Trial: the weekly trial status HSReplay reports for a
+//  Tier7Trial's weekly trial status, as HSReplay reports it for a
 //  Battle.net account, kept between calls the way HDT keeps its own _status field.
 //
 
 import Foundation
 
 // An async mutex, standing in for the SemaphoreSlim(1, 1) HDT wraps around
-// MulliganGuideTrial.ActivateOrContinue. An UnfairLock cannot be held across an
-// await, and both the status refresh and the trial activation await the
-// network halfway through.
+// its trial calls. An UnfairLock cannot be held across an await, and the
+// status refresh awaits the network halfway through.
 @available(macOS 10.15.0, *)
 actor AsyncSerialLock {
     private var isLocked = false
@@ -79,15 +78,14 @@ final class PlayerTrialStatusCache {
         return max(0, hours - elapsedHours)
     }
 
-    // HDT's MulliganGuideTrial.Update / Tier7Trial.Update:
+    // HDT's Tier7Trial.Update (and MulliganGuideTrial.Update, whose guide this fork removed):
     //   if(_status?.HoursUntilReset < 2) _status = null;
     //   _status ??= await GetPlayerTrialStatus(...);
     // The port had read the first line as `hours ?? 0 < 2`, which also threw the
     // status away when the server sends no reset time - exactly what it sends
     // while this week's trials are still unused - and it refetched on every
-    // call, replacing a good status with nil whenever a request failed. A game
-    // reaching its mulligan during one of those refetches saw no status and
-    // skipped the trial it should have used.
+    // call, replacing a good status with nil whenever a request failed, so a
+    // trial check made during one of those refetches saw no status at all.
     //
     // Calls are serialized, so a burst of callers makes one request. A stale
     // status stays readable until the new one arrives, and is kept if the

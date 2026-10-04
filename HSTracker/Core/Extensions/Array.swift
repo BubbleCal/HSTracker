@@ -16,31 +16,16 @@ extension Dictionary {
     }
 }
 
-enum CardListSorting: Int {
-    case cost, mulliganWr
-}
-
 extension Array where Element == Card {
-    func sortCardList(_ sorting: CardListSorting = .cost) -> [Card] {
-        if sorting == .cost {
-            return sorted {
-                if $0.cost == $1.cost {
-                    if $0.name == $1.name {
-                        return $0.extraInfo?.cardNameSuffix ?? "" < $0.extraInfo?.cardNameSuffix ?? ""
-                    }
-                    return $0.name < $1.name
-                }
-                return $0.cost < $1.cost
-            }
-        }
+    func sortCardList() -> [Card] {
         return sorted {
-            if $0.cardWinRates?.mulliganWinRate == $1.cardWinRates?.mulliganWinRate {
-                if $0.cost == $1.cost {
-                    return $0.name < $1.name
+            if $0.cost == $1.cost {
+                if $0.name == $1.name {
+                    return $0.extraInfo?.cardNameSuffix ?? "" < $0.extraInfo?.cardNameSuffix ?? ""
                 }
-                return $0.cost < $1.cost
+                return $0.name < $1.name
             }
-            return ($0.cardWinRates?.mulliganWinRate ?? 0.0) > ($1.cardWinRates?.mulliganWinRate ?? 0.0)
+            return $0.cost < $1.cost
         }
     }
 

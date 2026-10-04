@@ -35,13 +35,8 @@ class TrackersPreferences: PreferencePaneController, PreferencePane {
     @IBOutlet var hideAllWhenGameInBackground: NSButton!
     @IBOutlet var disableTrackingInSpectatorMode: NSButton!
     @IBOutlet var showExperienceCounter: NSButton!
-    @IBOutlet var showMulliganToast: NSButton!
     @IBOutlet var showFlavorText: NSButton!
     @IBOutlet var showBoardEntryOrder: NSButton!
-    @IBOutlet var enableMulliganGuide: NSButton!
-    @IBOutlet var enableMulliganGV2: NSButton!
-    @IBOutlet var showMulliganGuidePreLobby: NSButton!
-    @IBOutlet var autoShowMulliganGuide: NSButton!
     
     let themes = ["classic", "frost", "dark", "minimal"]
 
@@ -76,7 +71,6 @@ class TrackersPreferences: PreferencePaneController, PreferencePane {
         showRarityColors.state = Settings.showRarityColors ? .on : .off
         showFloatingCard.state = Settings.showFloatingCard ? .on : .off
         showExperienceCounter.state = Settings.showExperienceCounter ? .on : .off
-        showMulliganToast.state = Settings.showMulliganToast ? .on : .off
         showFlavorText.state = Settings.showFlavorText ? .on : .off
         showBoardEntryOrder.state = Settings.showBoardEntryOrder ? .on : .off
 
@@ -86,10 +80,6 @@ class TrackersPreferences: PreferencePaneController, PreferencePane {
         hideAllWhenGameInBackground.state = Settings.hideAllWhenGameInBackground
             ? .on : .off
         disableTrackingInSpectatorMode.state = Settings.dontTrackWhileSpectating ? .on : .off
-        enableMulliganGuide.state = Settings.enableMulliganGuide ? .on : .off
-        enableMulliganGV2.state = Settings.enableMulliganGV2 ? .on : .off
-        showMulliganGuidePreLobby.state = Settings.showMulliganGuidePreLobby ? .on : .off
-        autoShowMulliganGuide.state = Settings.autoShowMulliganGuide ? .on : .off
     }
 
     // The two secret options only mean something while the helper is shown
@@ -171,36 +161,10 @@ class TrackersPreferences: PreferencePaneController, PreferencePane {
                     counter.hide()
                 }
             }
-        } else if sender == showMulliganToast {
-            Settings.showMulliganToast = showMulliganToast.state == .on
         } else if sender == showFlavorText {
             Settings.showFlavorText = showFlavorText.state == .on
         } else if sender == showBoardEntryOrder {
             Settings.showBoardEntryOrder = showBoardEntryOrder.state == .on
-        } else if sender == enableMulliganGuide {
-            Settings.enableMulliganGuide = enableMulliganGuide.state == .on
-            let game = AppDelegate.instance().coreManager.game
-            // HDT clears on *un*check (CheckboxEnableMulliganStats_Unchecked):
-            // turning the guide off takes down whatever it left on screen, while
-            // turning it on has nothing to clear.
-            if enableMulliganGuide.state == .off {
-                game.hideMulliganGuideStats()
-                // Clear the Mulligan overlay if it's visible
-                game.player.mulliganCardStats = nil
-            }
-            game.updateMulliganGuidePreLobby()
-        } else if sender == enableMulliganGV2 {
-            Settings.enableMulliganGV2 = enableMulliganGV2.state == .on
-            if enableMulliganGV2.state == .off {
-                let game = AppDelegate.instance().coreManager.game
-                game.stopMulliganLivePolling()
-                game.hideMulliganGuideStats()
-            }
-        } else if sender == showMulliganGuidePreLobby {
-            Settings.showMulliganGuidePreLobby = showMulliganGuidePreLobby.state == .on
-            AppDelegate.instance().coreManager.game.updateMulliganGuidePreLobby()
-        } else if sender == autoShowMulliganGuide {
-            Settings.autoShowMulliganGuide = autoShowMulliganGuide.state == .on
         }
     }
 }

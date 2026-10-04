@@ -22928,36 +22928,48 @@
         }
       }
     },
-    "Logged in to HSReplay.net as %@. Open your collection and it will be automatically uploaded." : {
+    "Logged in to HSReplay.net as %@." : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Logged in to HSReplay.net as %@. Open your collection and it will be automatically uploaded."
+            "value" : "Logged in to HSReplay.net as %@."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Connecté à HSReplay.net en tant que %@. Ouvrez votre collection et elle sera envoyée automatiquement."
+            "value" : "Connecté à HSReplay.net en tant que %@."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已作为 %@ 登录 HSReplay.net。"
           }
         }
       }
     },
-    "Logged in to HSReplay.net. Open your collection and it will be automatically uploaded." : {
+    "Logged in to HSReplay.net." : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Logged in to HSReplay.net. Open your collection and it will be automatically uploaded."
+            "value" : "Logged in to HSReplay.net."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Connecté à HSReplay.net. Ouvrez votre collection et elle sera envoyée automatiquement."
+            "value" : "Connecté à HSReplay.net."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已登录 HSReplay.net。"
           }
         }
       }
@@ -23051,19 +23063,25 @@
         }
       }
     },
-    "Login to claim your replays and enable all HSReplay.net features." : {
+    "Login to enable all HSReplay.net features." : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Login to claim your replays and enable all HSReplay.net features."
+            "value" : "Login to enable all HSReplay.net features."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Connectez-vous pour réclamer vos replays et activer toutes les fonctionnalités de HSReplay.net."
+            "value" : "Connectez-vous pour activer toutes les fonctionnalités de HSReplay.net."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "登录以启用 HSReplay.net 的全部功能。"
           }
         }
       }

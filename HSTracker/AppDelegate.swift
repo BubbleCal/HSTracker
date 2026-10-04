@@ -172,7 +172,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSUserNotificationCenterDele
             // signed in. Logged on the next main-queue turn because the file
             // log destination is only added further down.
             DispatchQueue.main.async {
-                logger.info("HSReplay: not signed in (no stored OAuth token); premium features and the Mulligan Guide rely on free trials")
+                logger.info("HSReplay: not signed in (no stored OAuth token); premium features rely on free trials")
             }
         } else if refresh && hasRefreshToken {
             logger.debug("OAuth token is expired, renewing")
@@ -193,10 +193,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSUserNotificationCenterDele
                             logger.info("HSReplay: signed in=false premium=false")
                         case .success(account: let data):
                             Settings.hsReplayUsername = data.username
-
-                            if !MixpanelEvents.linkedMixpanelToken {
-                                HSReplayAPI.linkMixpanelAccount()
-                            }
                             logger.info("Successfully retrieved account data: Username: \(data.username), battletag: \(data.battletag)")
                             logger.info("HSReplay: signed in=true premium=\(data.is_premium)")
                         }
@@ -215,9 +211,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSUserNotificationCenterDele
                     logger.info("HSReplay: signed in=false premium=false")
                 case .success(account: let data):
                     Settings.hsReplayUsername = data.username
-                    if !MixpanelEvents.linkedMixpanelToken {
-                        HSReplayAPI.linkMixpanelAccount()
-                    }
                     logger.info("Successfully retrieved account data: Username: \(data.username), battletag: \(data.battletag)")
                     logger.info("HSReplay: signed in=true premium=\(data.is_premium)")
                 }
@@ -241,8 +234,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSUserNotificationCenterDele
         file.logFileAmount = 2
         logger.addDestination(file)
         logger.info("*** Starting \(Version.buildName) ***")
-        
-        HSReplayNetHelper.initialize()
         
         // check if we have valid settings
         let missing = Settings.missingConfiguration()

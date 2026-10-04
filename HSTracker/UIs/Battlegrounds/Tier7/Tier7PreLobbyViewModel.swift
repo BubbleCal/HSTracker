@@ -9,9 +9,7 @@
 import Foundation
 import AppKit
 
-// Not gated on the SwiftUI baseline: ConstructedMulliganPreLobbyWidgetViewModel
-// reuses both of these as-is, the same way HDT's own Constructed widget reuses
-// them from its Tier7 equivalent.
+// Not gated on the SwiftUI baseline.
 enum UserState: Int {
     case loading, unknownPlayer, validPlayer, subscribed, disabled
 }

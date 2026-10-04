@@ -889,24 +889,6 @@
         }
       }
     },
-    "bku-WW-nZc.title" : {
-      "comment" : "Class = \"NSButtonCell\"; title = \"Enable Mulligan Guide\"; ObjectID = \"bku-WW-nZc\";",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Enable Mulligan Guide"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Activer le Mulligan Guide"
-          }
-        }
-      }
-    },
     "cBa-wb-tRb.ibShadowedObjectValues[0]" : {
       "comment" : "Class = \"NSComboBoxCell\"; cBa-wb-tRb.ibShadowedObjectValues[0] = \"Classic\"; ObjectID = \"cBa-wb-tRb\";",
       "extractionState" : "extracted_with_value",
@@ -1291,18 +1273,6 @@
         }
       }
     },
-    "gV2-en-Cel.title" : {
-      "comment" : "Class = \"NSButtonCell\"; title = \"Enable Mulligan G-V2\"; ObjectID = \"gV2-en-Cel\";",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Enable Mulligan G-V2"
-          }
-        }
-      }
-    },
     "h5J-7C-d2f.title" : {
       "comment" : "Class = \"NSButtonCell\"; title = \"Show rarity colors\"; ObjectID = \"h5J-7C-d2f\";",
       "extractionState" : "extracted_with_value",
@@ -1389,30 +1359,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "顯示稀有度對應的顏色"
-          }
-        }
-      }
-    },
-    "HeE-hK-rL7.title" : {
-      "comment" : "Class = \"NSButtonCell\"; title = \"Show constructed mulligan\"; ObjectID = \"HeE-hK-rL7\";",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Show constructed mulligan"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Afficher le mulligan en mode Construit"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "显示构造调度建议"
           }
         }
       }
@@ -1933,24 +1879,6 @@
         }
       }
     },
-    "OaC-wC-z3b.title" : {
-      "comment" : "Class = \"NSButtonCell\"; title = \"Show availability on deck selection screen\"; ObjectID = \"OaC-wC-z3b\";",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Show availability on deck selection screen"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Afficher la disponibilité sur l'écran de sélection des decks"
-          }
-        }
-      }
-    },
     "s9w-5p-pJs.title" : {
       "comment" : "Class = \"NSButtonCell\"; title = \"Remove cards if count is 0\"; ObjectID = \"s9w-5p-pJs\";",
       "extractionState" : "extracted_with_value",
@@ -2085,24 +2013,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "從列表中移除不可能的秘密"
-          }
-        }
-      }
-    },
-    "UXw-QE-lUP.title" : {
-      "comment" : "Class = \"NSButtonCell\"; title = \"Show mulligan overlay at start of game\"; ObjectID = \"UXw-QE-lUP\";",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Show mulligan overlay at start of game"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Afficher l'overlay de mulligan en début de partie"
           }
         }
       }

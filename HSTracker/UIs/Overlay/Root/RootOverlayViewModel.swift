@@ -11,24 +11,12 @@ import SwiftUI
 
 // Single scaled canvas new SwiftUI overlay features attach to as children,
 // instead of each feature owning its own window + hand-rolled height/1080
-// scaling math (what every AppKit overlay, including the V1 mulligan guide,
-// currently does individually). RootOverlayView derives scale/canvas size
+// scaling math (what every AppKit overlay currently does individually). RootOverlayView derives scale/canvas size
 // directly from its own measured bounds (GeometryReader) rather than from
 // state pushed in here, so content authored at the 1080-tall reference
 // (matching the rest of HSTracker's overlay scaling convention) lines up
 // regardless of the window's aspect ratio.
 class RootOverlayViewModel: ObservableObject {
-    // HDT's two constructed mulligan guides, declared one after the other on
-    // its own canvas. The V1 one covers every game type the V2 one does not -
-    // everything outside Ranked and Friendly.
-    let mulliganGuide = ConstructedMulliganGuideViewModel()
-    let mulliganGuideV2 = ConstructedMulliganGuideV2ViewModel()
-    let constructedMulliganPreLobbyWidget = ConstructedMulliganPreLobbyWidgetViewModel()
-    // HDT's ConstructedMulliganGuidePreLobby, the badges over the deck boxes -
-    // declared on its own canvas just after the two guides, and a separate
-    // element from the pre-lobby widget above.
-    let mulliganGuidePreLobby = ConstructedMulliganGuidePreLobbyObservable()
-    let mulliganGuideTrialsExhausted = MulliganGuideTrialsExhaustedViewModel()
     let battlegroundsCompsGuides = BattlegroundsCompsGuidesViewModel()
     let battlegroundsHeroGuides = BattlegroundsHeroGuidesViewModel()
     let battlegroundsTrinketGuides = BattlegroundsTrinketGuidesViewModel()
@@ -47,7 +35,6 @@ class RootOverlayViewModel: ObservableObject {
     let battlegroundsSession = BattlegroundsSessionViewModel()
     let bobsBuddy = BobsBuddyPanelViewModel()
     let battlegroundsNotifications = BattlegroundsNotificationsViewModel()
-    let mulliganToast = MulliganToastViewModel()
     let battlegroundsOpponentInfo = BattlegroundsOpponentInfoViewModel()
     let battlegroundsHeroPicking = BattlegroundsHeroPickingViewModel()
     let battlegroundsQuestPicking = BattlegroundsQuestPickingViewModel()

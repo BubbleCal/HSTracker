@@ -11,11 +11,8 @@
                 <outlet property="allowFullscreen" destination="aO1-IW-r7y" id="Y7p-zj-Y0J"/>
                 <outlet property="autoGrayoutSecrets" destination="sAg-Gr-Btn" id="sAg-Gr-Out"/>
                 <outlet property="autoPositionTrackers" destination="TNp-Jh-qS9" id="tWk-Iu-CQp"/>
-                <outlet property="autoShowMulliganGuide" destination="dj6-Ot-tpw" id="nEW-22-jgP"/>
                 <outlet property="cardSize" destination="oRs-V7-1J6" id="hMc-ok-6ju"/>
                 <outlet property="disableTrackingInSpectatorMode" destination="zka-3O-txd" id="LSN-Ma-O0H"/>
-                <outlet property="enableMulliganGV2" destination="gV2-en-Ckb" id="gV2-en-Out"/>
-                <outlet property="enableMulliganGuide" destination="nYX-fZ-Mny" id="j8E-p3-afF"/>
                 <outlet property="hideAllWhenGameInBackground" destination="GbU-Ts-Vje" id="6E9-Rh-b40"/>
                 <outlet property="hideAllWhenNotInGame" destination="dGD-b8-UwI" id="OlZ-EN-L3z"/>
                 <outlet property="highlightCardsInHand" destination="MOS-w7-D1d" id="XUa-7d-V1f"/>
@@ -29,8 +26,6 @@
                 <outlet property="showExperienceCounter" destination="eYz-mj-UcC" id="zf7-cd-l4x"/>
                 <outlet property="showFlavorText" destination="7ps-Br-1Oh" id="hkm-br-Rt7"/>
                 <outlet property="showFloatingCard" destination="o0k-Kb-VAL" id="xCp-4x-8Ul"/>
-                <outlet property="showMulliganGuidePreLobby" destination="VdV-Vo-AfO" id="u1R-mv-gwT"/>
-                <outlet property="showMulliganToast" destination="JQv-VB-3MQ" id="1Ee-DV-fOa"/>
                 <outlet property="showRarityColors" destination="HPM-az-sML" id="2fY-JA-SSd"/>
                 <outlet property="showSecretHelper" destination="jqc-dr-ATS" id="bRc-eW-TmL"/>
                 <outlet property="showTimer" destination="xW7-1C-T20" id="p89-Aa-JMK"/>
@@ -339,56 +334,6 @@
                         <action selector="checkboxClicked:" target="-2" id="4BV-1d-Xg3"/>
                     </connections>
                 </button>
-                <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="JQv-VB-3MQ" userLabel="Show constructed mulligan">
-                    <rect key="frame" x="18" y="113" width="301" height="18"/>
-                    <buttonCell key="cell" type="check" title="Show constructed mulligan" bezelStyle="regularSquare" imagePosition="left" inset="2" id="HeE-hK-rL7" userLabel="Show experience counter">
-                        <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
-                        <font key="font" metaFont="system"/>
-                    </buttonCell>
-                    <connections>
-                        <action selector="checkboxClicked:" target="-2" id="zjL-jB-ArM"/>
-                    </connections>
-                </button>
-                <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="nYX-fZ-Mny" userLabel="Enable Mulligan Guide">
-                    <rect key="frame" x="18" y="87" width="301" height="18"/>
-                    <buttonCell key="cell" type="check" title="Enable Mulligan Guide" bezelStyle="regularSquare" imagePosition="left" state="on" inset="2" id="bku-WW-nZc">
-                        <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
-                        <font key="font" metaFont="system"/>
-                    </buttonCell>
-                    <connections>
-                        <action selector="checkboxClicked:" target="-2" id="e2s-of-hkJ"/>
-                    </connections>
-                </button>
-                <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="gV2-en-Ckb" userLabel="Enable Mulligan G-V2">
-                    <rect key="frame" x="18" y="87" width="301" height="18"/>
-                    <buttonCell key="cell" type="check" title="Enable Mulligan G-V2" bezelStyle="regularSquare" imagePosition="left" state="on" inset="2" id="gV2-en-Cel">
-                        <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
-                        <font key="font" metaFont="system"/>
-                    </buttonCell>
-                    <connections>
-                        <action selector="checkboxClicked:" target="-2" id="gV2-en-Act"/>
-                    </connections>
-                </button>
-                <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="dj6-Ot-tpw" userLabel="Show mulligan overlay at start of game">
-                    <rect key="frame" x="18" y="61" width="301" height="18"/>
-                    <buttonCell key="cell" type="check" title="Show mulligan overlay at start of game" bezelStyle="regularSquare" imagePosition="left" state="on" inset="2" id="UXw-QE-lUP">
-                        <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
-                        <font key="font" metaFont="system"/>
-                    </buttonCell>
-                    <connections>
-                        <action selector="checkboxClicked:" target="-2" id="Y88-mG-Kxu"/>
-                    </connections>
-                </button>
-                <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="VdV-Vo-AfO">
-                    <rect key="frame" x="18" y="35" width="301" height="18"/>
-                    <buttonCell key="cell" type="check" title="Show availability on deck selection screen" bezelStyle="regularSquare" imagePosition="left" state="on" inset="2" id="OaC-wC-z3b">
-                        <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
-                        <font key="font" metaFont="system"/>
-                    </buttonCell>
-                    <connections>
-                        <action selector="checkboxClicked:" target="-2" id="34M-lq-dCQ"/>
-                    </connections>
-                </button>
                 <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="7ps-Br-1Oh">
                     <rect key="frame" x="18" y="9" width="301" height="18"/>
                     <buttonCell key="cell" type="check" title="Show flavor text" bezelStyle="regularSquare" imagePosition="left" state="on" inset="2" id="Ehf-nl-mzO">
@@ -412,7 +357,6 @@
             </subviews>
             <edgeInsets key="edgeInsets" left="20" right="20" top="20" bottom="20"/>
             <constraints>
-                <constraint firstAttribute="trailing" secondItem="dj6-Ot-tpw" secondAttribute="trailing" constant="20" symbolic="YES" id="0jh-tg-Qbi"/>
                 <constraint firstAttribute="trailing" secondItem="7ps-Br-1Oh" secondAttribute="trailing" constant="20" symbolic="YES" id="1eg-U1-LOM"/>
                 <constraint firstItem="bEo-Or-Btn" firstAttribute="leading" secondItem="51m-9V-RQO" secondAttribute="leading" constant="20" symbolic="YES" id="bEo-Ld-Con"/>
                 <constraint firstAttribute="trailing" secondItem="bEo-Or-Btn" secondAttribute="trailing" constant="20" symbolic="YES" id="bEo-Tr-Con"/>
@@ -425,11 +369,7 @@
                 <constraint firstAttribute="trailing" secondItem="eYz-mj-UcC" secondAttribute="trailing" constant="20" symbolic="YES" id="FSd-fC-Hav"/>
                 <constraint firstItem="MOS-w7-D1d" firstAttribute="leading" secondItem="51m-9V-RQO" secondAttribute="leading" constant="20" symbolic="YES" id="Fde-6e-0wp"/>
                 <constraint firstAttribute="trailing" secondItem="xW7-1C-T20" secondAttribute="trailing" constant="20" symbolic="YES" id="GLz-ab-Dze"/>
-                <constraint firstItem="dj6-Ot-tpw" firstAttribute="leading" secondItem="51m-9V-RQO" secondAttribute="leading" constant="20" symbolic="YES" id="H6W-On-F2j"/>
                 <constraint firstAttribute="trailing" secondItem="WVi-zk-TFf" secondAttribute="trailing" constant="20" symbolic="YES" id="N2I-3Y-eKD"/>
-                <constraint firstItem="nYX-fZ-Mny" firstAttribute="leading" secondItem="51m-9V-RQO" secondAttribute="leading" constant="20" symbolic="YES" id="Ngw-M1-DvP"/>
-                <constraint firstItem="gV2-en-Ckb" firstAttribute="leading" secondItem="51m-9V-RQO" secondAttribute="leading" constant="20" symbolic="YES" id="gV2-Ld-Con"/>
-                <constraint firstAttribute="trailing" secondItem="gV2-en-Ckb" secondAttribute="trailing" constant="20" symbolic="YES" id="gV2-Tr-Con"/>
                 <constraint firstItem="TNp-Jh-qS9" firstAttribute="leading" secondItem="51m-9V-RQO" secondAttribute="leading" constant="20" symbolic="YES" id="OfP-zq-Tiw"/>
                 <constraint firstItem="HPM-az-sML" firstAttribute="leading" secondItem="51m-9V-RQO" secondAttribute="leading" constant="20" symbolic="YES" id="QQc-38-g0g"/>
                 <constraint firstAttribute="trailing" secondItem="1Ry-pR-4H6" secondAttribute="trailing" constant="20" symbolic="YES" id="ScW-0I-b1i"/>
@@ -440,11 +380,9 @@
                 <constraint firstItem="GbU-Ts-Vje" firstAttribute="leading" secondItem="51m-9V-RQO" secondAttribute="leading" constant="20" symbolic="YES" id="bdv-Sy-FOT"/>
                 <constraint firstAttribute="trailing" secondItem="GbU-Ts-Vje" secondAttribute="trailing" constant="20" symbolic="YES" id="bei-99-B95"/>
                 <constraint firstAttribute="trailing" secondItem="jqc-dr-ATS" secondAttribute="trailing" constant="20" symbolic="YES" id="d1U-Dc-aBK"/>
-                <constraint firstAttribute="trailing" secondItem="VdV-Vo-AfO" secondAttribute="trailing" constant="20" symbolic="YES" id="dXM-Mw-uTv"/>
                 <constraint firstItem="Q3s-94-J32" firstAttribute="leading" secondItem="51m-9V-RQO" secondAttribute="leading" constant="20" symbolic="YES" id="dqu-qN-Qtu"/>
                 <constraint firstAttribute="trailing" secondItem="HPM-az-sML" secondAttribute="trailing" constant="20" symbolic="YES" id="fvU-yp-F7b"/>
                 <constraint firstAttribute="trailing" secondItem="aO1-IW-r7y" secondAttribute="trailing" constant="20" symbolic="YES" id="gvG-Ti-bug"/>
-                <constraint firstItem="JQv-VB-3MQ" firstAttribute="leading" secondItem="51m-9V-RQO" secondAttribute="leading" constant="20" symbolic="YES" id="hz6-qE-vOh"/>
                 <constraint firstItem="knx-a6-nzZ" firstAttribute="leading" secondItem="51m-9V-RQO" secondAttribute="leading" constant="20" symbolic="YES" id="i0x-tk-dbq"/>
                 <constraint firstAttribute="trailing" secondItem="o0k-Kb-VAL" secondAttribute="trailing" constant="20" symbolic="YES" id="iDR-Lh-2NR"/>
                 <constraint firstItem="PL6-uo-7RN" firstAttribute="leading" secondItem="51m-9V-RQO" secondAttribute="leading" constant="20" symbolic="YES" id="ike-ez-zBK"/>
@@ -462,9 +400,6 @@
                 <constraint firstAttribute="trailing" secondItem="aHc-kB-x01" secondAttribute="trailing" constant="20" symbolic="YES" id="aHc-Tr-C01"/>
                 <constraint firstAttribute="trailing" secondItem="TNp-Jh-qS9" secondAttribute="trailing" constant="20" symbolic="YES" id="tFn-7F-esx"/>
                 <constraint firstItem="eYz-mj-UcC" firstAttribute="leading" secondItem="51m-9V-RQO" secondAttribute="leading" constant="20" symbolic="YES" id="tYq-Y9-RTY"/>
-                <constraint firstItem="VdV-Vo-AfO" firstAttribute="leading" secondItem="51m-9V-RQO" secondAttribute="leading" constant="20" symbolic="YES" id="u2t-XD-TRv"/>
-                <constraint firstAttribute="trailing" secondItem="nYX-fZ-Mny" secondAttribute="trailing" constant="20" symbolic="YES" id="uv3-0l-996"/>
-                <constraint firstAttribute="trailing" secondItem="JQv-VB-3MQ" secondAttribute="trailing" constant="20" symbolic="YES" id="vuF-8v-PLV"/>
                 <constraint firstAttribute="trailing" secondItem="MOS-w7-D1d" secondAttribute="trailing" constant="20" symbolic="YES" id="wDv-Zr-wWh"/>
             </constraints>
             <visibilityPriorities>
@@ -490,16 +425,8 @@
                 <integer value="1000"/>
                 <integer value="1000"/>
                 <integer value="1000"/>
-                <integer value="1000"/>
-                <integer value="1000"/>
-                <integer value="1000"/>
-                <integer value="1000"/>
             </visibilityPriorities>
             <customSpacing>
-                <real value="3.4028234663852886e+38"/>
-                <real value="3.4028234663852886e+38"/>
-                <real value="3.4028234663852886e+38"/>
-                <real value="3.4028234663852886e+38"/>
                 <real value="3.4028234663852886e+38"/>
                 <real value="3.4028234663852886e+38"/>
                 <real value="3.4028234663852886e+38"/>

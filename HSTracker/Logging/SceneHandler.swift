@@ -48,14 +48,7 @@ class SceneHandler {
         
         let game = AppDelegate.instance().coreManager.game
         
-        if from == .tournament {
-            
-            DispatchQueue.main.async {
-                game.updateMulliganGuidePreLobby()
-            }
-            game.windowManager.rootOverlay?.viewModel.mulliganGuidePreLobby.viewModel.invlidateAllDecks()
-            Watchers.deckPickerWatcher.stop()
-        } else if from == .bacon {
+        if from == .bacon {
             DispatchQueue.main.async {
                 game.updateBattlegroundsSessionVisibility()
                 game.updateTier7PreLobbyVisibility()
@@ -93,12 +86,7 @@ class SceneHandler {
         }
         let game = core.game
 
-        if to == .tournament {
-            Watchers.deckPickerWatcher.run()
-            DispatchQueue.main.async {
-                game.updateMulliganGuidePreLobby()
-            }
-        } else if to == .bacon {
+        if to == .bacon {
             game.cacheBattlegroundRatingInfo()
             
             DispatchQueue.main.async {

@@ -25,7 +25,7 @@
 		5E1D7A2C9B3F4E60A8C1D2E4 /* HoverPopupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E1D7A2C9B3F4E60A8C1D2E3 /* HoverPopupTests.swift */; };
 		506332DF14E84226A5406F22 /* BoardDamageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 282512BFCDBA898C2CBECF16 /* BoardDamageTests.swift */; };
 		D263D38AEBD00222F3207171 /* ActionHistoryRecorderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 452016FCC727689B4E19D163 /* ActionHistoryRecorderTests.swift */; };
-		E4636A60A212B891F5F452C3 /* MulliganGuideTrialTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E74A2C90813F6A51BF150C8 /* MulliganGuideTrialTests.swift */; };
+		E4636A60A212B891F5F452C3 /* PlayerTrialStatusCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E74A2C90813F6A51BF150C8 /* PlayerTrialStatusCacheTests.swift */; };
 		B0C059017331D7CB8481FEC1 /* MulliganRecorderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 854B1DD408533A68D512CA98 /* MulliganRecorderTests.swift */; };
 		EAF95676C6577B2F43E65AD6 /* ActionHistoryReplayTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4980AF37EF880A5414F5B852 /* ActionHistoryReplayTests.swift */; };
 		84A92DD9DDD3525D628F3B99 /* ActionHistoryPresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5000344EA550B58FE632734 /* ActionHistoryPresentationTests.swift */; };
@@ -144,7 +144,6 @@
 		22F482B90D9DDAAC5DD33EDD /* CrystalBroker.swift in Sources */ = {isa = PBXBuildFile; fileRef = F68F41579CEA6E6D237C3100 /* CrystalBroker.swift */; };
 		2335868FBD26DDA38F863070 /* MuckPools.swift in Sources */ = {isa = PBXBuildFile; fileRef = 024361DC162B7159D7896147 /* MuckPools.swift */; };
 		23B8C179BBAA52544CE2D89E /* HookNHeave.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFC56AE545DD8F37255CC883 /* HookNHeave.swift */; };
-		2454744B74BFA3F7B8ECF7E3 /* BattlegroundsTavernPoolObservationParams.swift in Sources */ = {isa = PBXBuildFile; fileRef = B662B8B615092B0EF4D9C5C3 /* BattlegroundsTavernPoolObservationParams.swift */; };
 		247E75D0640C2FE789012DE2 /* FalseDisciple.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D094BD98A4373D7763B276D /* FalseDisciple.swift */; };
 		24A6F7609D6642FAB5B444BC /* BattlegroundsDiscoveryGuidesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 755828E8DCB947A7B93443CD /* BattlegroundsDiscoveryGuidesViewModel.swift */; };
 		24DAE815B49242E7A17CC1A7 /* MulliganTooltipWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8E2BBE30F494E9E8F26C8D4 /* MulliganTooltipWatcher.swift */; };
@@ -186,11 +185,9 @@
 		317974BB01D45D08FE33911F /* CriminalContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC9202D1D261071A701EA612 /* CriminalContract.swift */; };
 		317F0A7468D4A00D5B9CAD63 /* Symbiosis.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC6F4215A49EF7BE98125512 /* Symbiosis.swift */; };
 		31A1DFEAD8B12E6F26941A52 /* BattlegroundsDeityState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04655F383E8EBD0E3BD1461F /* BattlegroundsDeityState.swift */; };
-		31BB69763BC1B35E25AE5639 /* ConstructedMulliganV2SingleCardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F24D4A90A357C8BFD01DCBD2 /* ConstructedMulliganV2SingleCardViewModel.swift */; };
 		3258395BFBEEBA3D2E11A13E /* InstrumentSmasher.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAA0A92B8EDC1A27F9A1842A /* InstrumentSmasher.swift */; };
 		331F1C9A8DDAB391612B45B8 /* Skyfin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2DC78C9F7310C8316AEA1A /* Skyfin.swift */; };
 		33C397595FCEB279A57B4E07 /* CrystalsongPortal.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2AEE407FFC333F8468DBAC0 /* CrystalsongPortal.swift */; };
-		3412955453DE192E50E80735 /* ConstructedMulliganV2SingleCardHeaderViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 738EB3EBBA2F12662014F3ED /* ConstructedMulliganV2SingleCardHeaderViewModel.swift */; };
 		3422F72487C0809D12AEEF8C /* Paparazzi.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90E2C897D7F3BA4C0B17AF84 /* Paparazzi.swift */; };
 		3468D8A1665DB918DFBF66AF /* BlazingInvocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 177C7CA6E5F07B2E7CAA8DAD /* BlazingInvocation.swift */; };
 		348466B0B8EFCD53579CE893 /* Glaciate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5690E4AAF0C8F47D3F0227DF /* Glaciate.swift */; };
@@ -202,7 +199,6 @@
 		38401596D9F8475B99074AB2 /* BattlegroundsSingleTrinketView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D5B388BE912457084C83660 /* BattlegroundsSingleTrinketView.swift */; };
 		3877FB56DA0B83FC54E7EA20 /* FirelandsPortal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504AD75D62A0C8B8ECB13911 /* FirelandsPortal.swift */; };
 		387CAFA4FF9F85399599B6C6 /* Alarashi.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70F71B59788B8BC5C03A125F /* Alarashi.swift */; };
-		389DB9BC1E784988977841AF /* MulliganToastView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6615C51905284AC3B7C1CAF9 /* MulliganToastView.swift */; };
 		38DB3DADE0733708D5EF1D9B /* RelatedCardsTooltipPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E142A16D801540C076F75EA1 /* RelatedCardsTooltipPanel.swift */; };
 		390E95C7083D1610C12BBEFE /* ShadowjewelerHanar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06FD2C181408E5C36508245E /* ShadowjewelerHanar.swift */; };
 		391CAEF905C5F34216A8E21B /* CardTileListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A25E23944145D19C83FE6DB /* CardTileListView.swift */; };
@@ -226,7 +222,6 @@
 		3D0A925CA944D122B0626563 /* MurlocKnight.swift in Sources */ = {isa = PBXBuildFile; fileRef = C45B9250DC43DE9B7738888F /* MurlocKnight.swift */; };
 		3D11A476F7209ADE3356D197 /* Dethrone.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBB29B539DBFE7DBC9D5CF3E /* Dethrone.swift */; };
 		3DB8446653C640BA92B821E3 /* HDTCanvasIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 873E3052927B48C8AF6B3C4C /* HDTCanvasIcon.swift */; };
-		3DEAC63A9D588D131162ABF7 /* MulliganV2StatusData.swift in Sources */ = {isa = PBXBuildFile; fileRef = A97939C4EA13DEC8A16EB021 /* MulliganV2StatusData.swift */; };
 		3E156FBCD98A3A796BD96E09 /* BlindBox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36614FEAD9E3A3A66175A20C /* BlindBox.swift */; };
 		3E2FC867E4CE427BAFBD8FC3 /* BobsBuddyPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4ACC57F3C3CD407287A0B1E0 /* BobsBuddyPanelView.swift */; };
 		3E4074B4682880EF85228562 /* PackTheHouse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93E60BB1B2EE136BEA492B8A /* PackTheHouse.swift */; };
@@ -380,8 +375,6 @@
 		43C567EC1D5E314500451B6F /* HSReplay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43C567EB1D5E314500451B6F /* HSReplay.swift */; };
 		43C567FD1D5E448200451B6F /* HSReplayManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43C567FC1D5E448200451B6F /* HSReplayManager.swift */; };
 		43C567FF1D5E4F9700451B6F /* HSReplayAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43C567FE1D5E4F9700451B6F /* HSReplayAPI.swift */; };
-		43C568011D5E584F00451B6F /* LogUploader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43C568001D5E584F00451B6F /* LogUploader.swift */; };
-		43C568031D5E59E500451B6F /* UploadResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43C568021D5E59E500451B6F /* UploadResult.swift */; };
 		43C568051D5E5BFF00451B6F /* UploadMetaData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43C568041D5E5BFF00451B6F /* UploadMetaData.swift */; };
 		43D307FB1C83159C00480488 /* SizeHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43D307FA1C83159C00480488 /* SizeHelper.swift */; };
 		43D308041C842DC000480488 /* GeneralPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43D308031C842DC000480488 /* GeneralPreferences.swift */; };
@@ -441,12 +434,10 @@
 		4C68AF2C2447D37000E52834 /* HearthMirror.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 4C68AF2A2447D35A00E52834 /* HearthMirror.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		4C6B7A1F5E16F08D0A70154B /* IKnowAGuyGANGS.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4421B5278C605255AAF533D /* IKnowAGuyGANGS.swift */; };
 		4C6E9E0D16338D4F02726329 /* NaturalTalent.swift in Sources */ = {isa = PBXBuildFile; fileRef = F219A6BE2B9A9330CC7E7851 /* NaturalTalent.swift */; };
-		4C8E201F195AC2873021D4F9 /* MulliganV2StatusParams.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EBEF7E2938397C5400012FA /* MulliganV2StatusParams.swift */; };
 		4CAEB0594D37490DBB18686F /* BattlegroundsPlacementDistributionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40B639B247DF49E6B95178F5 /* BattlegroundsPlacementDistributionView.swift */; };
 		4CED5D15243D1B27006D2E1F /* DemonHunter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CED5D14243D1B27006D2E1F /* DemonHunter.swift */; };
 		4D130755B942B6ED141C3F32 /* Anomalize.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8D617118C7F8A3570A7D883 /* Anomalize.swift */; };
 		4D1B7AF4BB91D5F5B32D6AE0 /* VelarokWindblade.swift in Sources */ = {isa = PBXBuildFile; fileRef = 303C3240B65217A9439E85E2 /* VelarokWindblade.swift */; };
-		4D3ECCEAC870D8495A39FF5E /* ConstructedMulliganPreLobbyWidgetViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85F0CE929C65D6AE160FFBF5 /* ConstructedMulliganPreLobbyWidgetViewModel.swift */; };
 		4DB3387B6FC24B7AB57C5B51 /* SlimeEm.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27FC3508F59927DE9C19984F /* SlimeEm.swift */; };
 		4DD495AA0B5E2AF8AD774912 /* MuckbornServant.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6A213E722B21C2C7A39B59F /* MuckbornServant.swift */; };
 		4E3B4A18F648D3F84CFFD2B6 /* HenchClanBurglar.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB21CB09F9D38EAF05B91DC1 /* HenchClanBurglar.swift */; };
@@ -455,7 +446,6 @@
 		4ED574B4266527F5F64E2036 /* KureTheLightBeyond.swift in Sources */ = {isa = PBXBuildFile; fileRef = 161E59A28716457626CFA651 /* KureTheLightBeyond.swift */; };
 		4FDE2DD7D0D2D94AD2F594AF /* TheSunwell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0093278898A576BD6877B781 /* TheSunwell.swift */; };
 		50005FA7C83CB42BEEF5C54F /* ANewChallenger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A323AF4287E0D9113B6C7FC /* ANewChallenger.swift */; };
-		506D65462C58EAC1617E4302 /* ConstructedMulliganGuideV2View.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB3F16E15E17850C0760780D /* ConstructedMulliganGuideV2View.swift */; };
 		510B084E7B4A1450F0D9E5A7 /* GuideCardArtBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDBE0861B8A2931879DA5F53 /* GuideCardArtBackground.swift */; };
 		5185B63E0FD1BE9461AD08A9 /* DeitySizeCounter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E270CB7F3E83D61312873710 /* DeitySizeCounter.swift */; };
 		51B8DD6464703968ADFE5FCE /* BrightwingLegacy.swift in Sources */ = {isa = PBXBuildFile; fileRef = F06807492716FAF52C25BD10 /* BrightwingLegacy.swift */; };
@@ -517,10 +507,8 @@
 		6298673DBB6DF707F095CA2E /* Tortotem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2EDDD00A20FE4F4CDB00E26E /* Tortotem.swift */; };
 		62A3B2C9070D7B4E73AD3FF5 /* HuntersPack.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D5833BC7BF588B04EE5FE77 /* HuntersPack.swift */; };
 		62C3B3896265118661C66F0B /* CarefreeCookie.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4F302CD9CDCCDA9AD8B83EC /* CarefreeCookie.swift */; };
-		62EBAABA64D422A3A7C5B058 /* MulliganGuideTrial.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE6E0D088083F9ECD72F3B16 /* MulliganGuideTrial.swift */; };
 		632010D1543465E135FFFF21 /* MatchingOutfits.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CDF7B8B35C0DA0A3FF2B20B /* MatchingOutfits.swift */; };
 		639CD49E06E16725CB4555E9 /* RitualOfLife.swift in Sources */ = {isa = PBXBuildFile; fileRef = 367496F4C069BDBECF55E3DD /* RitualOfLife.swift */; };
-		64069AB704B1E42F6742B690 /* LinearGaugeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A55210827595351F15734B7 /* LinearGaugeView.swift */; };
 		6474B16184F07EE41D76D446 /* BoggspineKnuckles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 603A979A54748F818672ED21 /* BoggspineKnuckles.swift */; };
 		652BD0B9DE1DDE37C79D55A2 /* MendTheTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82A9162157AF263A59450421 /* MendTheTimeline.swift */; };
 		6593650632D18035F6D2D1FB /* AstralRift.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EBB0FE676BF4D4F62DC3675 /* AstralRift.swift */; };
@@ -546,7 +534,6 @@
 		6C89C05B0970134ACA0795B6 /* BattlegroundsAnomalyGuidesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E87BB2FCD06AE1E9309A679 /* BattlegroundsAnomalyGuidesViewModel.swift */; };
 		6D9457B0FAD59D6144251261 /* RunicAdornment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E1A542D1668E60601197B8F /* RunicAdornment.swift */; };
 		6DCA3F2FE9CAAFDDAE1DC538 /* KthirRitualist.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69B9980E8B2A3B0375B1BE15 /* KthirRitualist.swift */; };
-		6F10D744995FB62C28FB3813 /* MulliganTipIconView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8710EB77B7B79FE2F598AEBA /* MulliganTipIconView.swift */; };
 		6F40D819B9291158FC8261B3 /* HandCannon.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6CC469FB4FBFE0BACC124E9 /* HandCannon.swift */; };
 		6F40E4B5B249C04FE909C337 /* SpitefulSummoner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DA4431CA0BA7592497A0B49 /* SpitefulSummoner.swift */; };
 		7069DF8D4101B37B4D70F5E8 /* GoldenScarab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4669141DF4224FC2B45CB8BD /* GoldenScarab.swift */; };
@@ -609,7 +596,6 @@
 		818C36459FBA5E6FE2C64179 /* GrimestreetInformantGANGS.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4A8B56683D3E94E63C7A39E /* GrimestreetInformantGANGS.swift */; };
 		81E9251799626B9EB840627D /* TheScourge.swift in Sources */ = {isa = PBXBuildFile; fileRef = D770A27218CD8123AFC580A9 /* TheScourge.swift */; };
 		829BB843A03E1675C0CA4955 /* RunefueledGolem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87D0C9B02B89AE2BA38E7B17 /* RunefueledGolem.swift */; };
-		82C409FBBAECB6E69E29A68F /* ConstructedMulliganGuideV2ViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46F4128461C4484E8450D77D /* ConstructedMulliganGuideV2ViewModel.swift */; };
 		83357E771750467CBA9C1E54 /* SpinningIndicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 095B9E3F897A4466B967AC5B /* SpinningIndicator.swift */; };
 		839CE5F360CCD3E39FA56B0C /* KeywardenIvory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 383E21A366B3E7BD30A1BFD8 /* KeywardenIvory.swift */; };
 		843223FC224804CA1B846F27 /* TravelSecurity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FB366FD65D447B7354216FA /* TravelSecurity.swift */; };
@@ -627,8 +613,6 @@
 		8858CCB31701AF9B828ECC6B /* GorillabotA3.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5FB6D87022CE7858962C804 /* GorillabotA3.swift */; };
 		8A5B1213499B19DA7366E3E1 /* CommissaryCrook.swift in Sources */ = {isa = PBXBuildFile; fileRef = 547AA8A9A7B0239ABAEEA3E4 /* CommissaryCrook.swift */; };
 		8A9278650FD2FE1B6801A7D5 /* HeroGuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E517AA18E918059BD6446774 /* HeroGuideView.swift */; };
-		8DF18459F89A844F812A8D2F /* MulliganV2Params.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331922B5382E5C30E699243F /* MulliganV2Params.swift */; };
-		8F239D3C72B955B990CF1451 /* MulliganGuideTrialsExhaustedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C74E246D839D7D120CA28E4 /* MulliganGuideTrialsExhaustedView.swift */; };
 		8F3B3A1B6F94B49AFAE348A5 /* Qonzu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5614FDB97644B1A5167F9676 /* Qonzu.swift */; };
 		8F60E4B45DEC949E787EFCF4 /* AssemblyLine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 193CBC69FF8ECC7499058C1B /* AssemblyLine.swift */; };
 		8FAEECDF7BE5021FD91CE046 /* DarkPeddler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FF67307662ABFB905C45540 /* DarkPeddler.swift */; };
@@ -680,7 +664,6 @@
 		9DD70DA15300572734CA4BE2 /* TheRunespear.swift in Sources */ = {isa = PBXBuildFile; fileRef = 011F18270F3BFB47C67ED301 /* TheRunespear.swift */; };
 		9DEF28957A4767C28CB0A9DD /* Saddlemaster.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D7B85072F794B15C6FE7107 /* Saddlemaster.swift */; };
 		9E10A613D299D5DFF66A5B2F /* Stormrook.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A68F142E38CD130E4B5E7C3 /* Stormrook.swift */; };
-		9E67814D8E6FAC2919F53CB0 /* MulliganCardPortraitView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE7A76CCAFA6BFB8D952B01F /* MulliganCardPortraitView.swift */; };
 		9E856B103D3E09870F93A8D8 /* WhirlkickMaster.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE7A884DEC8C096EACC7C478 /* WhirlkickMaster.swift */; };
 		9EA14AA3067A5E6417AB17FC /* StewardOfScrolls.swift in Sources */ = {isa = PBXBuildFile; fileRef = F40B12BAAEDCCD585ADE5365 /* StewardOfScrolls.swift */; };
 		9EC6E05476289559B4AB6DAE /* ThiefsTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1EC0FB7D44D66874B6CF31A /* ThiefsTools.swift */; };
@@ -688,7 +671,6 @@
 		9EFD48B270A5FDB127AD7683 /* WishingWell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C49258C44FB3F58CEDFF2BE /* WishingWell.swift */; };
 		A0632B7A36A36A4BDF0BDF07 /* SparkOfLife.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFF9DB5D921C22186F617E1E /* SparkOfLife.swift */; };
 		A06675979F03FFD46F063AC8 /* LotusAgentsGANGS.swift in Sources */ = {isa = PBXBuildFile; fileRef = 739242AB078DEC2E8F12E742 /* LotusAgentsGANGS.swift */; };
-		A07B71E888E4FFF92A972B12 /* MulliganV2Data.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E350BCCBA1DB98636739A35 /* MulliganV2Data.swift */; };
 		A07DE94EACEB6D4842B6F273 /* ZuldrakRitualist.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD06DFFE30D2B94D7020B744 /* ZuldrakRitualist.swift */; };
 		A0A79B73B56B9459D405B6E5 /* ScarletBruiser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3334B12457155BB9AF9D69D6 /* ScarletBruiser.swift */; };
 		A0B6B1D13F3461AB18D61BA2 /* RaptorHerald.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76EE4E519D110769C32B736A /* RaptorHerald.swift */; };
@@ -751,7 +733,6 @@
 		B38305148277172B9D88997F /* OmegaAssembly.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DA6B481B1FCD2C7D9C4E2D9 /* OmegaAssembly.swift */; };
 		B3C7963D7C2FCD7C5A39FEC1 /* ThistleTeaSet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEEF7AB77473DF57C7EF8167 /* ThistleTeaSet.swift */; };
 		B3F0708D0880295D75E00378 /* CounterChipView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C57685B3ADDD6F597BA9277 /* CounterChipView.swift */; };
-		B41238D5664BA8BCEC4D20C5 /* ConstructedMulliganPreLobbyWidgetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB1647DCFF7E9F0816C194F6 /* ConstructedMulliganPreLobbyWidgetView.swift */; };
 		B45B6BEFC2E43751F420C40F /* StateValuePoolCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87F213C266C5FFA8BAF416D6 /* StateValuePoolCard.swift */; };
 		B45CC15DDF390E3355C517B0 /* MaestraMaskMerchant.swift in Sources */ = {isa = PBXBuildFile; fileRef = D21681B02E1F422F26E7922B /* MaestraMaskMerchant.swift */; };
 		B4743CFE3D39BD3CAF6816AD /* ShakuTheCollector.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2DEC7A341DD25FB24A44950 /* ShakuTheCollector.swift */; };
@@ -793,7 +774,6 @@
 		B80B690E2E3C3FC800197FA5 /* Sleetbreaker.swift in Sources */ = {isa = PBXBuildFile; fileRef = B80B690D2E3C3FC800197FA5 /* Sleetbreaker.swift */; };
 		B81189252E429A510091B4D6 /* WhirringProtector.swift in Sources */ = {isa = PBXBuildFile; fileRef = B81189242E429A510091B4D6 /* WhirringProtector.swift */; };
 		B812BCED2947F929000C6513 /* BattlegroundsQuestPickParams.swift in Sources */ = {isa = PBXBuildFile; fileRef = B812BCEC2947F928000C6513 /* BattlegroundsQuestPickParams.swift */; };
-		B81849272BF4D7C900F4EEE2 /* ConstructedMulliganOverlayMessageViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B81849262BF4D7C900F4EEE2 /* ConstructedMulliganOverlayMessageViewModel.swift */; };
 		B8196F112CC1BB58007C0371 /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = B8196F102CC1BB58007C0371 /* Sentry */; };
 		B8196F142CC850BB007C0371 /* BaseCounter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8196F132CC850BB007C0371 /* BaseCounter.swift */; };
 		B8196F162CC86FB3007C0371 /* NumericCounter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8196F152CC86FB3007C0371 /* NumericCounter.swift */; };
@@ -1057,7 +1037,6 @@
 		B85462392CE01B1F0083BB31 /* BattlegroundsTeammateBoardStateWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = B85462382CE01B1F0083BB31 /* BattlegroundsTeammateBoardStateWatcher.swift */; };
 		B854623B2CE01C5F0083BB31 /* BattlegroundsLeaderboardWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = B854623A2CE01C5F0083BB31 /* BattlegroundsLeaderboardWatcher.swift */; };
 		B854623D2CE01DF50083BB31 /* SceneWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = B854623C2CE01DF50083BB31 /* SceneWatcher.swift */; };
-		B854623F2CE01ECF0083BB31 /* DeckPickerWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = B854623E2CE01ECF0083BB31 /* DeckPickerWatcher.swift */; };
 		B85462412CE01FCD0083BB31 /* ExperienceWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = B85462402CE01FCD0083BB31 /* ExperienceWatcher.swift */; };
 		B85462432CE021FF0083BB31 /* PVPDungeonRunWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = B85462422CE021FF0083BB31 /* PVPDungeonRunWatcher.swift */; };
 		B85462452CE023D20083BB31 /* DungeonRunWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = B85462442CE023D20083BB31 /* DungeonRunWatcher.swift */; };
@@ -1066,7 +1045,6 @@
 		B8591FF02B23CC7D00B907A4 /* ChoiceType.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8591FEF2B23CC7D00B907A4 /* ChoiceType.swift */; };
 		B8591FF42B23D4D000B907A4 /* ChoicesHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8591FF32B23D4D000B907A4 /* ChoicesHandler.swift */; };
 		EF64E22318D20662EB62FB95 /* MulliganRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93E333ED65BB300489314E28 /* MulliganRecorder.swift */; };
-		B8591FF82B24919F00B907A4 /* MulliganState.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8591FF72B24919F00B907A4 /* MulliganState.swift */; };
 		B8591FFA2B24F7C900B907A4 /* ObjectiveFactoryProxy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8591FF92B24F7C900B907A4 /* ObjectiveFactoryProxy.swift */; };
 		B8591FFC2B24F87C00B907A4 /* ObjectiveProxy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8591FFB2B24F87C00B907A4 /* ObjectiveProxy.swift */; };
 		B85920962B4C73B300B907A4 /* CustomToolTip in Frameworks */ = {isa = PBXBuildFile; productRef = B85920952B4C73B300B907A4 /* CustomToolTip */; };
@@ -1075,7 +1053,6 @@
 		B85F1AC9258A558200A6F8C3 /* Helper.swift in Sources */ = {isa = PBXBuildFile; fileRef = B85F1AC8258A558200A6F8C3 /* Helper.swift */; };
 		B85FE9C52E53CACA001865FC /* Resources in Resources */ = {isa = PBXBuildFile; fileRef = 439C7E8E1C777D6C00D29859 /* Resources */; };
 		B8621F1A2746A785004DD0E9 /* Account.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8621F192746A785004DD0E9 /* Account.swift */; };
-		B8621F1C2746AF5E004DD0E9 /* HSReplayNetHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8621F1B2746AF5E004DD0E9 /* HSReplayNetHelper.swift */; };
 		B864A13E24F54E1F005EA2A0 /* MinionHeroPowerTrigger.swift in Sources */ = {isa = PBXBuildFile; fileRef = B864A13D24F54E1F005EA2A0 /* MinionHeroPowerTrigger.swift */; };
 		B864AE2025979E3400793F36 /* AdventureDbId.swift in Sources */ = {isa = PBXBuildFile; fileRef = B864AE1F25979E3400793F36 /* AdventureDbId.swift */; };
 		B864AE2225979E9100793F36 /* AdventureModeDbId.swift in Sources */ = {isa = PBXBuildFile; fileRef = B864AE2125979E9100793F36 /* AdventureModeDbId.swift */; };
@@ -1184,10 +1161,6 @@
 		B893434E2CD1320F009A8727 /* WheelOfDeathTurnsCounter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B893434D2CD1320F009A8727 /* WheelOfDeathTurnsCounter.swift */; };
 		B89343502CD1520E009A8727 /* PlayedSpellSchoolsCounter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B893434F2CD1520E009A8727 /* PlayedSpellSchoolsCounter.swift */; };
 		B8956CFD25509B3F0073D70C /* BattlegroundsMinionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8956CFC25509B3F0073D70C /* BattlegroundsMinionView.swift */; };
-		B89586452B804E2000989C13 /* ConstructedStatsHeaderViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B89586442B804E2000989C13 /* ConstructedStatsHeaderViewModel.swift */; };
-		B89586472B81400A00989C13 /* ConstructedMulliganSingleCardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B89586462B81400A00989C13 /* ConstructedMulliganSingleCardViewModel.swift */; };
-		B89586492B81411400989C13 /* MulliganGuideData.swift in Sources */ = {isa = PBXBuildFile; fileRef = B89586482B81411400989C13 /* MulliganGuideData.swift */; };
-		B895864B2B81460700989C13 /* ConstructedMulliganSingleCardHeaderViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B895864A2B81460700989C13 /* ConstructedMulliganSingleCardHeaderViewModel.swift */; };
 		B89656512E555B5C00257DDC /* WidowbloomSeedsman.swift in Sources */ = {isa = PBXBuildFile; fileRef = B89656502E555B5C00257DDC /* WidowbloomSeedsman.swift */; };
 		B89656532E555BD800257DDC /* FaithfulCompanions.swift in Sources */ = {isa = PBXBuildFile; fileRef = B89656522E555BD800257DDC /* FaithfulCompanions.swift */; };
 		B89656552E555C5B00257DDC /* ValstannStaghelm.swift in Sources */ = {isa = PBXBuildFile; fileRef = B89656542E555C5B00257DDC /* ValstannStaghelm.swift */; };
@@ -1325,11 +1298,6 @@
 		B8A1F1022FD10001000A0102 /* TurnTimerOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8A1F1012FD10001000A0101 /* TurnTimerOverlayView.swift */; };
 		B8A1F1042FD10001000A0104 /* BoardAttackIconView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8A1F1032FD10001000A0103 /* BoardAttackIconView.swift */; };
 		B8A1F1062FD10001000A0106 /* ExperienceCounterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8A1F1052FD10001000A0105 /* ExperienceCounterView.swift */; };
-		B8A1F2022FD20001000A0202 /* ConstructedMulliganGuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8A1F2012FD20001000A0201 /* ConstructedMulliganGuideView.swift */; };
-		B8A1F2042FD20001000A0204 /* ConstructedMulliganSingleCardStatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8A1F2032FD20001000A0203 /* ConstructedMulliganSingleCardStatsView.swift */; };
-		B8A1F2062FD20001000A0206 /* ConstructedMulliganSingleCardHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8A1F2052FD20001000A0205 /* ConstructedMulliganSingleCardHeaderView.swift */; };
-		B8A1F2082FD20001000A0208 /* ConstructedMulliganOverlayMessageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8A1F2072FD20001000A0207 /* ConstructedMulliganOverlayMessageView.swift */; };
-		B8A1F3022FD30001000A0302 /* ConstructedMulliganGuidePreLobbyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8A1F3012FD30001000A0301 /* ConstructedMulliganGuidePreLobbyView.swift */; };
 		B8A1F5022FD50001000A0502 /* MercenariesTaskViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8A1F5012FD50001000A0501 /* MercenariesTaskViewModel.swift */; };
 		B8A1F5042FD50001000A0504 /* MercenariesTaskListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8A1F5032FD50001000A0503 /* MercenariesTaskListViewModel.swift */; };
 		B8A1F5062FD50001000A0506 /* OverlayFormattedText.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8A1F5052FD50001000A0505 /* OverlayFormattedText.swift */; };
@@ -1355,8 +1323,6 @@
 		B8AA20072FC2000100AA2007 /* ArenaPreferences.xib in Resources */ = {isa = PBXBuildFile; fileRef = B8AA20062FC2000100AA2006 /* ArenaPreferences.xib */; };
 		B8AB59942742F94900383EC8 /* RateLimiter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8AB59932742F94900383EC8 /* RateLimiter.swift */; };
 		B8AB59962742FA5C00383EC8 /* Deque.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8AB59952742FA5C00383EC8 /* Deque.swift */; };
-		B8AB59982744139700383EC8 /* CollectionHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8AB59972744139700383EC8 /* CollectionHelper.swift */; };
-		B8AB599A2744145B00383EC8 /* Collection.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8AB59992744145B00383EC8 /* Collection.swift */; };
 		B8AC9A1C293CE3310047F438 /* BattlegroundsHeroPickingViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8AC9A1B293CE3310047F438 /* BattlegroundsHeroPickingViewModel.swift */; };
 		B8AC9A1E293CE51B0047F438 /* BattlegroundsSingleHeroViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8AC9A1D293CE51B0047F438 /* BattlegroundsSingleHeroViewModel.swift */; };
 		B8AC9A26293F92540047F438 /* BattlegroundsQuestPickingViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8AC9A25293F92530047F438 /* BattlegroundsQuestPickingViewModel.swift */; };
@@ -1370,12 +1336,7 @@
 		B8AEB6112FB2744B00CDA2C0 /* LeylineExtraTriggerCounter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8AEB6102FB2744B00CDA2C0 /* LeylineExtraTriggerCounter.swift */; };
 		B8AEB6132FB276A100CDA2C0 /* ExtraAnimalCompanionCounter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8AEB6122FB276A100CDA2C0 /* ExtraAnimalCompanionCounter.swift */; };
 		B8AEB6262FB2813800CDA2C0 /* FriendlyAttacksThisGameCounter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8AEB6252FB2813800CDA2C0 /* FriendlyAttacksThisGameCounter.swift */; };
-		B8AF0C672B83A65E00B65F63 /* MulliganGuideStatusData.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8AF0C662B83A65E00B65F63 /* MulliganGuideStatusData.swift */; };
-		B8AF0C692B83A77100B65F63 /* MulliganGuideStatusParams.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8AF0C682B83A77100B65F63 /* MulliganGuideStatusParams.swift */; };
-		B8AF0C6B2B83A7AD00B65F63 /* MulliganGuideParams.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8AF0C6A2B83A7AD00B65F63 /* MulliganGuideParams.swift */; };
-		B8AF0C712B84347800B65F63 /* ConstructedMulliganGuideViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8AF0C702B84347800B65F63 /* ConstructedMulliganGuideViewModel.swift */; };
 		B8AF0C772B85625200B65F63 /* Region.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8AF0C762B85625200B65F63 /* Region.swift */; };
-		B8AF0C792B91444200B65F63 /* ConstructedMulliganGuidePreLobbyViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8AF0C782B91444200B65F63 /* ConstructedMulliganGuidePreLobbyViewModel.swift */; };
 		B8B287052E83838600C55767 /* CardLegalityChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8B287042E83838600C55767 /* CardLegalityChecker.swift */; };
 		B8B287072EA19A3100C55767 /* PortalVanguard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8B287062EA19A3100C55767 /* PortalVanguard.swift */; };
 		B8B61C222AEBEA9C00990359 /* AvailableSecretsProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8B61C212AEBEA9C00990359 /* AvailableSecretsProvider.swift */; };
@@ -1503,7 +1464,6 @@
 		B8C1F1BF295553F8001E078C /* MainMenu.xib in Resources */ = {isa = PBXBuildFile; fileRef = B8C1F1BD295553F7001E078C /* MainMenu.xib */; };
 		B8C2F90F261F530700C31E6A /* GetAccountResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8C2F90E261F530700C31E6A /* GetAccountResult.swift */; };
 		B8C33FB1273EF851006DA79E /* MercenariesCoins.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8C33FB0273EF851006DA79E /* MercenariesCoins.swift */; };
-		B8CB542253130C9F7AB0D806 /* MulliganGuideTrialsExhaustedViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F763EBF84875A096625CC1B /* MulliganGuideTrialsExhaustedViewModel.swift */; };
 		B8CD01012FA0000000CD0101 /* CardDefsBinary.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8CD01002FA0000000CD0100 /* CardDefsBinary.swift */; };
 		B8CDDCAD2F3A7B9A004C3E86 /* Reminisce.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8CDDCAC2F3A7B9A004C3E86 /* Reminisce.swift */; };
 		B8CDDCBF2F3D63C8004C3E86 /* TimewarpedMagnanimooseEnchantmentProxy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8CDDCBE2F3D63C8004C3E86 /* TimewarpedMagnanimooseEnchantmentProxy.swift */; };
@@ -1770,7 +1730,6 @@
 		D836A37C12F165669F0CC2AC /* LinkOpponentDeckPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC0A231CF348D070B2A92305 /* LinkOpponentDeckPanelView.swift */; };
 		D8CF638309CDF3155798492B /* BlazingTransmutation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79082F4EE582FD77218C371E /* BlazingTransmutation.swift */; };
 		D9AF42CAD0BC12B1FEFB7474 /* SoulburnerVaria.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82A6DECE2F4FD456AF27F36F /* SoulburnerVaria.swift */; };
-		DA1A7EBBEB02499BA7888F27 /* MulliganToastViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7763354053BC4D139A9EE08D /* MulliganToastViewModel.swift */; };
 		DA2A1C47627F0671938096C2 /* ApexisSmuggler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A4BA80DAAE39D93A3583223 /* ApexisSmuggler.swift */; };
 		DA3475D2A9A84E659ADF7AD5 /* BattlegroundsNotificationsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79DFF0647D594486B3EBB4C5 /* BattlegroundsNotificationsViewModel.swift */; };
 		DACDD03EBE58B6B5EFBA98B6 /* WindowShopper.swift in Sources */ = {isa = PBXBuildFile; fileRef = F672B1590C6AD7494CA6234A /* WindowShopper.swift */; };
@@ -1828,7 +1787,6 @@
 		EE2A2B3C4D5E6F708192A3C2 /* BattlegroundsTurnCounterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE1A2B3C4D5E6F708192A3C1 /* BattlegroundsTurnCounterView.swift */; };
 		EE64318AE7EDFA3378A3F43C /* NeonInnovation.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFD15B9BA278606D641BCD8F /* NeonInnovation.swift */; };
 		EF33AF55BC0F915B78184CCA /* BreakoutArchitect.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DDEC51776ADF2C1D30CCFA9 /* BreakoutArchitect.swift */; };
-		EF3B5194CD86CE62EAA0D5E7 /* ConstructedMulliganV2SingleCardHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 172D1024C17902D2BE62ABF7 /* ConstructedMulliganV2SingleCardHeaderView.swift */; };
 		EF7EA56E7B72AC7A78AC0C3A /* Magicfin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 939E794E893DD4D8CE422ECF /* Magicfin.swift */; };
 		EFD3706F44E482FB357DADD2 /* WardOfEarth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2235814D61E8F8F2BC63DF25 /* WardOfEarth.swift */; };
 		F03D5447434AF5B506934D72 /* BloodDraw.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C679C0AAE9E03F33A871668 /* BloodDraw.swift */; };
@@ -1936,7 +1894,7 @@
 		5E1D7A2C9B3F4E60A8C1D2E3 /* HoverPopupTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoverPopupTests.swift; sourceTree = "<group>"; };
 		282512BFCDBA898C2CBECF16 /* BoardDamageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardDamageTests.swift; sourceTree = "<group>"; };
 		452016FCC727689B4E19D163 /* ActionHistoryRecorderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionHistoryRecorderTests.swift; sourceTree = "<group>"; };
-		2E74A2C90813F6A51BF150C8 /* MulliganGuideTrialTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MulliganGuideTrialTests.swift; sourceTree = "<group>"; };
+		2E74A2C90813F6A51BF150C8 /* PlayerTrialStatusCacheTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerTrialStatusCacheTests.swift; sourceTree = "<group>"; };
 		854B1DD408533A68D512CA98 /* MulliganRecorderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MulliganRecorderTests.swift; sourceTree = "<group>"; };
 		4980AF37EF880A5414F5B852 /* ActionHistoryReplayTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionHistoryReplayTests.swift; sourceTree = "<group>"; };
 		B5000344EA550B58FE632734 /* ActionHistoryPresentationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionHistoryPresentationTests.swift; sourceTree = "<group>"; };
@@ -1987,7 +1945,6 @@
 		0DB1E2C55020D30B1602DA66 /* PickConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PickConfig.swift; sourceTree = "<group>"; };
 		0DF74692EBFCD9012E3EF596 /* WhackAGnoll.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhackAGnoll.swift; sourceTree = "<group>"; };
 		0E1A542D1668E60601197B8F /* RunicAdornment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunicAdornment.swift; sourceTree = "<group>"; };
-		0E350BCCBA1DB98636739A35 /* MulliganV2Data.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MulliganV2Data.swift; sourceTree = "<group>"; };
 		0E9B8E28B2824B84961B0EB2 /* SnakeEyes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnakeEyes.swift; sourceTree = "<group>"; };
 		0ED7A51728982317BA0CABB1 /* Waxmancy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Waxmancy.swift; sourceTree = "<group>"; };
 		0EEF1820F2F8D85D3F99D808 /* RoamFree.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoamFree.swift; sourceTree = "<group>"; };
@@ -2010,7 +1967,6 @@
 		161E59A28716457626CFA651 /* KureTheLightBeyond.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KureTheLightBeyond.swift; sourceTree = "<group>"; };
 		1687C2330CD8A06FE4E183CC /* SubmergedMap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubmergedMap.swift; sourceTree = "<group>"; };
 		16DA83CE26100E8F838D07B1 /* TrickTotem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrickTotem.swift; sourceTree = "<group>"; };
-		172D1024C17902D2BE62ABF7 /* ConstructedMulliganV2SingleCardHeaderView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConstructedMulliganV2SingleCardHeaderView.swift; sourceTree = "<group>"; };
 		174A8FB14DC7DF2733333DF3 /* Webspinner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Webspinner.swift; sourceTree = "<group>"; };
 		174CD2284B19B0910485DE8C /* CorpseFarm.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorpseFarm.swift; sourceTree = "<group>"; };
 		1758DC225CCE31EECE72F7C1 /* SuspiciousPeddler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuspiciousPeddler.swift; sourceTree = "<group>"; };
@@ -2026,7 +1982,6 @@
 		1976A3B9A4843054F8A44D92 /* ShimmerShot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShimmerShot.swift; sourceTree = "<group>"; };
 		19C2CEEC819A870AEB9BF554 /* TalanjisLastStand.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalanjisLastStand.swift; sourceTree = "<group>"; };
 		1A2DC78C9F7310C8316AEA1A /* Skyfin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Skyfin.swift; sourceTree = "<group>"; };
-		1A55210827595351F15734B7 /* LinearGaugeView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LinearGaugeView.swift; sourceTree = "<group>"; };
 		1A56A6CC532F29CA066AB4AD /* CompGuideDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompGuideDetailView.swift; sourceTree = "<group>"; };
 		1B078BA4862C95DFD0F1D998 /* GeosculptorYip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeosculptorYip.swift; sourceTree = "<group>"; };
 		1B131DBA71DC97F07837762A /* VastWisdom.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VastWisdom.swift; sourceTree = "<group>"; };
@@ -2101,14 +2056,12 @@
 		2E9FD1F5132B4BB4B408B7AC /* BattlegroundsQuestPickingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BattlegroundsQuestPickingView.swift; sourceTree = "<group>"; };
 		2EDDD00A20FE4F4CDB00E26E /* Tortotem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tortotem.swift; sourceTree = "<group>"; };
 		2F38201F4BEEED40E361096F /* NexusChampionSaraad.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NexusChampionSaraad.swift; sourceTree = "<group>"; };
-		2F763EBF84875A096625CC1B /* MulliganGuideTrialsExhaustedViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MulliganGuideTrialsExhaustedViewModel.swift; sourceTree = "<group>"; };
 		2FDFBC1F1075C8104BCF16B6 /* DurnholdeImposter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DurnholdeImposter.swift; sourceTree = "<group>"; };
 		303C3240B65217A9439E85E2 /* VelarokWindblade.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VelarokWindblade.swift; sourceTree = "<group>"; };
 		324D034815559080AFCDA2E2 /* WarCacheCorePlaceholder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WarCacheCorePlaceholder.swift; sourceTree = "<group>"; };
 		32DD5C9CBEBE3A5F03BE14DE /* IvoryKnight.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IvoryKnight.swift; sourceTree = "<group>"; };
 		32F2D438A01B8A24BE375EA1 /* UnstableEvolution.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnstableEvolution.swift; sourceTree = "<group>"; };
 		32F41C2F06EACEBB0F3DE082 /* TortollanForager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TortollanForager.swift; sourceTree = "<group>"; };
-		331922B5382E5C30E699243F /* MulliganV2Params.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MulliganV2Params.swift; sourceTree = "<group>"; };
 		3334B12457155BB9AF9D69D6 /* ScarletBruiser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScarletBruiser.swift; sourceTree = "<group>"; };
 		344212442E66D6A2164A2C84 /* HologramOperator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HologramOperator.swift; sourceTree = "<group>"; };
 		34889C8488137B3728B9A9CC /* BattlegroundsCompGuides.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BattlegroundsCompGuides.swift; sourceTree = "<group>"; };
@@ -2301,8 +2254,6 @@
 		43C567EB1D5E314500451B6F /* HSReplay.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = HSReplay.swift; sourceTree = "<group>"; };
 		43C567FC1D5E448200451B6F /* HSReplayManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = HSReplayManager.swift; sourceTree = "<group>"; };
 		43C567FE1D5E4F9700451B6F /* HSReplayAPI.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = HSReplayAPI.swift; sourceTree = "<group>"; };
-		43C568001D5E584F00451B6F /* LogUploader.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = LogUploader.swift; sourceTree = "<group>"; };
-		43C568021D5E59E500451B6F /* UploadResult.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = UploadResult.swift; sourceTree = "<group>"; };
 		43C568041D5E5BFF00451B6F /* UploadMetaData.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = UploadMetaData.swift; sourceTree = "<group>"; };
 		43D307FA1C83159C00480488 /* SizeHelper.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SizeHelper.swift; sourceTree = "<group>"; };
 		43D308031C842DC000480488 /* GeneralPreferences.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GeneralPreferences.swift; sourceTree = "<group>"; };
@@ -2340,7 +2291,6 @@
 		467766111996039F461A90E2 /* SilvermoonPortal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SilvermoonPortal.swift; sourceTree = "<group>"; };
 		46C342855F8B11EA41581FE4 /* Rheastrasza.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Rheastrasza.swift; sourceTree = "<group>"; };
 		46EDDF6D65F4F359B421850C /* MountainMap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MountainMap.swift; sourceTree = "<group>"; };
-		46F4128461C4484E8450D77D /* ConstructedMulliganGuideV2ViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConstructedMulliganGuideV2ViewModel.swift; sourceTree = "<group>"; };
 		4710128D4357221E15BADE5C /* Mutate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Mutate.swift; sourceTree = "<group>"; };
 		4715E7CD46544F99E45DDA6E /* CoilfangElite.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoilfangElite.swift; sourceTree = "<group>"; };
 		47725036CA468714D30DA153 /* LowSecurityWing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LowSecurityWing.swift; sourceTree = "<group>"; };
@@ -2433,7 +2383,6 @@
 		5B3395D185C070FC1DE24907 /* WorthyExpedition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorthyExpedition.swift; sourceTree = "<group>"; };
 		5C32BC6DE885B0703F31650D /* ToysnatchingGeist.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToysnatchingGeist.swift; sourceTree = "<group>"; };
 		5C73C7FC0284A5D2CCA1360B /* BoardFill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardFill.swift; sourceTree = "<group>"; };
-		5C74E246D839D7D120CA28E4 /* MulliganGuideTrialsExhaustedView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MulliganGuideTrialsExhaustedView.swift; sourceTree = "<group>"; };
 		5CD6B9085396785A70385643 /* SpitefulChef.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpitefulChef.swift; sourceTree = "<group>"; };
 		5D1FA45FE119F6CC9EA54A96 /* SecretsPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecretsPanelView.swift; sourceTree = "<group>"; };
 		5D5C5740C225A34DA4059645 /* FinalFrontier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinalFrontier.swift; sourceTree = "<group>"; };
@@ -2458,7 +2407,6 @@
 		64AB9CC69639454D9FB39A13 /* BattlegroundsTrinketPickingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BattlegroundsTrinketPickingView.swift; sourceTree = "<group>"; };
 		653AA0E547351AB223D57656 /* SnackRun.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnackRun.swift; sourceTree = "<group>"; };
 		656E602C257F3C364C949311 /* Gazlowe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gazlowe.swift; sourceTree = "<group>"; };
-		6615C51905284AC3B7C1CAF9 /* MulliganToastView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MulliganToastView.swift; sourceTree = "<group>"; };
 		669A611369C84EBF4058A44A /* CryofrozenChampion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CryofrozenChampion.swift; sourceTree = "<group>"; };
 		6714D232E5BC27AD4922D6B2 /* RinlingsRifle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RinlingsRifle.swift; sourceTree = "<group>"; };
 		673EF74D3B52B075E6D7197C /* ArrivalOfTheTitans.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArrivalOfTheTitans.swift; sourceTree = "<group>"; };
@@ -2491,7 +2439,6 @@
 		72180A22958837B4A37D87C0 /* BattlegroundsQuestGuides.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BattlegroundsQuestGuides.swift; sourceTree = "<group>"; };
 		72524408A7AD4CA6F9A0549B /* Atlasaurus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Atlasaurus.swift; sourceTree = "<group>"; };
 		7351DDDF2A67BA06B09FA11B /* BaneOfDoom.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BaneOfDoom.swift; sourceTree = "<group>"; };
-		738EB3EBBA2F12662014F3ED /* ConstructedMulliganV2SingleCardHeaderViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConstructedMulliganV2SingleCardHeaderViewModel.swift; sourceTree = "<group>"; };
 		739242AB078DEC2E8F12E742 /* LotusAgentsGANGS.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LotusAgentsGANGS.swift; sourceTree = "<group>"; };
 		73E18388E29551423ECCD59D /* MigratingElekk.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MigratingElekk.swift; sourceTree = "<group>"; };
 		74150158F4C7F4213EAA85FF /* DeckOfLunacy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeckOfLunacy.swift; sourceTree = "<group>"; };
@@ -2503,7 +2450,6 @@
 		75A702661E4D83404173EB1E /* EncoreHeroic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EncoreHeroic.swift; sourceTree = "<group>"; };
 		75BE875CA029FF5C99C5B890 /* DaydreamingPixie.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DaydreamingPixie.swift; sourceTree = "<group>"; };
 		76EE4E519D110769C32B736A /* RaptorHerald.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RaptorHerald.swift; sourceTree = "<group>"; };
-		7763354053BC4D139A9EE08D /* MulliganToastViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MulliganToastViewModel.swift; sourceTree = "<group>"; };
 		77E8DEA075619457444DA642 /* Devolve.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Devolve.swift; sourceTree = "<group>"; };
 		77F9E3A211164980BB8D0328 /* RootOverlayViewModel+OpacityMask.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "RootOverlayViewModel+OpacityMask.swift"; sourceTree = "<group>"; };
 		78EE9167084132E5F3C20D6C /* BabblingBookcaseCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BabblingBookcaseCore.swift; sourceTree = "<group>"; };
@@ -2534,7 +2480,6 @@
 		7D6572F30E20D675137E706C /* GalakrondTheWretched.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GalakrondTheWretched.swift; sourceTree = "<group>"; };
 		7DA79498D8960EC39CFDE5C4 /* MountHyjalImposter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MountHyjalImposter.swift; sourceTree = "<group>"; };
 		7DA8A2C264D0025AFA8301B5 /* WitchsCauldron.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WitchsCauldron.swift; sourceTree = "<group>"; };
-		7EBEF7E2938397C5400012FA /* MulliganV2StatusParams.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MulliganV2StatusParams.swift; sourceTree = "<group>"; };
 		7EF8E55CDA2FA28BE06BCCEA /* AnomalyGuideMulliganTriggerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnomalyGuideMulliganTriggerView.swift; sourceTree = "<group>"; };
 		7EFB64810E93DD25C03AA892 /* CactusConstruct.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CactusConstruct.swift; sourceTree = "<group>"; };
 		7FF67307662ABFB905C45540 /* DarkPeddler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DarkPeddler.swift; sourceTree = "<group>"; };
@@ -2553,12 +2498,10 @@
 		84A99E1F30E14766662C9E9B /* SecretPlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecretPlan.swift; sourceTree = "<group>"; };
 		84AFA865F6AC9314B6EA797D /* ForbiddenShrine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForbiddenShrine.swift; sourceTree = "<group>"; };
 		8593CB8940034E80B9BF74C5 /* KabalCourierGANGS.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KabalCourierGANGS.swift; sourceTree = "<group>"; };
-		85F0CE929C65D6AE160FFBF5 /* ConstructedMulliganPreLobbyWidgetViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConstructedMulliganPreLobbyWidgetViewModel.swift; sourceTree = "<group>"; };
 		865D84255EE383CE26D2A229 /* CounterDescriptor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CounterDescriptor.swift; sourceTree = "<group>"; };
 		867C1380410D6FE490BC51EE /* LotusIllusionist.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LotusIllusionist.swift; sourceTree = "<group>"; };
 		86AE8A5E358756F04FB0FAB1 /* TrienniumRex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrienniumRex.swift; sourceTree = "<group>"; };
 		86E72086C305764B911D0D87 /* Soothsayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Soothsayer.swift; sourceTree = "<group>"; };
-		8710EB77B7B79FE2F598AEBA /* MulliganTipIconView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MulliganTipIconView.swift; sourceTree = "<group>"; };
 		8724759D0B6412C8283A19D3 /* DesperateMeasures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesperateMeasures.swift; sourceTree = "<group>"; };
 		873E3052927B48C8AF6B3C4C /* HDTCanvasIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HDTCanvasIcon.swift; sourceTree = "<group>"; };
 		879400B57B55DB7ED5658DEA /* Netherwalker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Netherwalker.swift; sourceTree = "<group>"; };
@@ -2646,7 +2589,6 @@
 		A945A5DFEF5B58FDD846AB99 /* HerosWelcome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HerosWelcome.swift; sourceTree = "<group>"; };
 		A9637E18220148822A80AF9F /* TitanforgedTraps.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TitanforgedTraps.swift; sourceTree = "<group>"; };
 		A96844049B1E2B17ACC2A290 /* ArchivistElysiana.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchivistElysiana.swift; sourceTree = "<group>"; };
-		A97939C4EA13DEC8A16EB021 /* MulliganV2StatusData.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MulliganV2StatusData.swift; sourceTree = "<group>"; };
 		AA118E25CF8B46DA9C97451E /* OverlayToastPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayToastPanel.swift; sourceTree = "<group>"; };
 		AA1B2C3D4E5F6A7B8C9D0E1F /* BattlegroundsMinionsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BattlegroundsMinionsViewModel.swift; sourceTree = "<group>"; };
 		AA3DB15609E8DD81E526C05C /* FlintFirearm.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlintFirearm.swift; sourceTree = "<group>"; };
@@ -2662,7 +2604,6 @@
 		AD2AC35158694F2DAFBAAE6A /* BattlegroundsHeroPickingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BattlegroundsHeroPickingView.swift; sourceTree = "<group>"; };
 		AD495F983326D4215A7EA995 /* EndtimeMurozond.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EndtimeMurozond.swift; sourceTree = "<group>"; };
 		ADC6CF7AD394561BCF942E78 /* TrackerPanelViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackerPanelViewModel.swift; sourceTree = "<group>"; };
-		AE7A76CCAFA6BFB8D952B01F /* MulliganCardPortraitView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MulliganCardPortraitView.swift; sourceTree = "<group>"; };
 		AEEF7AB77473DF57C7EF8167 /* ThistleTeaSet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThistleTeaSet.swift; sourceTree = "<group>"; };
 		AF41AB749F090C411D345567 /* Renew.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Renew.swift; sourceTree = "<group>"; };
 		AF644A46A0817DCFEEC06BD9 /* LightningReflexes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LightningReflexes.swift; sourceTree = "<group>"; };
@@ -2685,7 +2626,6 @@
 		B4F302CD9CDCCDA9AD8B83EC /* CarefreeCookie.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarefreeCookie.swift; sourceTree = "<group>"; };
 		B52A515A64336AB7C22672B8 /* DeepSpaceCurator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepSpaceCurator.swift; sourceTree = "<group>"; };
 		B5D91966A7FA19ACE871426F /* ConvincingDisguise.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConvincingDisguise.swift; sourceTree = "<group>"; };
-		B662B8B615092B0EF4D9C5C3 /* BattlegroundsTavernPoolObservationParams.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BattlegroundsTavernPoolObservationParams.swift; sourceTree = "<group>"; };
 		B69668FB06B897373A124FED /* TrackerCardHoverHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackerCardHoverHandler.swift; sourceTree = "<group>"; };
 		B6BCC30F318BE30D2D4C5518 /* StaffOfTrickery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StaffOfTrickery.swift; sourceTree = "<group>"; };
 		B6CC469FB4FBFE0BACC124E9 /* HandCannon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HandCannon.swift; sourceTree = "<group>"; };
@@ -2720,7 +2660,6 @@
 		B80B690D2E3C3FC800197FA5 /* Sleetbreaker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sleetbreaker.swift; sourceTree = "<group>"; };
 		B81189242E429A510091B4D6 /* WhirringProtector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhirringProtector.swift; sourceTree = "<group>"; };
 		B812BCEC2947F928000C6513 /* BattlegroundsQuestPickParams.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BattlegroundsQuestPickParams.swift; sourceTree = "<group>"; };
-		B81849262BF4D7C900F4EEE2 /* ConstructedMulliganOverlayMessageViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConstructedMulliganOverlayMessageViewModel.swift; sourceTree = "<group>"; };
 		B8196F132CC850BB007C0371 /* BaseCounter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BaseCounter.swift; sourceTree = "<group>"; };
 		B8196F152CC86FB3007C0371 /* NumericCounter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NumericCounter.swift; sourceTree = "<group>"; };
 		B8196F172CC87021007C0371 /* StatsCounter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsCounter.swift; sourceTree = "<group>"; };
@@ -2985,7 +2924,6 @@
 		B85462382CE01B1F0083BB31 /* BattlegroundsTeammateBoardStateWatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BattlegroundsTeammateBoardStateWatcher.swift; sourceTree = "<group>"; };
 		B854623A2CE01C5F0083BB31 /* BattlegroundsLeaderboardWatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BattlegroundsLeaderboardWatcher.swift; sourceTree = "<group>"; };
 		B854623C2CE01DF50083BB31 /* SceneWatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneWatcher.swift; sourceTree = "<group>"; };
-		B854623E2CE01ECF0083BB31 /* DeckPickerWatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeckPickerWatcher.swift; sourceTree = "<group>"; };
 		B85462402CE01FCD0083BB31 /* ExperienceWatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExperienceWatcher.swift; sourceTree = "<group>"; };
 		B85462422CE021FF0083BB31 /* PVPDungeonRunWatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PVPDungeonRunWatcher.swift; sourceTree = "<group>"; };
 		B85462442CE023D20083BB31 /* DungeonRunWatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DungeonRunWatcher.swift; sourceTree = "<group>"; };
@@ -2994,14 +2932,12 @@
 		B8591FEF2B23CC7D00B907A4 /* ChoiceType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChoiceType.swift; sourceTree = "<group>"; };
 		B8591FF32B23D4D000B907A4 /* ChoicesHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChoicesHandler.swift; sourceTree = "<group>"; };
 		93E333ED65BB300489314E28 /* MulliganRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MulliganRecorder.swift; sourceTree = "<group>"; };
-		B8591FF72B24919F00B907A4 /* MulliganState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MulliganState.swift; sourceTree = "<group>"; };
 		B8591FF92B24F7C900B907A4 /* ObjectiveFactoryProxy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObjectiveFactoryProxy.swift; sourceTree = "<group>"; };
 		B8591FFB2B24F87C00B907A4 /* ObjectiveProxy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObjectiveProxy.swift; sourceTree = "<group>"; };
 		B85A0D52272CDDFB006D2648 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = Base.lproj/MercenariesPreferences.xib; sourceTree = "<group>"; };
 		B85A0D53272CDEFE006D2648 /* MercenariesPreferences.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MercenariesPreferences.swift; sourceTree = "<group>"; };
 		B85F1AC8258A558200A6F8C3 /* Helper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Helper.swift; sourceTree = "<group>"; };
 		B8621F192746A785004DD0E9 /* Account.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Account.swift; sourceTree = "<group>"; };
-		B8621F1B2746AF5E004DD0E9 /* HSReplayNetHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HSReplayNetHelper.swift; sourceTree = "<group>"; };
 		B864A13D24F54E1F005EA2A0 /* MinionHeroPowerTrigger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MinionHeroPowerTrigger.swift; sourceTree = "<group>"; };
 		B864A14224F58539005EA2A0 /* Mono.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Mono.framework; path = ../../../Library/Frameworks/Mono.framework; sourceTree = "<group>"; };
 		B864AE1F25979E3400793F36 /* AdventureDbId.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdventureDbId.swift; sourceTree = "<group>"; };
@@ -3110,10 +3046,6 @@
 		B893434D2CD1320F009A8727 /* WheelOfDeathTurnsCounter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WheelOfDeathTurnsCounter.swift; sourceTree = "<group>"; };
 		B893434F2CD1520E009A8727 /* PlayedSpellSchoolsCounter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayedSpellSchoolsCounter.swift; sourceTree = "<group>"; };
 		B8956CFC25509B3F0073D70C /* BattlegroundsMinionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BattlegroundsMinionView.swift; sourceTree = "<group>"; };
-		B89586442B804E2000989C13 /* ConstructedStatsHeaderViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConstructedStatsHeaderViewModel.swift; sourceTree = "<group>"; };
-		B89586462B81400A00989C13 /* ConstructedMulliganSingleCardViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConstructedMulliganSingleCardViewModel.swift; sourceTree = "<group>"; };
-		B89586482B81411400989C13 /* MulliganGuideData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MulliganGuideData.swift; sourceTree = "<group>"; };
-		B895864A2B81460700989C13 /* ConstructedMulliganSingleCardHeaderViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConstructedMulliganSingleCardHeaderViewModel.swift; sourceTree = "<group>"; };
 		B89656502E555B5C00257DDC /* WidowbloomSeedsman.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidowbloomSeedsman.swift; sourceTree = "<group>"; };
 		B89656522E555BD800257DDC /* FaithfulCompanions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FaithfulCompanions.swift; sourceTree = "<group>"; };
 		B89656542E555C5B00257DDC /* ValstannStaghelm.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ValstannStaghelm.swift; sourceTree = "<group>"; };
@@ -3270,11 +3202,6 @@
 		B8A1F1012FD10001000A0101 /* TurnTimerOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TurnTimerOverlayView.swift; sourceTree = "<group>"; };
 		B8A1F1032FD10001000A0103 /* BoardAttackIconView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardAttackIconView.swift; sourceTree = "<group>"; };
 		B8A1F1052FD10001000A0105 /* ExperienceCounterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExperienceCounterView.swift; sourceTree = "<group>"; };
-		B8A1F2012FD20001000A0201 /* ConstructedMulliganGuideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConstructedMulliganGuideView.swift; sourceTree = "<group>"; };
-		B8A1F2032FD20001000A0203 /* ConstructedMulliganSingleCardStatsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConstructedMulliganSingleCardStatsView.swift; sourceTree = "<group>"; };
-		B8A1F2052FD20001000A0205 /* ConstructedMulliganSingleCardHeaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConstructedMulliganSingleCardHeaderView.swift; sourceTree = "<group>"; };
-		B8A1F2072FD20001000A0207 /* ConstructedMulliganOverlayMessageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConstructedMulliganOverlayMessageView.swift; sourceTree = "<group>"; };
-		B8A1F3012FD30001000A0301 /* ConstructedMulliganGuidePreLobbyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConstructedMulliganGuidePreLobbyView.swift; sourceTree = "<group>"; };
 		B8A1F5012FD50001000A0501 /* MercenariesTaskViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MercenariesTaskViewModel.swift; sourceTree = "<group>"; };
 		B8A1F5032FD50001000A0503 /* MercenariesTaskListViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MercenariesTaskListViewModel.swift; sourceTree = "<group>"; };
 		B8A1F5052FD50001000A0505 /* OverlayFormattedText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayFormattedText.swift; sourceTree = "<group>"; };
@@ -3301,8 +3228,6 @@
 		B8AA20052FC2000100AA2005 /* mul */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; name = mul; path = mul.lproj/ArenaPreferences.xcstrings; sourceTree = "<group>"; };
 		B8AB59932742F94900383EC8 /* RateLimiter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RateLimiter.swift; sourceTree = "<group>"; };
 		B8AB59952742FA5C00383EC8 /* Deque.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Deque.swift; sourceTree = "<group>"; };
-		B8AB59972744139700383EC8 /* CollectionHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollectionHelper.swift; sourceTree = "<group>"; };
-		B8AB59992744145B00383EC8 /* Collection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Collection.swift; sourceTree = "<group>"; };
 		B8AC9A1B293CE3310047F438 /* BattlegroundsHeroPickingViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BattlegroundsHeroPickingViewModel.swift; sourceTree = "<group>"; };
 		B8AC9A1D293CE51B0047F438 /* BattlegroundsSingleHeroViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BattlegroundsSingleHeroViewModel.swift; sourceTree = "<group>"; };
 		B8AC9A25293F92530047F438 /* BattlegroundsQuestPickingViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BattlegroundsQuestPickingViewModel.swift; sourceTree = "<group>"; };
@@ -3316,12 +3241,7 @@
 		B8AEB6102FB2744B00CDA2C0 /* LeylineExtraTriggerCounter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeylineExtraTriggerCounter.swift; sourceTree = "<group>"; };
 		B8AEB6122FB276A100CDA2C0 /* ExtraAnimalCompanionCounter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtraAnimalCompanionCounter.swift; sourceTree = "<group>"; };
 		B8AEB6252FB2813800CDA2C0 /* FriendlyAttacksThisGameCounter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendlyAttacksThisGameCounter.swift; sourceTree = "<group>"; };
-		B8AF0C662B83A65E00B65F63 /* MulliganGuideStatusData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MulliganGuideStatusData.swift; sourceTree = "<group>"; };
-		B8AF0C682B83A77100B65F63 /* MulliganGuideStatusParams.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MulliganGuideStatusParams.swift; sourceTree = "<group>"; };
-		B8AF0C6A2B83A7AD00B65F63 /* MulliganGuideParams.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MulliganGuideParams.swift; sourceTree = "<group>"; };
-		B8AF0C702B84347800B65F63 /* ConstructedMulliganGuideViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConstructedMulliganGuideViewModel.swift; sourceTree = "<group>"; };
 		B8AF0C762B85625200B65F63 /* Region.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Region.swift; sourceTree = "<group>"; };
-		B8AF0C782B91444200B65F63 /* ConstructedMulliganGuidePreLobbyViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConstructedMulliganGuidePreLobbyViewModel.swift; sourceTree = "<group>"; };
 		B8B287042E83838600C55767 /* CardLegalityChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardLegalityChecker.swift; sourceTree = "<group>"; };
 		B8B287062EA19A3100C55767 /* PortalVanguard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortalVanguard.swift; sourceTree = "<group>"; };
 		B8B61C212AEBEA9C00990359 /* AvailableSecretsProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvailableSecretsProvider.swift; sourceTree = "<group>"; };
@@ -3668,7 +3588,6 @@
 		C9BDB3D81D20BE9500886A11 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = Base.lproj/LadderTab.xib; sourceTree = "<group>"; };
 		C9DBE95658968986E3486610 /* InfiniteAmalgam.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InfiniteAmalgam.swift; sourceTree = "<group>"; };
 		CA2742D7642ECBC122BF4479 /* RootOverlayWindow.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RootOverlayWindow.swift; sourceTree = "<group>"; };
-		CB3F16E15E17850C0760780D /* ConstructedMulliganGuideV2View.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConstructedMulliganGuideV2View.swift; sourceTree = "<group>"; };
 		CB4464819FD7EAB21D3E1EE0 /* BabblingBook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BabblingBook.swift; sourceTree = "<group>"; };
 		CB8150190C09EC5C49A5E716 /* ArcaneBreath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArcaneBreath.swift; sourceTree = "<group>"; };
 		CC3D4E5F6A7B8C9D0E1F2A3B /* BattlegroundsCardsGroupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BattlegroundsCardsGroupView.swift; sourceTree = "<group>"; };
@@ -3707,7 +3626,6 @@
 		DA6D85C55C18463C9D42BDE3 /* BattlegroundsDiscoveryGuideTriggerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BattlegroundsDiscoveryGuideTriggerView.swift; sourceTree = "<group>"; };
 		DA8475F50098260058DC0B6C /* FacelessSummoner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FacelessSummoner.swift; sourceTree = "<group>"; };
 		DAAFDFEEBE32626240122B72 /* PrimordialStudies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrimordialStudies.swift; sourceTree = "<group>"; };
-		DB1647DCFF7E9F0816C194F6 /* ConstructedMulliganPreLobbyWidgetView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConstructedMulliganPreLobbyWidgetView.swift; sourceTree = "<group>"; };
 		DB21CB09F9D38EAF05B91DC1 /* HenchClanBurglar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HenchClanBurglar.swift; sourceTree = "<group>"; };
 		DC6F4215A49EF7BE98125512 /* Symbiosis.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Symbiosis.swift; sourceTree = "<group>"; };
 		DD06DFFE30D2B94D7020B744 /* ZuldrakRitualist.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZuldrakRitualist.swift; sourceTree = "<group>"; };
@@ -3770,7 +3688,6 @@
 		EE0000000000000000002005 /* BattlegroundsMinionPinningShopView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BattlegroundsMinionPinningShopView.swift; sourceTree = "<group>"; };
 		EE0000000000000000002011 /* PlayZoneWatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayZoneWatcher.swift; sourceTree = "<group>"; };
 		EE1A2B3C4D5E6F708192A3C1 /* BattlegroundsTurnCounterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BattlegroundsTurnCounterView.swift; sourceTree = "<group>"; };
-		EE6E0D088083F9ECD72F3B16 /* MulliganGuideTrial.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MulliganGuideTrial.swift; sourceTree = "<group>"; };
 		EE8CE85B5ED03B5FC5D3FC06 /* ArrivalOfTheOldGods.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArrivalOfTheOldGods.swift; sourceTree = "<group>"; };
 		EEA2923A0CC094688C54EAC1 /* TwilightInfluence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TwilightInfluence.swift; sourceTree = "<group>"; };
 		EEC93BBB046A651DDBFE2036 /* Hydrologist.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Hydrologist.swift; sourceTree = "<group>"; };
@@ -3787,7 +3704,6 @@
 		F0E9AE42CC5063C67B1C38F1 /* ExpensiveSpellsPlayedCounter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpensiveSpellsPlayedCounter.swift; sourceTree = "<group>"; };
 		F154E9600E2BE56BB15B20E2 /* WaveOfNostalgia.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaveOfNostalgia.swift; sourceTree = "<group>"; };
 		F219A6BE2B9A9330CC7E7851 /* NaturalTalent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NaturalTalent.swift; sourceTree = "<group>"; };
-		F24D4A90A357C8BFD01DCBD2 /* ConstructedMulliganV2SingleCardViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConstructedMulliganV2SingleCardViewModel.swift; sourceTree = "<group>"; };
 		F26FE77E174E66E764BE5212 /* SuspiciousUsher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuspiciousUsher.swift; sourceTree = "<group>"; };
 		F28A2E812F2EFBF3F260A3AE /* RootOverlayViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RootOverlayViewModel.swift; sourceTree = "<group>"; };
 		F2AEE407FFC333F8468DBAC0 /* CrystalsongPortal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrystalsongPortal.swift; sourceTree = "<group>"; };
@@ -4260,7 +4176,7 @@
 				439C7E601C7772C100D29859 /* HSTrackerTests.swift */,
 				5E1D7A2C9B3F4E60A8C1D2E3 /* HoverPopupTests.swift */,
 				1CF1B58B1E815810007DCBF2 /* LogReaderTests.swift */,
-				2E74A2C90813F6A51BF150C8 /* MulliganGuideTrialTests.swift */,
+				2E74A2C90813F6A51BF150C8 /* PlayerTrialStatusCacheTests.swift */,
 				E37377C1AC01A926B98E3110 /* RewoundEntityCreationFilterTests.swift */,
 				C94596811D174FBA008CD47A /* StatsTests.swift */,
 				C38F2226D77177A24038CA24 /* RecordStatsTests.swift */,
@@ -4344,7 +4260,6 @@
 				439C7EB11C777F8900D29859 /* LogReaderManager.swift */,
 				12CB37BE5C722DAC9773D151 /* RewoundEntityCreationFilter.swift */,
 				3CB1A35E2E8C63010090486F /* MixpanelEvents.swift */,
-				B8591FF72B24919F00B907A4 /* MulliganState.swift */,
 				93E333ED65BB300489314E28 /* MulliganRecorder.swift */,
 				B8DC376025D06C2F00452A83 /* OpponentDeadForTracker.swift */,
 				1CCB4AE91E8A46F0003FD1AD /* Parsers */,
@@ -4477,8 +4392,6 @@
 				B81B3D612D10CDD400DC9EB0 /* CardExtraInfo */,
 				B8B287042E83838600C55767 /* CardLegalityChecker.swift */,
 				B8FDE9332CDB0B430093BFF7 /* CardUtils.swift */,
-				B8AB59992744145B00383EC8 /* Collection.swift */,
-				B8AB59972744139700383EC8 /* CollectionHelper.swift */,
 				B8196F122CC850A8007C0371 /* CounterSystem */,
 				B8B78F992C93C33B00DD33EC /* EffectSystem */,
 				B8E868842B940EB7005B1315 /* HearthDbConverter.swift */,
@@ -4530,10 +4443,8 @@
 				43C567EB1D5E314500451B6F /* HSReplay.swift */,
 				43C567FE1D5E4F9700451B6F /* HSReplayAPI.swift */,
 				43C567FC1D5E448200451B6F /* HSReplayManager.swift */,
-				B8621F1B2746AF5E004DD0E9 /* HSReplayNetHelper.swift */,
 				433554381D5FABD600277B27 /* HSReplayPreferences.swift */,
 				4335543C1D5FAF0300277B27 /* HSReplayPreferences.xib */,
-				43C568001D5E584F00451B6F /* LogUploader.swift */,
 				B82E7B15262A798000C42EF0 /* ShortIdHelper.swift */,
 			);
 			path = HSReplay;
@@ -4609,21 +4520,6 @@
 				B8BCC1E02739991600DA6474 /* VerticallyAlignedTextFieldCell.swift */,
 			);
 			path = Views;
-			sourceTree = "<group>";
-		};
-		54E5C32CC162F286D353E539 /* V2 */ = {
-			isa = PBXGroup;
-			children = (
-				46F4128461C4484E8450D77D /* ConstructedMulliganGuideV2ViewModel.swift */,
-				F24D4A90A357C8BFD01DCBD2 /* ConstructedMulliganV2SingleCardViewModel.swift */,
-				738EB3EBBA2F12662014F3ED /* ConstructedMulliganV2SingleCardHeaderViewModel.swift */,
-				172D1024C17902D2BE62ABF7 /* ConstructedMulliganV2SingleCardHeaderView.swift */,
-				CB3F16E15E17850C0760780D /* ConstructedMulliganGuideV2View.swift */,
-				1A55210827595351F15734B7 /* LinearGaugeView.swift */,
-				AE7A76CCAFA6BFB8D952B01F /* MulliganCardPortraitView.swift */,
-				8710EB77B7B79FE2F598AEBA /* MulliganTipIconView.swift */,
-			);
-			path = V2;
 			sourceTree = "<group>";
 		};
 		5C38F6FC51054184C0D0910D /* Settings */ = {
@@ -5493,7 +5389,6 @@
 				B85462302CE00EED0083BB31 /* BigCardWatcher.swift */,
 				A8E2BBE30F494E9E8F26C8D4 /* MulliganTooltipWatcher.swift */,
 				B85462362CE019FE0083BB31 /* ChoicesWatcher.swift */,
-				B854623E2CE01ECF0083BB31 /* DeckPickerWatcher.swift */,
 				B8889C1A2D9DC6ED0053DD57 /* DiscoverStateWatcher.swift */,
 				B85462442CE023D20083BB31 /* DungeonRunWatcher.swift */,
 				B85462402CE01FCD0083BB31 /* ExperienceWatcher.swift */,
@@ -5519,36 +5414,9 @@
 			isa = PBXGroup;
 			children = (
 				B89F51E82C9CF8C300E31195 /* ActiveEffects */,
-				B89586432B804E0200989C13 /* Mulligan */,
 				B852D8002DBA8A9500884B26 /* PlayerResourcesWidget */,
 			);
 			path = Constructed;
-			sourceTree = "<group>";
-		};
-		B89586432B804E0200989C13 /* Mulligan */ = {
-			isa = PBXGroup;
-			children = (
-				B8AF0C782B91444200B65F63 /* ConstructedMulliganGuidePreLobbyViewModel.swift */,
-				B8AF0C702B84347800B65F63 /* ConstructedMulliganGuideViewModel.swift */,
-				B81849262BF4D7C900F4EEE2 /* ConstructedMulliganOverlayMessageViewModel.swift */,
-				B895864A2B81460700989C13 /* ConstructedMulliganSingleCardHeaderViewModel.swift */,
-				B89586462B81400A00989C13 /* ConstructedMulliganSingleCardViewModel.swift */,
-				B89586442B804E2000989C13 /* ConstructedStatsHeaderViewModel.swift */,
-				54E5C32CC162F286D353E539 /* V2 */,
-				EE6E0D088083F9ECD72F3B16 /* MulliganGuideTrial.swift */,
-				85F0CE929C65D6AE160FFBF5 /* ConstructedMulliganPreLobbyWidgetViewModel.swift */,
-				DB1647DCFF7E9F0816C194F6 /* ConstructedMulliganPreLobbyWidgetView.swift */,
-				2F763EBF84875A096625CC1B /* MulliganGuideTrialsExhaustedViewModel.swift */,
-				7763354053BC4D139A9EE08D /* MulliganToastViewModel.swift */,
-				5C74E246D839D7D120CA28E4 /* MulliganGuideTrialsExhaustedView.swift */,
-				6615C51905284AC3B7C1CAF9 /* MulliganToastView.swift */,
-				B8A1F3012FD30001000A0301 /* ConstructedMulliganGuidePreLobbyView.swift */,
-				B8A1F2012FD20001000A0201 /* ConstructedMulliganGuideView.swift */,
-				B8A1F2032FD20001000A0203 /* ConstructedMulliganSingleCardStatsView.swift */,
-				B8A1F2052FD20001000A0205 /* ConstructedMulliganSingleCardHeaderView.swift */,
-				B8A1F2072FD20001000A0207 /* ConstructedMulliganOverlayMessageView.swift */,
-			);
-			path = Mulligan;
 			sourceTree = "<group>";
 		};
 		B89865872D91CDF900BA5649 /* Multi */ = {
@@ -5974,27 +5842,17 @@
 				72180A22958837B4A37D87C0 /* BattlegroundsQuestGuides.swift */,
 				B8BD3BA52C41596C001E85B7 /* BattlegroundsCompStatsParams.swift */,
 				B82238BD2BF96C5F00B405D4 /* BattlegroundsHeroPickStats.swift */,
-				B662B8B615092B0EF4D9C5C3 /* BattlegroundsTavernPoolObservationParams.swift */,
 				B8D34D36294FE74700CACC5A /* BattlegroundsHeroPickStatsParams .swift */,
 				B8AC9A29293F9B120047F438 /* BattlegroundsQuestStats.swift */,
 				B812BCEC2947F928000C6513 /* BattlegroundsQuestPickParams.swift */,
 				B898994E2CA4514E0011B184 /* BattlegroundsTrinketPickParams.swift */,
 				B89899482CA254B10011B184 /* BattlegroundsTrinketPickStats.swift */,
 				B8C2F90E261F530700C31E6A /* GetAccountResult.swift */,
-				B89586482B81411400989C13 /* MulliganGuideData.swift */,
-				B8AF0C6A2B83A7AD00B65F63 /* MulliganGuideParams.swift */,
-				B8AF0C662B83A65E00B65F63 /* MulliganGuideStatusData.swift */,
-				B8AF0C682B83A77100B65F63 /* MulliganGuideStatusParams.swift */,
 				B804FC292943626C00F74CD9 /* PlayerTrialData.swift */,
 				CA676900A1EFF8E24954C74A /* PlayerTrialStatusCache.swift */,
 				B804FC2729429ED900F74CD9 /* Tier7AllTime.swift */,
 				E30590BA21174FC900679D66 /* UploadCollectionData.swift */,
 				43C568041D5E5BFF00451B6F /* UploadMetaData.swift */,
-				43C568021D5E59E500451B6F /* UploadResult.swift */,
-				331922B5382E5C30E699243F /* MulliganV2Params.swift */,
-				0E350BCCBA1DB98636739A35 /* MulliganV2Data.swift */,
-				7EBEF7E2938397C5400012FA /* MulliganV2StatusParams.swift */,
-				A97939C4EA13DEC8A16EB021 /* MulliganV2StatusData.swift */,
 			);
 			path = Data;
 			sourceTree = "<group>";
@@ -7242,7 +7100,6 @@
 				B898657C2D91AFC600BA5649 /* BlazingAccretion.swift in Sources */,
 				B852D80F2DDAB97100884B26 /* ElementalExtraStatsCounter.swift in Sources */,
 				B8B790252C9755F200DD33EC /* ResistanceAuraEnchantment.swift in Sources */,
-				B8AF0C792B91444200B65F63 /* ConstructedMulliganGuidePreLobbyViewModel.swift in Sources */,
 				B86D8A062D95F77B00AB65A5 /* NightmareLordXavius.swift in Sources */,
 				43F204121E93C2E600E0BC4A /* Warlock.swift in Sources */,
 				B83335FD2F620C5700923513 /* CleansingClericEnchantment.swift in Sources */,
@@ -7296,7 +7153,6 @@
 				B8DB12B32EBAE740004268FA /* MuradinHighKing.swift in Sources */,
 				B852D8022DBA8BDE00884B26 /* PlayerResourcesViewModel.swift in Sources */,
 				B8E1E5FE2D0CA1CD00383975 /* HabeasCorpses.swift in Sources */,
-				B8AF0C6B2B83A7AD00B65F63 /* MulliganGuideParams.swift in Sources */,
 				B82F4EB024E32C3000905024 /* SimulatorProxy.swift in Sources */,
 				B89865422D8B63A700BA5649 /* NorthernNavigation.swift in Sources */,
 				B833360B2F62116800923513 /* StickybombSaboteur.swift in Sources */,
@@ -7366,7 +7222,6 @@
 				B846CCC02E1DABA700552F9C /* DiveTheGolakkaDepthsBuffCounter.swift in Sources */,
 				B846CC482E06366600552F9C /* IcebloodTower.swift in Sources */,
 				B89865CD2D9206D100BA5649 /* Cosmonaut.swift in Sources */,
-				B89586452B804E2000989C13 /* ConstructedStatsHeaderViewModel.swift in Sources */,
 				B8DB128D2EBAD962004268FA /* AxeOfCenarius.swift in Sources */,
 				4360329A1C7B6578005F1893 /* InitialConfiguration.swift in Sources */,
 				B846CC782E157B7000552F9C /* ConjuredBookkeeper.swift in Sources */,
@@ -7503,7 +7358,6 @@
 				B852D8452DDFBEBB00884B26 /* ArchwitchWillow.swift in Sources */,
 				B8820CD025603FB00072ECBC /* RemoteConfig.swift in Sources */,
 				B8E1E5C92D0C8BCF00383975 /* BloodreaverGuldan.swift in Sources */,
-				B8AF0C712B84347800B65F63 /* ConstructedMulliganGuideViewModel.swift in Sources */,
 				B83682242789F812007D5740 /* ExitConditions.swift in Sources */,
 				B8E1E5EA2D0C9EB600383975 /* AnimateDead.swift in Sources */,
 				B8B78FAB2C93C83E00DD33EC /* ElizaGorebladeEnchantment.swift in Sources */,
@@ -7528,7 +7382,6 @@
 				B854621C2CDEBBC40083BB31 /* VoroneiRecruiter.swift in Sources */,
 				439C7E8D1C777D1C00D29859 /* Database.swift in Sources */,
 				B8CD01012FA0000000CD0101 /* CardDefsBinary.swift in Sources */,
-				B8AB599A2744145B00383EC8 /* Collection.swift in Sources */,
 				B86D8A002D95F3A700AB65A5 /* FinjaTheFlyingStar.swift in Sources */,
 				B82029492CD2D2C200C19A8C /* ForebodingFlameEnchantment.swift in Sources */,
 				B8AC9A1E293CE51B0047F438 /* BattlegroundsSingleHeroViewModel.swift in Sources */,
@@ -7545,7 +7398,6 @@
 				B89865AF2D91D6D300BA5649 /* InterstellarResearcher.swift in Sources */,
 				B83336012F620CFC00923513 /* CommanderGeddonEnchantment.swift in Sources */,
 				B83335F92F62095500923513 /* WarlocEnchantment.swift in Sources */,
-				B8621F1C2746AF5E004DD0E9 /* HSReplayNetHelper.swift in Sources */,
 				B87216922F16ECBE00E848BA /* OverloadThisGameCounter.swift in Sources */,
 				B8DB12BF2EBAE910004268FA /* TinyRafaam.swift in Sources */,
 				A542EFEAB1D58BE6C831CB61 /* TimethiefRafaam.swift in Sources */,
@@ -7729,7 +7581,6 @@
 				43A8A0F91E15596000AF34FD /* GameType.swift in Sources */,
 				B89865722D91ADDE00BA5649 /* MessengerBuzzard.swift in Sources */,
 				439C7ECA1C777F8900D29859 /* LogReader.swift in Sources */,
-				B89586472B81400A00989C13 /* ConstructedMulliganSingleCardViewModel.swift in Sources */,
 				B89865AB2D91D5D400BA5649 /* CardboardGolem.swift in Sources */,
 				43F000301C81BAE8000F2F8F /* Mode.swift in Sources */,
 				B8B7901B2C97540D00DD33EC /* DeputizationAuraEnchantment.swift in Sources */,
@@ -8033,7 +7884,6 @@
 				B804FC342944416A00F74CD9 /* TextButton.swift in Sources */,
 				43B6955B1C9065AC00F4D0AC /* Secret.swift in Sources */,
 				B89865D12D92074700BA5649 /* Flowrider.swift in Sources */,
-				43C568031D5E59E500451B6F /* UploadResult.swift in Sources */,
 				B8FDE9472CDD1DC40093BFF7 /* Rewind.swift in Sources */,
 				B8DB12A32EBAE3BC004268FA /* GelbinOfTomorrow.swift in Sources */,
 				439C7EBB1C777F8900D29859 /* Mulligan.swift in Sources */,
@@ -8049,7 +7899,6 @@
 				B86D89C82D95A48F00AB65A5 /* TyrandeSpellsPlayedCounter.swift in Sources */,
 				B8889C1F2DA4AAEB0053DD57 /* ImbueCounter.swift in Sources */,
 				B89865322D6EA36B00BA5649 /* EnchantmentFactoryProxy.swift in Sources */,
-				B8AF0C672B83A65E00B65F63 /* MulliganGuideStatusData.swift in Sources */,
 				B852D8312DDFB8C100884B26 /* ArchdruidNaralex.swift in Sources */,
 				D75387951E63EA3BDB4E4EFC /* Arfus.swift in Sources */,
 				B8B790342C975BCB00DD33EC /* RazaTheResealedEnchantment.swift in Sources */,
@@ -8274,8 +8123,6 @@
 				B8815BF23022BEC40016D77A /* LockboxCardEntityProxy.swift in Sources */,
 				B8DB12912EBADA2D004268FA /* Solitude.swift in Sources */,
 				B8B7900A2C974CFA00DD33EC /* LoathebEnchantment.swift in Sources */,
-				B895864B2B81460700989C13 /* ConstructedMulliganSingleCardHeaderViewModel.swift in Sources */,
-				B89586492B81411400989C13 /* MulliganGuideData.swift in Sources */,
 				B8BB7AB828351890008239CA /* NSFont+NSTextField.swift in Sources */,
 				B85462282CDEC0A00083BB31 /* Archimonde.swift in Sources */,
 				B8BB7AB42832F02D008239CA /* BattlegroundsUtils.swift in Sources */,
@@ -8397,7 +8244,6 @@
 				B8AA20022FC2000100AA2002 /* ArenaPreferences.swift in Sources */,
 				B8B7CC1F253C721400033758 /* BattlegroundsPreferences.swift in Sources */,
 				B89343422CD0791C009A8727 /* GalakrondCounter.swift in Sources */,
-				43C568011D5E584F00451B6F /* LogUploader.swift in Sources */,
 				439C7EBD1C777F8900D29859 /* TagClass.swift in Sources */,
 				43E77EE41C94A19700C26950 /* TurnTimer.swift in Sources */,
 				B89865522D8C6FCB00BA5649 /* ChiaDrake.swift in Sources */,
@@ -8565,7 +8411,6 @@
 				B8BCC1E12739991600DA6474 /* VerticallyAlignedTextFieldCell.swift in Sources */,
 				B804FC3F2946882D00F74CD9 /* StatsHeaderViewModel.swift in Sources */,
 				B8B790662C97860600DD33EC /* AthleticStudiesEnchantment.swift in Sources */,
-				B81849272BF4D7C900F4EEE2 /* ConstructedMulliganOverlayMessageViewModel.swift in Sources */,
 				B81B3D652D10CE1300DC9EB0 /* IncidiusCounter.swift in Sources */,
 				B8B78FA22C93C49A00DD33EC /* EffectDuration.swift in Sources */,
 				433554391D5FABD600277B27 /* HSReplayPreferences.swift in Sources */,
@@ -8592,7 +8437,6 @@
 				B89343442CD11C13009A8727 /* JadeDisplayCounter.swift in Sources */,
 				B86D8A122D95FA7500AB65A5 /* DragonscaleArmaments.swift in Sources */,
 				B8B78FD32C96133D00DD33EC /* ProsecutorMeltranixEnchantment.swift in Sources */,
-				B8591FF82B24919F00B907A4 /* MulliganState.swift in Sources */,
 				EF64E22318D20662EB62FB95 /* MulliganRecorder.swift in Sources */,
 				B89865F22D95514900BA5649 /* AnachronosTurnCounter.swift in Sources */,
 				B86D8A222D95FF8C00AB65A5 /* Merithra.swift in Sources */,
@@ -8620,7 +8464,6 @@
 				43C568051D5E5BFF00451B6F /* UploadMetaData.swift in Sources */,
 				43C36D2C1D08623D00F6723C /* CardSet.swift in Sources */,
 				B81B3DA12D419B5200DC9EB0 /* Mothership.swift in Sources */,
-				B8AB59982744139700383EC8 /* CollectionHelper.swift in Sources */,
 				436F5D0E1CFD64A300DEB9A1 /* ThemeElementInfo.swift in Sources */,
 				B8BD3BA62C41596C001E85B7 /* BattlegroundsCompStatsParams.swift in Sources */,
 				B8DB129D2EBAE213004268FA /* MirrorDimension.swift in Sources */,
@@ -8636,7 +8479,6 @@
 				B86D89EC2D95ED3700AB65A5 /* Tuskpiercer.swift in Sources */,
 				B8FDE9322CDAFF470093BFF7 /* ReturnPolicy.swift in Sources */,
 				B82238BE2BF96C6000B405D4 /* BattlegroundsHeroPickStats.swift in Sources */,
-				2454744B74BFA3F7B8ECF7E3 /* BattlegroundsTavernPoolObservationParams.swift in Sources */,
 				B86C9EAB27A17B3B00195C0A /* BrukanInvocationDeathrattles.swift in Sources */,
 				B8E1E5D12D0C94E000383975 /* Hadronox.swift in Sources */,
 				B8C33FB1273EF851006DA79E /* MercenariesCoins.swift in Sources */,
@@ -8678,7 +8520,6 @@
 				B89865582D8C92A300BA5649 /* PeacefulPiper.swift in Sources */,
 				B83336092F6210C300923513 /* DeathwingWorldbreaker.swift in Sources */,
 				B8D8859224F3034700F2F0F2 /* StatusMessageConverter.swift in Sources */,
-				B8AF0C692B83A77100B65F63 /* MulliganGuideStatusParams.swift in Sources */,
 				B8E1E5DE2D0C9CFE00383975 /* DaUndatakah.swift in Sources */,
 				B8D34D37294FE74700CACC5A /* BattlegroundsHeroPickStatsParams .swift in Sources */,
 				B8E1E5D82D0C95D400383975 /* Rally.swift in Sources */,
@@ -8686,7 +8527,6 @@
 				43C567E71D5D0F2E00451B6F /* LogLineNamespace.swift in Sources */,
 				B837D7D62EAC28D50070DB4B /* TwilightDeceptor.swift in Sources */,
 				B85462432CE021FF0083BB31 /* PVPDungeonRunWatcher.swift in Sources */,
-				B854623F2CE01ECF0083BB31 /* DeckPickerWatcher.swift in Sources */,
 				B8B78FDE2C9633EC00DD33EC /* HodirFatherOfGiantsEnchantment.swift in Sources */,
 				439C7EBA1C777F8900D29859 /* GameTag.swift in Sources */,
 				B8832DDA26057A5000646BA4 /* RepeatingTimer.swift in Sources */,
@@ -8802,14 +8642,6 @@
 				B82238BA2BF948B000B405D4 /* BoardSnapshot.swift in Sources */,
 				B8DB12A52EBAE474004268FA /* PastGnomeregan.swift in Sources */,
 				B85462372CE019FE0083BB31 /* ChoicesWatcher.swift in Sources */,
-				8DF18459F89A844F812A8D2F /* MulliganV2Params.swift in Sources */,
-				A07B71E888E4FFF92A972B12 /* MulliganV2Data.swift in Sources */,
-				82C409FBBAECB6E69E29A68F /* ConstructedMulliganGuideV2ViewModel.swift in Sources */,
-				31BB69763BC1B35E25AE5639 /* ConstructedMulliganV2SingleCardViewModel.swift in Sources */,
-				3412955453DE192E50E80735 /* ConstructedMulliganV2SingleCardHeaderViewModel.swift in Sources */,
-				EF3B5194CD86CE62EAA0D5E7 /* ConstructedMulliganV2SingleCardHeaderView.swift in Sources */,
-				506D65462C58EAC1617E4302 /* ConstructedMulliganGuideV2View.swift in Sources */,
-				64069AB704B1E42F6742B690 /* LinearGaugeView.swift in Sources */,
 				EC68F5A0821EEF29C71FA2E4 /* GuideTooltip.swift in Sources */,
 				D4A5138D3DE8CE1FFCC9C339 /* OutlinedText.swift in Sources */,
 				B8A1F1022FD10001000A0102 /* TurnTimerOverlayView.swift in Sources */,
@@ -8843,8 +8675,6 @@
 				510B084E7B4A1450F0D9E5A7 /* GuideCardArtBackground.swift in Sources */,
 				9ECB3617F6D61E087A475667 /* BattlegroundsMinionArtView.swift in Sources */,
 				FC723A1970E743048B3F5615 /* CardImageTooltip.swift in Sources */,
-				9E67814D8E6FAC2919F53CB0 /* MulliganCardPortraitView.swift in Sources */,
-				6F10D744995FB62C28FB3813 /* MulliganTipIconView.swift in Sources */,
 				1F966AEAB083406B7A9876F0 /* RootOverlayViewModel.swift in Sources */,
 				6A35D4C1A830458DB48B03AD /* RootOverlayViewModel+OpacityMask.swift in Sources */,
 				E7A88D211D724FA18DD88D50 /* OverlayOpacityMask.swift in Sources */,
@@ -8866,20 +8696,6 @@
 				D795B0A979BEFC65C4EA362B /* LinkOpponentDeckPanelViewModel.swift in Sources */,
 				D836A37C12F165669F0CC2AC /* LinkOpponentDeckPanelView.swift in Sources */,
 				947577168CC05BE7DC23659A /* RootOverlayWindow.swift in Sources */,
-				4C8E201F195AC2873021D4F9 /* MulliganV2StatusParams.swift in Sources */,
-				3DEAC63A9D588D131162ABF7 /* MulliganV2StatusData.swift in Sources */,
-				62EBAABA64D422A3A7C5B058 /* MulliganGuideTrial.swift in Sources */,
-				4D3ECCEAC870D8495A39FF5E /* ConstructedMulliganPreLobbyWidgetViewModel.swift in Sources */,
-				B41238D5664BA8BCEC4D20C5 /* ConstructedMulliganPreLobbyWidgetView.swift in Sources */,
-				B8CB542253130C9F7AB0D806 /* MulliganGuideTrialsExhaustedViewModel.swift in Sources */,
-				DA1A7EBBEB02499BA7888F27 /* MulliganToastViewModel.swift in Sources */,
-				8F239D3C72B955B990CF1451 /* MulliganGuideTrialsExhaustedView.swift in Sources */,
-				389DB9BC1E784988977841AF /* MulliganToastView.swift in Sources */,
-				B8A1F3022FD30001000A0302 /* ConstructedMulliganGuidePreLobbyView.swift in Sources */,
-				B8A1F2022FD20001000A0202 /* ConstructedMulliganGuideView.swift in Sources */,
-				B8A1F2042FD20001000A0204 /* ConstructedMulliganSingleCardStatsView.swift in Sources */,
-				B8A1F2062FD20001000A0206 /* ConstructedMulliganSingleCardHeaderView.swift in Sources */,
-				B8A1F2082FD20001000A0208 /* ConstructedMulliganOverlayMessageView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -8894,7 +8710,7 @@
 				5E1D7A2C9B3F4E60A8C1D2E4 /* HoverPopupTests.swift in Sources */,
 				506332DF14E84226A5406F22 /* BoardDamageTests.swift in Sources */,
 				D263D38AEBD00222F3207171 /* ActionHistoryRecorderTests.swift in Sources */,
-				E4636A60A212B891F5F452C3 /* MulliganGuideTrialTests.swift in Sources */,
+				E4636A60A212B891F5F452C3 /* PlayerTrialStatusCacheTests.swift in Sources */,
 				EAF95676C6577B2F43E65AD6 /* ActionHistoryReplayTests.swift in Sources */,
 				B0C059017331D7CB8481FEC1 /* MulliganRecorderTests.swift in Sources */,
 				84A92DD9DDD3525D628F3B99 /* ActionHistoryPresentationTests.swift in Sources */,

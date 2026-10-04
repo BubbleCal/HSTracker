@@ -9,8 +9,7 @@
 import Foundation
 
 enum NotificationType {
-    case gameStart, turnStart, opponentConcede, hsReplayPush(replayId: String), hsReplayUploadFailed(error: String),
-         hsReplayCollectionUploaded, hsReplayMercenariesCollectionUploaded, hsReplayCollectionUploadFailed(error: String), hsReplayMercenariesCollectionUploadFailed(error: String), restartRequired
+    case gameStart, turnStart, opponentConcede, restartRequired
 }
 
 class NotificationManager {
@@ -50,39 +49,6 @@ class NotificationManager {
             show(title: String.localizedString("Hearthstone", comment: ""),
                 message: String.localizedString("It's your turn to play", comment: ""))
 
-        case .hsReplayPush(let replayId):
-            guard Settings.showHSReplayPushNotification else {
-                return
-            }
-
-            show(title: String.localizedString("HSReplay", comment: ""),
-                message: String.localizedString("Your replay has been uploaded to HSReplay.net",
-                    comment: "")) {
-                HSReplayManager.showReplay(replayId: replayId)
-            }
-
-        case .hsReplayUploadFailed(let error):
-            show(title: String.localizedString("HSReplay", comment: ""),
-                 message: String(format: String.localizedString("Failed to upload replay: %@", comment: ""), "\(error)"))
-
-        case .hsReplayCollectionUploaded:
-            show(title: String.localizedString("HSReplay", comment: ""),
-                message: String.localizedString("Your collection has been uploaded to HSReplay.net",
-                    comment: ""))
-
-        case .hsReplayCollectionUploadFailed(let error):
-            show(title: String.localizedString("HSReplay", comment: ""),
-                 message: String(format: String.localizedString("Failed to upload collection: %@", comment: ""), "\(error)"), duration: 10, fontSize: 8)
-            
-        case .hsReplayMercenariesCollectionUploaded:
-            show(title: String.localizedString("HSReplay", comment: ""),
-                message: String.localizedString("Your Mercenaries collection has been uploaded to HSReplay.net",
-                    comment: ""))
-
-        case .hsReplayMercenariesCollectionUploadFailed(let error):
-            show(title: String.localizedString("HSReplay", comment: ""),
-                 message: String(format: String.localizedString("Failed to upload Mercenaries collection: %@", comment: ""), "\(error)"), duration: 10, fontSize: 8)
-            
         case .restartRequired:
             show(title: String.localizedString("Hearthstone restart required!", comment: ""),
                  message: String.localizedString("Please restart Hearthstone", comment: ""), duration: 10)

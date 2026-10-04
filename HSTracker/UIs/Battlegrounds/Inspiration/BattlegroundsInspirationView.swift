@@ -16,9 +16,8 @@ import SwiftUI
 // stacks a title bar, a description strip, a pager docked to the bottom, and
 // the lineup list filling what is left.
 //
-// isShown is checked here, in the view holding its own @ObservedObject - see
-// MulliganGuideTrialsExhaustedView for why gating from RootOverlayView doesn't
-// reliably react to a nested ObservableObject.
+// isShown is checked here, in the view holding its own @ObservedObject: gating
+// from RootOverlayView doesn't reliably react to a nested ObservableObject.
 struct BattlegroundsInspirationView: View {
     @ObservedObject var viewModel: BattlegroundsInspirationViewModel
 

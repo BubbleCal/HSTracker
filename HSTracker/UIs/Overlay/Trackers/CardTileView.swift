@@ -99,9 +99,6 @@ struct CardTileView: View {
         if showsDarkening {
             themeImage("dark.png", rect: CardTileTheme.frameRect)
         }
-        if card?.cardWinRates != nil {
-            mulliganWinRate
-        }
         flash
     }
 
@@ -237,30 +234,6 @@ struct CardTileView: View {
         }
     }
 
-    private var mulliganWinRate: some View {
-        Group {
-            if let card {
-                themeImage(card.isMulliganOption ? "keeprate_active_box.png" : "keeprate_box.png",
-                           rect: CardTileTheme.mulliganWinrateBoxRect)
-                if let winrate = card.cardWinRates?.mulliganWinRate {
-                    let delta = winrate - (card.cardWinRates?.baseWinrate ?? 50.0)
-                    let color = Color(NSColor.fromHexString(hex: Helper.getColorString(delta: delta, intensity: 75)) ?? .white)
-                    Text(verbatim: String(format: "%.1f%%", winrate))
-                        .font(CardTileTheme.font(theme.nameFontName, size: CardTileTheme.mulliganWinRateFontSize))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.3)
-                        .frame(width: CardTileTheme.mulliganWinrateBoxRect.width, alignment: .center)
-                        .outlinedText(color, width: CardTileTheme.outlineWidth)
-                        .placeText(x: CardTileTheme.mulliganWinrateBoxRect.minX,
-                                   baseline: CardTileTheme.baselineY(
-                                    for: CardTileTheme.mulliganWinrateBoxRect.offsetBy(dx: 0, dy: 8)),
-                                   ascent: CardTileTheme.ascent(theme.nameFontName,
-                                                               size: CardTileTheme.mulliganWinRateFontSize))
-                }
-            }
-        }
-    }
-
     // MARK: - Values
 
     private func fittedNameSize(_ name: String) -> CGFloat {
@@ -335,8 +308,7 @@ struct CardTileView: View {
     /// is showing.
     private var nameRect: CGRect {
         if let fixed = theme.fixedCardNameRect { return fixed }
-        let keepWidth: CGFloat = card?.cardWinRates != nil ? CardTileTheme.mulliganWinrateBoxRect.width : 0
-        var width = CardTileTheme.frameRect.width - keepWidth - 38
+        var width = CardTileTheme.frameRect.width - 38
         if let card {
             if abs(card.count) > 0 || rarity(of: card) == .legendary {
                 width -= CardTileTheme.boxRect.width

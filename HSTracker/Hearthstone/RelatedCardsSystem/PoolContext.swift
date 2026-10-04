@@ -12,9 +12,8 @@ import Foundation
 // for. HDT's PoolContext also extrapolates these from the deck-picker screen
 // outside a match (so pool previews work before a game starts); nothing in
 // HSTracker builds a pool preview there yet, so this only covers the in-game
-// path for now. Add the menu-time fallback here (mirroring how
-// Game.setDeckPickerState already threads VisualsFormatType into the mulligan
-// pre-lobby view models) once something needs pools resolved outside a match.
+// path for now. Add the menu-time fallback here once something needs pools
+// resolved outside a match.
 struct PoolContext {
     static func getGameType() -> GameType {
         return AppDelegate.instance().coreManager.game.currentGameType

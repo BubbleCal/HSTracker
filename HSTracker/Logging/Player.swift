@@ -488,43 +488,23 @@ final class Player {
             return (revealedCards + createdInHand
                 + knownCardsInDeck + getPredictedCardsInDeck(hidden: true)).sortCardList()
         }
-        let sorting = game.isMulliganDone() ? CardListSorting.cost : CardListSorting.mulliganWr
         let deckState = getDeckState()
         let inDeck = deckState.remainingInDeck
         let notInDeck = deckState.removedFromDeck.filter({ x in inDeck.all({ x.id != $0.id }) })
         let predictedInDeck = getPredictedCardsInDeck(hidden: false).filter({ x in inDeck.all { c in x.id != c.id } })
         if !Settings.removeCardsFromDeck {
-            return annotateCards(cards: (inDeck + predictedInDeck + notInDeck + createdInHand)).sortCardList(sorting)
+            return annotateCards(cards: (inDeck + predictedInDeck + notInDeck + createdInHand)).sortCardList()
         }
         if Settings.highlightCardsInHand {
             return annotateCards(cards: (inDeck + predictedInDeck + getHighlightedCardsInHand(cardsInDeck: inDeck)
-                + createdInHand)).sortCardList(sorting)
+                + createdInHand)).sortCardList()
         }
-        return annotateCards(cards: (inDeck + predictedInDeck + createdInHand)).sortCardList(sorting)
+        return annotateCards(cards: (inDeck + predictedInDeck + createdInHand)).sortCardList()
     }
     
     private func annotateCards(cards: [Card]) -> [Card] {
         // Override Zilliax 3000 cost
-        let cards = Helper.resolveZilliax3000(cards, playerSideboardsDict)
-        guard let mulliganCardStats else {
-            return cards
-        }
-        // Attach Mulligan Card Data
-        return cards.compactMap { card in
-            let dbfId = card.deckbuildingCard.dbfId
-            guard let cardStats = mulliganCardStats.first(where: { x in x.dbf_id == dbfId }) else {
-                return card
-            }
-            let newCard = card.copy()
-            if let openingHandWinrate = cardStats.opening_hand_winrate {
-                let cardWinRates = CardWinrates()
-                cardWinRates.mulliganWinRate = openingHandWinrate
-                cardWinRates.baseWinrate = cardStats.baseWinRate
-                newCard.cardWinRates = cardWinRates
-            }
-            newCard.isMulliganOption = hand.any { x in x.card.dbfId == dbfId }
-            return newCard
-        }
+        return Helper.resolveZilliax3000(cards, playerSideboardsDict)
     }
     
     var playerSideboardsDict: [Sideboard] {
@@ -1246,19 +1226,6 @@ final class Player {
         }
         if added != nil  && Settings.fullGameLog {
             logger.info("\(debugName) \(#function) \(entity)")
-        }
-    }
-    
-    private var _mulliganCardStats: [SingleCardStats]?
-    var mulliganCardStats: [SingleCardStats]? {
-        get {
-            return _mulliganCardStats
-        }
-        set {
-            _mulliganCardStats = newValue
-            // Optional: the unit test host has no CoreManager, and its games reach this through
-            // the end of the mulligan
-            AppDelegate.instance().coreManager?.game.updatePlayerTracker(reset: true)
         }
     }
 }

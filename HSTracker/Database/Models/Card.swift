@@ -9,15 +9,6 @@
 import Foundation
 //import HearthAssets
 
-class CardWinrates: Equatable {
-    static func == (lhs: CardWinrates, rhs: CardWinrates) -> Bool {
-        return lhs.mulliganWinRate == rhs.mulliganWinRate && lhs.baseWinrate == rhs.baseWinrate
-    }
-    
-    var mulliganWinRate = 0.0
-    var baseWinrate: Double?
-}
-
 final class Card {
     // MARK: - Card data
     var id = ""
@@ -78,8 +69,6 @@ final class Card {
     var isBaconPoolSpell = false
     var deckListIndex = 0
     var battlegroundsSkinParentId = 0
-    var isMulliganOption = false
-    var cardWinRates: CardWinrates?
     var zilliaxCustomizableFunctionalModule = false
     var zilliaxCustomizableCosmeticModule = false
     var tourist = 0

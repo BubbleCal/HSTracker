@@ -30,8 +30,6 @@ enum ThemeElement {
     darkOverlay,
     fadeOverlay,
     flashFrame,
-    defaultKeepRateBox,
-    defaultKeepRateActiveBox,
     highlightTeal,
     highlightOrange,
     highlightGreen

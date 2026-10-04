@@ -153,7 +153,6 @@ class CardBar: NSView, CardBarTheme {
     var createdIconOffset: CGFloat = -23
 
     var countFontSize: CGFloat = 17
-    var mulliganWinRateFontSize: CGFloat = 15
     var textFontSize: CGFloat = 15
     var costFontSize: CGFloat = 20
     var flashColor: NSColor {
@@ -168,14 +167,12 @@ class CardBar: NSView, CardBarTheme {
         static let frame = NSRect(x: 0, y: 0, width: 217, height: 34)
         static let gem = NSRect(x: 0, y: 0, width: 34, height: 34)
         static let box = NSRect(x: 183, y: 0, width: 34, height: 34)
-        static let mulliganWinrateBox = NSRect(x: 136, y: 4, width: 54, height: 26)
         static let arenaHelper = NSRect(x: 17, y: 0, width: 34, height: 34)
     }
 
     var frameRect: NSRect { return Metrics.frame }
     var gemRect: NSRect { return Metrics.gem }
     var boxRect: NSRect { return Metrics.box }
-    var mulliganWinrateBoxRect: NSRect { return Metrics.mulliganWinrateBox }
     var arenaHelperRect: NSRect { return Metrics.arenaHelper }
 
     let imageRect = NSRect(x: 83, y: 0, width: 134, height: 34)
@@ -221,8 +218,6 @@ class CardBar: NSView, CardBarTheme {
                                              rect: Metrics.arenaHelper),
         .legendaryIcon: ThemeElementInfo(filename: "icon_legendary.png", rect: Metrics.box),
         .flashFrame: ThemeElementInfo(filename: "frame_mask.png", rect: Metrics.frame),
-        .defaultKeepRateBox: ThemeElementInfo(filename: "keeprate_box.png", rect: Metrics.mulliganWinrateBox),
-        .defaultKeepRateActiveBox: ThemeElementInfo(filename: "keeprate_active_box.png", rect: Metrics.mulliganWinrateBox),
         .highlightTeal: ThemeElementInfo(filename: "highlight_teal.png", rect: Metrics.frame),
         .highlightOrange: ThemeElementInfo(filename: "highlight_orange.png", rect: Metrics.frame),
         .highlightGreen: ThemeElementInfo(filename: "highlight_green.png", rect: Metrics.frame)
@@ -436,10 +431,6 @@ class CardBar: NSView, CardBarTheme {
                 addDarken()
             }
         }
-        if card?.cardWinRates != nil {
-            addMulliganWinRate()
-            addMulliganWinRateText()
-        }
     }
 
     func addCardImage() {
@@ -577,28 +568,6 @@ class CardBar: NSView, CardBarTheme {
         }
     }
     
-    func addMulliganWinRate() {
-        if let card, let mulliganWinRateBox = required[card.isMulliganOption ? .defaultKeepRateActiveBox : .defaultKeepRateBox] {
-            add(themeElement: mulliganWinRateBox, rect: mulliganWinrateBoxRect)
-        }
-    }
-    
-    func addMulliganWinRateText() {
-        if let card {
-            var color = Color.white
-            var text = ""
-            if let winrate = card.cardWinRates?.mulliganWinRate {
-                let baseWinrate = card.cardWinRates?.baseWinrate
-                let delta = (winrate - (baseWinrate ?? 50.0))
-                let tmpcolor = Helper.getColorString(delta: delta, intensity: 75)
-                color = NSColor.fromHexString(hex: tmpcolor) ?? Color.white
-                text = String(format: "%.1f%%", winrate)
-            }
-            let textRect = NSRect(x: mulliganWinrateBoxRect.minX, y: mulliganWinrateBoxRect.minY + 8, width: mulliganWinrateBoxRect.width, height: mulliganWinrateBoxRect.height - 6)
-            add(text: text, fontSize: mulliganWinRateFontSize, rect: textRect, textColor: color, font: textFont, strokeThickness: -2.0, centered: true)
-        }
-    }
-
     func addCreatedIcon() {
         if let rect = required[.createdIcon]?.rect {
             addCreatedIcon(rect: rect)
@@ -750,8 +719,7 @@ class CardBar: NSView, CardBarTheme {
     }
 
     func addCardName() {
-        let keepWidth = card?.cardWinRates != nil ? mulliganWinrateBoxRect.width : 0
-        var width = frameRect.width - keepWidth - (isBattlegrounds ? 14 : 38)
+        var width = frameRect.width - (isBattlegrounds ? 14 : 38)
         if let card = card {
             let rarity = card.rarity == .invalid && card.mechanics.contains("ELITE") ? Rarity.legendary : card.rarity
             if abs(card.count) > 0 || rarity == .legendary {

@@ -9,8 +9,7 @@
 import Foundation
 
 class Tier7Trial {
-    // Same status handling as MulliganGuideTrial - see PlayerTrialStatusCache.update
-    // for the HDT Update() semantics this had lost.
+    // See PlayerTrialStatusCache.update for the HDT Update() semantics this had lost.
     static let statusCache = PlayerTrialStatusCache(name: "tier7-overlay")
     static private(set) var token: String?
     static var remainingTrials: Int? { return statusCache.remainingTrials }

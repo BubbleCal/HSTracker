@@ -208,20 +208,6 @@ struct RootOverlayView: View {
                 ExperienceCounterView(viewModel: viewModel.experienceCounter,
                                       canvasWidth: canvasWidth)
 
-                // HDT declares the V1 guide immediately before the V2
-                // one on its own canvas, and sizes both to
-                // Width/scaling by Height/scaling at Canvas 0,0 with
-                // scaling = Height/1080 - this subtree's own canvas.
-                ConstructedMulliganGuideView(viewModel: viewModel.mulliganGuide,
-                                             canvasWidth: canvasWidth)
-                ConstructedMulliganGuideV2View(viewModel: viewModel.mulliganGuideV2)
-
-                // HDT declares the pre-lobby badges immediately after
-                // the two guides on its own canvas, and scales them by
-                // Height/1080 - this subtree's own factor.
-                ConstructedMulliganGuidePreLobbyView(model: viewModel.mulliganGuidePreLobby,
-                                                     canvasWidth: canvasWidth)
-
                 // Both counter blocks are children of HDT's own overlay
                 // canvas, declared opponent-first
                 // (Windows/OverlayWindow.xaml), and are scaled by the same
@@ -328,14 +314,9 @@ struct RootOverlayView: View {
                 BattlegroundsNotificationsView(viewModel: viewModel.battlegroundsNotifications,
                                                canvasWidth: canvasWidth)
 
-                // HDT's MulliganNotificationPanel, declared right after
-                // those two and placed exactly where the hero one is.
-                MulliganToastView(viewModel: viewModel.mulliganToast,
-                                  canvasWidth: canvasWidth)
-
                 // HDT's MercenariesTaskListButton and MercenariesTaskList,
                 // declared one after the other right here on its own canvas
-                // - after MulliganNotificationPanel and ahead of the
+                // - after the notification panels and ahead of the
                 // Battlegrounds pickers. Both carry
                 // GetScaling = AutoScaling, so they belong in this scaled
                 // subtree; the container holds the pair because the list's
@@ -534,19 +515,7 @@ struct RootOverlayView: View {
             // there gets pulled toward that transform's center anchor in
             // a non-obvious way). No explicit position/offset here at
             // all - the outer ZStack's .topLeading alignment already
-            // anchors it at (0,0), matching HDT's own OverlayWindow.xaml
-            // (`Canvas.Top="0" Canvas.Left="0"` on this exact widget).
-            //
-            // Always instantiated (not gated behind an `if` here) so their
-            // own @ObservedObject binding reacts directly to view model
-            // changes - see the comment on
-            // ConstructedMulliganPreLobbyWidgetView.body for why gating
-            // from out here doesn't work. Each view renders nothing (and
-            // reports no interactive region) when its own isShown says
-            // not to - see their own .background() for that reporting,
-            // which is why none is attached out here.
-            ConstructedMulliganPreLobbyWidgetView(viewModel: viewModel.constructedMulliganPreLobbyWidget)
-            MulliganGuideTrialsExhaustedView(viewModel: viewModel.mulliganGuideTrialsExhausted)
+            // anchors it at (0,0).
             AnomalyGuideMulliganTriggerView(anomalyGuides: viewModel.battlegroundsAnomalyGuides, geometrySize: geometry.size)
             AnomalyGuideBadgeTriggerView(anomalyGuides: viewModel.battlegroundsAnomalyGuides, geometrySize: geometry.size)
             // The Battlegrounds session panel belongs in this fixed-pixel
