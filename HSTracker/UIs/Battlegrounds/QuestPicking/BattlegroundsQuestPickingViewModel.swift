@@ -7,7 +7,6 @@
 //
 
 import Foundation
-import PromiseKit
 import SwiftUI
 
 // Port of HDT's BattlegroundsQuestPickingViewModel
@@ -98,11 +97,8 @@ class BattlegroundsQuestPickingViewModel: ObservableObject {
         if quests != nil {
             return
         }
-        let userOwnsTier7 = HSReplayAPI.accountData?.is_tier7 ?? false
-        
-        // The trial would have been activated at hero picking. If it is
-        // not active we do not try to activate it here.
-        if !userOwnsTier7 && Tier7Trial.token == nil {
+        // quests are offered after the mulligan, so this only continues a trial from hero picking
+        guard let access = await Tier7Trial.getAccess() else {
             return
         }
         
@@ -118,7 +114,18 @@ class BattlegroundsQuestPickingViewModel: ObservableObject {
             logger.error(error)
         }
         
-        let choices = MirrorHelper.getCardChoices()
+        // choices are only reported once revealed, which can lag behind the quest tags (e.g. for Sire Denathrius)
+        var choices = MirrorHelper.getCardChoices()
+        var retries = 0
+        while choices == nil && _entities.count > 0 && retries < 50 {
+            retries += 1
+            do {
+                try await Task.sleep(nanoseconds: 100_000_000)
+            } catch {
+                logger.error(error)
+            }
+            choices = MirrorHelper.getCardChoices()
+        }
         guard let choices else {
             self.message.error()
             return
@@ -131,8 +138,8 @@ class BattlegroundsQuestPickingViewModel: ObservableObject {
             return
         }
         
-        guard let questData = Tier7Trial.token != nil ?
-                await HSReplayAPI.getTier7QuestStats(token: Tier7Trial.token, parameters: requestParams) :
+        guard let questData = access.trialToken != nil ?
+                await HSReplayAPI.getTier7QuestStats(token: access.trialToken, parameters: requestParams) :
                     await HSReplayAPI.getTier7QuestStats(parameters: requestParams) else {
             message.error()
             return

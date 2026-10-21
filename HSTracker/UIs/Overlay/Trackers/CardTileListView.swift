@@ -37,12 +37,11 @@ struct CardTileListView: View {
     var highlight: ((Card, [Card]) -> HighlightColor)?
 
     var body: some View {
-        let inDeck = cards.filter { $0.count > 0 }
         return VStack(spacing: 0) {
             ForEach(rows, id: \.key) { row in
                 CardTileView(card: row.card, playerType: playerType, rowHeight: cardHeight,
                              flashToken: flashing.contains(row.key) ? version : 0,
-                             highlight: highlightColor(for: row.card, inDeck: inDeck))
+                             highlightColor: row.highlightColor)
                     .background(
                         GeometryReader { proxy in
                             Color.clear.preference(
@@ -69,12 +68,19 @@ struct CardTileListView: View {
     }
 
     private var rows: [Row] {
-        cards.map { Row(key: RowKey($0), card: $0) }
+        // AnimatedCardList judged every row against the cards still in the list,
+        // and never lit one that was used up or jousted.
+        let inList = highlight == nil ? [] : cards.filter { $0.count > 0 }
+        return cards.map { card in
+            let color = highlightColor(for: card, inDeck: inList) ?? card.highlightColor
+            return Row(key: RowKey(card), card: card, highlightColor: color)
+        }
     }
 
     private struct Row {
         let key: RowKey
         let card: Card
+        let highlightColor: HighlightColor
     }
 }
 

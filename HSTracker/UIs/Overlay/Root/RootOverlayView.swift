@@ -62,6 +62,10 @@ enum HoverRegionID {
     // MouseEnter/MouseLeave handlers - it reveals the task list without ever
     // taking a click of its own.
     static let mercenariesTasksButton = "mercenariesTasksButton"
+
+    // The task list itself, which keeps itself open while hovered - see
+    // MercenariesTaskListView.regions.
+    static let mercenariesTasksList = "mercenariesTasksList"
 }
 
 struct HoverRegionPreferenceKey: PreferenceKey {
@@ -352,6 +356,11 @@ struct RootOverlayView: View {
 
                 BattlegroundsTrinketPickingView(viewModel: viewModel.battlegroundsTrinketPicking,
                                                 canvasWidth: canvasWidth)
+
+                // Sir Finley's hero power choice, declared right after the
+                // trinket picker on HDT's canvas.
+                BattlegroundsHeroPowerPickingView(viewModel: viewModel.battlegroundsHeroPowerPicking,
+                                                  canvasWidth: canvasWidth)
 
                 // The trinket/quest discovery guide trigger used to be
                 // declared here, but its card (positioned by

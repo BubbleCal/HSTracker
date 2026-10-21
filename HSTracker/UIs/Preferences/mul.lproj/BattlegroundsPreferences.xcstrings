@@ -41,6 +41,12 @@
       "comment" : "Class = \"NSButtonCell\"; title = \"Show minion types\"; ObjectID = \"7dm-kv-U4Y\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dienerarten anzeigen"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -51,6 +57,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Afficher les types de serviteurs"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示随从类型"
           }
         }
       }
@@ -70,6 +82,12 @@
             "state" : "translated",
             "value" : "Bob's Buddy"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "鲍勃之友"
+          }
         }
       }
     },
@@ -77,6 +95,12 @@
       "comment" : "Class = \"NSButtonCell\"; title = \"Show trinket picking stats\"; ObjectID = \"be4-8p-MhH\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Statistik zur Schmuckstückwahl anzeigen"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -88,6 +112,12 @@
             "state" : "translated",
             "value" : "Afficher les stats de choix des babioles"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示饰品选择统计"
+          }
         }
       }
     },
@@ -95,6 +125,12 @@
       "comment" : "Class = \"NSButtonCell\"; title = \"Show hero and comp guides\"; ObjectID = \"bgg-ui-002\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Helden- und Comp-Guides anzeigen"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -131,10 +167,22 @@
       "comment" : "Class = \"NSButtonCell\"; title = \"Show minions and guides browser in pre-lobby\"; ObjectID = \"bgl-ui-002\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diener- und Guide-Übersicht in der Vorlobby anzeigen"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
             "value" : "Show minions and guides browser in pre-lobby"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在大厅中显示随从和指南浏览器"
           }
         }
       }
@@ -236,7 +284,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Show turn counter"
+            "value" : "Zugzähler anzeigen"
           }
         },
         "en" : {
@@ -323,6 +371,12 @@
       "comment" : "Class = \"NSButtonCell\"; title = \"Banned\"; ObjectID = \"DaB-Gf-wIK\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gesperrt"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -334,6 +388,12 @@
             "state" : "translated",
             "value" : "Bannis"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已禁用"
+          }
         }
       }
     },
@@ -341,6 +401,12 @@
       "comment" : "Class = \"NSButtonCell\"; title = \"Show Battlecry and Deathrattle on tiers\"; ObjectID = \"dcW-bJ-e6v\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kampfschrei und Todesröcheln auf Stufen anzeigen"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -352,6 +418,12 @@
             "state" : "translated",
             "value" : "Afficher les Cris de guerre et Râles d'agonie sur les niveaux"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在等级列表中显示战吼和亡语"
+          }
         }
       }
     },
@@ -359,6 +431,12 @@
       "comment" : "Class = \"NSButtonCell\"; title = \"Always show tavern tier 7\"; ObjectID = \"EaL-aA-A3g\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tavernenstufe 7 immer anzeigen"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -370,6 +448,12 @@
             "state" : "translated",
             "value" : "Toujours afficher le niveau 7 de taverne"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "始终显示酒馆等级 7"
+          }
         }
       }
     },
@@ -377,6 +461,12 @@
       "comment" : "Class = \"NSButtonCell\"; title = \"Enable Tier7 overlay\"; ObjectID = \"fts-jC-w9N\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tier7-Overlay aktivieren"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -388,6 +478,12 @@
             "state" : "translated",
             "value" : "Activer l'overlay Tier7"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "启用Tier7内嵌"
+          }
         }
       }
     },
@@ -395,6 +491,12 @@
       "comment" : "Class = \"NSButtonCell\"; title = \"Reset Session\"; ObjectID = \"gcd-yJ-p3G\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sitzung zurücksetzen"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -406,6 +508,12 @@
             "state" : "translated",
             "value" : "Réinitialiser la session"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重置时段数据"
+          }
         }
       }
     },
@@ -413,6 +521,12 @@
       "comment" : "Class = \"NSButtonCell\"; title = \"Show Battlegrounds hero picking stats\"; ObjectID = \"gkM-fC-BN7\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Statistik zur Heldenwahl anzeigen"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -424,6 +538,12 @@
             "state" : "translated",
             "value" : "Afficher les stats de choix des héros de Champs de bataille"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示战棋英雄选择统计"
+          }
         }
       }
     },
@@ -431,6 +551,12 @@
       "comment" : "Class = \"NSButtonCell\"; title = \"Show latest games\"; ObjectID = \"hVL-iu-9SV\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Letzte Spiele anzeigen"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -442,6 +568,12 @@
             "state" : "translated",
             "value" : "Afficher les dernières parties"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示最近对局"
+          }
         }
       }
     },
@@ -452,7 +584,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Show Bob's Buddy"
+            "value" : "Bob's Buddy anzeigen"
           }
         },
         "en" : {
@@ -524,7 +656,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "显示鲍勃助手"
+            "value" : "显示鲍勃之友"
           }
         },
         "zh-Hant" : {
@@ -539,6 +671,12 @@
       "comment" : "Class = \"NSButtonCell\"; title = \"Show opponent warband\"; ObjectID = \"J07-pk-b78\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gegnerisches Brett anzeigen"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -563,6 +701,12 @@
       "comment" : "Class = \"NSBox\"; title = \"Session Recap\"; ObjectID = \"JUT-jb-jLx\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sitzungsübersicht"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -573,6 +717,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Résumé de session"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "时段回顾"
           }
         }
       }
@@ -592,6 +742,12 @@
             "state" : "translated",
             "value" : "Tier7"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tier7"
+          }
         }
       }
     },
@@ -599,6 +755,12 @@
       "comment" : "Class = \"NSButtonCell\"; title = \"Start, Current\"; ObjectID = \"L5S-gI-Wxn\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start, Aktuell"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -610,6 +772,12 @@
             "state" : "translated",
             "value" : "Départ, actuel"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "初始、当前"
+          }
         }
       }
     },
@@ -620,7 +788,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Always show average damage"
+            "value" : "Durchschnittlichen Schaden immer anzeigen"
           }
         },
         "en" : {
@@ -737,6 +905,12 @@
       "comment" : "Class = \"NSButtonCell\"; title = \"Show tavern and triple history\"; ObjectID = \"nGc-Fs-IbI\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tavernen- und Dreifachverlauf anzeigen"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -761,6 +935,12 @@
       "comment" : "Class = \"NSButtonCell\"; title = \"Show hero comparison\"; ObjectID = \"oXq-kH-uaV\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Heldenvergleich anzeigen"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -785,6 +965,12 @@
       "comment" : "Class = \"NSButtonCell\"; title = \"Show Battlegrounds quest picking stats\"; ObjectID = \"po8-Pv-EE8\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Statistik zur Questwahl anzeigen"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -796,6 +982,12 @@
             "state" : "translated",
             "value" : "Afficher les stats de choix des quêtes de Champs de bataille"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示战棋任务选择统计"
+          }
         }
       }
     },
@@ -803,6 +995,12 @@
       "comment" : "Class = \"NSButtonCell\"; title = \"Show MMR\"; ObjectID = \"PrW-hA-PZj\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MMR anzeigen"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -814,6 +1012,12 @@
             "state" : "translated",
             "value" : "Afficher le MMR"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示等级积分"
+          }
         }
       }
     },
@@ -821,6 +1025,12 @@
       "comment" : "Class = \"NSTextFieldCell\"; title = \"Scaling\"; ObjectID = \"pzC-JZ-tcU\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skalierung"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -832,6 +1042,12 @@
             "state" : "translated",
             "value" : "Échelle"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "缩放比例"
+          }
         }
       }
     },
@@ -842,7 +1058,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Show Bob's Buddy during combat"
+            "value" : "Bob's Buddy während des Kampfes anzeigen"
           }
         },
         "en" : {
@@ -914,7 +1130,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在战斗中显示鲍勃助手"
+            "value" : "在战斗中显示鲍勃之友"
           }
         },
         "zh-Hant" : {
@@ -929,6 +1145,12 @@
       "comment" : "Class = \"NSButtonCell\"; title = \"Show tavern spells\"; ObjectID = \"QUp-Tx-AlQ\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tavernenzauber anzeigen"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -940,6 +1162,12 @@
             "state" : "translated",
             "value" : "Afficher les sorts de taverne"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示酒馆法术"
+          }
         }
       }
     },
@@ -947,6 +1175,12 @@
       "comment" : "Class = \"NSButtonCell\"; title = \"Current, Change\"; ObjectID = \"RCI-vA-mUx\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aktuell, Änderung"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -958,6 +1192,12 @@
             "state" : "translated",
             "value" : "Actuel, évolution"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当前、变化"
+          }
         }
       }
     },
@@ -968,7 +1208,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Show Bob's Buddy during shopping"
+            "value" : "Bob's Buddy während der Rekrutierungsphase anzeigen"
           }
         },
         "en" : {
@@ -1040,7 +1280,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在商店中显示鲍勃助手"
+            "value" : "在商店中显示鲍勃之友"
           }
         },
         "zh-Hant" : {
@@ -1055,6 +1295,12 @@
       "comment" : "Class = \"NSButtonCell\"; title = \"Show comp stats (in session recap)\"; ObjectID = \"tBZ-Tg-1hx\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comp-Statistik anzeigen (in der Sitzungsübersicht)"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -1065,6 +1311,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Afficher les stats de compositions (dans le résumé de session)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示阵容统计（在时段回顾中）"
           }
         }
       }
@@ -1084,6 +1336,12 @@
             "state" : "translated",
             "value" : "100 %"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "100%"
+          }
         }
       }
     },
@@ -1091,6 +1349,12 @@
       "comment" : "Class = \"NSButtonCell\"; title = \"Show tavern pinning\"; ObjectID = \"tvp-ui-002\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anheften in der Taverne anzeigen"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -1115,6 +1379,12 @@
       "comment" : "Class = \"NSButtonCell\"; title = \"Auto-enable comps key pieces on game start\"; ObjectID = \"tvp-ui-012\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wichtige Comp-Karten bei Spielstart automatisch aktivieren"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -1139,6 +1409,12 @@
       "comment" : "Class = \"NSButtonCell\"; title = \"Show quick guides\"; ObjectID = \"tvp-ui-022\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kurzanleitungen anzeigen"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -1169,6 +1445,12 @@
       "comment" : "Class = \"NSButtonCell\"; title = \"Available\"; ObjectID = \"wfJ-hm-6dv\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verfügbar"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -1180,6 +1462,12 @@
             "state" : "translated",
             "value" : "Disponibles"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可用"
+          }
         }
       }
     },
@@ -1187,6 +1475,12 @@
       "comment" : "Class = \"NSButtonCell\"; title = \"Show Tier7 menu overlay (MMR & stats)\"; ObjectID = \"Xmc-n4-oyS\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tier7-Menü-Overlay anzeigen (MMR & Statistik)"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -1198,6 +1492,12 @@
             "state" : "translated",
             "value" : "Afficher l'overlay du menu Tier7 (MMR et stats)"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在菜单中显示Tier7（等级积分和统计）"
+          }
         }
       }
     },
@@ -1205,6 +1505,12 @@
       "comment" : "Class = \"NSButtonCell\"; title = \"Show session recap\"; ObjectID = \"ZsD-zG-uu2\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sitzungsübersicht anzeigen"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -1215,6 +1521,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Afficher le résumé de session"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示时段回顾"
           }
         }
       }

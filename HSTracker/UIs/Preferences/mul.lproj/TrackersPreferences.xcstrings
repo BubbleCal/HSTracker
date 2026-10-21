@@ -5,6 +5,12 @@
       "comment" : "Class = \"NSButtonCell\"; title = \"Show experience counter\"; ObjectID = \"3i1-BX-ZbC\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erfahrungszähler anzeigen"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -209,6 +215,12 @@
       "comment" : "Class = \"NSButtonCell\"; title = \"Disable tracking in spectator mode\"; ObjectID = \"6n7-a6-LsZ\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tracking im Zuschauermodus deaktivieren"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -302,7 +314,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "HSTracker wird während Du spielst auf alles Schreibtischen sichtbar sein"
+            "value" : "HSTracker wird, während du spielst, auf allen Schreibtischen sichtbar sein"
           }
         },
         "en" : {
@@ -1253,6 +1265,12 @@
       "comment" : "Class = \"NSButtonCell\"; title = \"Show flavor text\"; ObjectID = \"Ehf-nl-mzO\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aromatext anzeigen"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -1367,6 +1385,12 @@
       "comment" : "Class = \"NSButtonCell\"; title = \"Hide all trackers when game is in background\"; ObjectID = \"HEr-xo-koe\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle Tracker ausblenden, wenn das Spiel im Hintergrund ist"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -1973,6 +1997,12 @@
       "comment" : "Class = \"NSButtonCell\"; title = \"Gray out secrets whose trigger was met\"; ObjectID = \"sAg-Gr-Cel\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mulligan-Overlay bei Spielbeginn anzeigen"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",

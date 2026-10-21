@@ -26,7 +26,7 @@ struct CompGuideDetailView: View {
                     header
                     ScrollView {
                         VStack(alignment: .leading, spacing: 0) {
-                            if !comp.howToPlay.isEmpty {
+                            if comp.isTierAdjusted || !comp.howToPlay.isEmpty {
                                 howToPlaySection
                             }
                             if !comp.coreCards.isEmpty {
@@ -124,7 +124,8 @@ struct CompGuideDetailView: View {
 
     // BtnPinAllCompCards: a 30x30 PinIconButtonStyle button carrying a 22pt
     // pin.png, Margin="0,0,6,0", wrapped in the same BgsMinionPinningVisibility
-    // gate the browser's per-row button uses. #23272a idle, #43474a hovered,
+    // gate the browser's per-row button uses, plus PinAllCompCardsAvailable
+    // (pinning a whole comp is Tier7 only). #23272a idle, #43474a hovered,
     // and #141617 once every card in the guide is pinned.
     //
     // PinButtonIn / PinButtonUnpinned / PinButtonPinned: opacity 0->1 with a
@@ -139,7 +140,7 @@ struct CompGuideDetailView: View {
 
     @ViewBuilder
     private var pinAllButton: some View {
-        if pinning.isShown {
+        if pinning.isShown && comp.pinAllCompCardsAvailable {
             Button {
                 comp.togglePinAllCompCards(pinning)
             } label: {
@@ -201,19 +202,63 @@ struct CompGuideDetailView: View {
             .cornerRadius(3)
     }
 
+    // The adjusted-tier notice shares the How to Play section's 9pt-inset
+    // StackPanel in CompGuide.xaml, sitting above it with a 9pt bottom margin.
     private var howToPlaySection: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack {
-                Text("How to Play")
-                    .chunkFive(size: 12)
-                    .outlinedText()
-                Spacer()
-                badge(text: difficultyLabel(comp.difficulty), colors: [comp.difficultyColor, comp.difficultyColor])
+        VStack(alignment: .leading, spacing: 0) {
+            if comp.isTierAdjusted {
+                tierAdjustedNotice
+                    .padding(.bottom, 9)
             }
-            // FontSize 11 / LineHeight 17 in CompGuide.xaml.
-            GuideText(text: comp.howToPlay, fontSize: 11, color: .white.opacity(0.7), lineSpacing: 6)
+            if !comp.howToPlay.isEmpty {
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack {
+                        Text("How to Play")
+                            .chunkFive(size: 12)
+                            .outlinedText()
+                        Spacer()
+                        badge(text: difficultyLabel(comp.difficulty), colors: [comp.difficultyColor, comp.difficultyColor])
+                    }
+                    // FontSize 11 / LineHeight 17 in CompGuide.xaml.
+                    GuideText(text: comp.howToPlay, fontSize: 11, color: .white.opacity(0.7), lineSpacing: 6)
+                }
+            }
         }
         .padding(9)
+    }
+
+    // "Tier adjusted from [B] for this match.", with the comp's base tier as a
+    // small badge in place of {0}.
+    private var tierAdjustedNotice: some View {
+        let parts = BattlegroundsCompGuideViewModel.tierAdjustedFromParts
+        return HStack(spacing: 0) {
+            Text(verbatim: parts.prefix)
+                .font(.system(size: 10).italic())
+                .foregroundColor(.white)
+                .opacity(0.6)
+            Text(verbatim: comp.baseTierText)
+                .font(.system(size: 10, weight: .black))
+                .foregroundColor(.white)
+                .padding(.leading, 5)
+                .padding(.trailing, 5)
+                .padding(.top, 1)
+                .padding(.bottom, 2)
+                .background(LinearGradient(colors: comp.baseTierColors, startPoint: .topLeading, endPoint: .bottomTrailing))
+                .cornerRadius(2)
+                .opacity(0.8)
+                .padding(.horizontal, 4)
+            Text(verbatim: parts.suffix)
+                .font(.system(size: 10).italic())
+                .foregroundColor(.white)
+                .opacity(0.6)
+        }
+        .fixedSize()
+        .padding(.horizontal, 7)
+        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(hex: "#1c1f22"))
+        .cornerRadius(3)
+        .overlay(RoundedRectangle(cornerRadius: 3).stroke(Color(hex: "#4A5256"), lineWidth: 1))
     }
 
     // Plain HStack rows rather than LazyVGrid: this module's baseline is

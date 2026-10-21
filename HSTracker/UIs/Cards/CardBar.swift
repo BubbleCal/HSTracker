@@ -7,7 +7,7 @@
 //
 
 import Foundation
-import TextAttributes
+import AppKit
 
 protocol CardCellHover: AnyObject {
     func hover(cell: CardBar, card: Card)

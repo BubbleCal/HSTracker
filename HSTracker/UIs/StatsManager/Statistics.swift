@@ -93,7 +93,7 @@ class Statistics: NSWindowController {
             selectedDeckName.stringValue = deck.name
         } else {
             selectedDeckIcon.image = NSImage(named: "error")
-            selectedDeckName.stringValue = "No deck selected."
+            selectedDeckName.stringValue = String.localizedString("No deck selected.", comment: "")
         }
     }
 

@@ -29,8 +29,13 @@ struct BattlegroundsCompGuideViewModel: Identifiable {
     let coreCards: [GuideMinion]
     let addonCards: [GuideMinion]
     let representativeCard: Card?
+    // The tier the comp is listed under: the match-adjusted one when the
+    // server sent it, otherwise the base tier.
     let tier: Int
     let tierColors: [Color]
+    let baseTier: Int
+    let baseTierColors: [Color]
+    var isTierAdjusted: Bool { tier != baseTier }
     let difficulty: Int
     let difficultyColor: Color
     let primaryTribe: Int
@@ -43,6 +48,10 @@ struct BattlegroundsCompGuideViewModel: Identifiable {
     // until the Inspiration milestone, but the gating already matches.
     var exampleBoardsButtonEnabled: Bool { Self.isTier7Enabled }
 
+    // HDT's PinAllCompCardsAvailable: pinning individual minions is free, but
+    // pinning a whole comp stays a Tier7 feature.
+    var pinAllCompCardsAvailable: Bool { Self.isTier7Enabled }
+
     // HDT's ExampleBoardsButtonVisibility: the example boards are filtered by
     // the current minion pool, which only exists during a match.
     var exampleBoardsButtonVisible: Bool { !isPreLobby }
@@ -51,6 +60,16 @@ struct BattlegroundsCompGuideViewModel: Identifiable {
     // three of them render it now: the comp list row, the comp detail header,
     // and the Tavern Pinning key-piece tooltip.
     var tierText: String { Self.tierText(tier) }
+    var baseTierText: String { Self.tierText(baseTier) }
+
+    // The base tier badge sits where {0} is in the localized string.
+    static var tierAdjustedFromParts: (prefix: String, suffix: String) {
+        let parts = String.localizedString("Battlegrounds_CompGuide_TierAdjustedFrom", comment: "")
+            .components(separatedBy: "{0}")
+        let prefix = parts[0].trimmingCharacters(in: .whitespaces)
+        let suffix = parts.count > 1 ? parts[1...].joined(separator: "{0}").trimmingCharacters(in: .whitespaces) : ""
+        return (prefix, suffix)
+    }
 
     // The list's tier group headers label a bare tier number rather than a
     // comp, hence the static form.
@@ -96,19 +115,30 @@ struct BattlegroundsCompGuideViewModel: Identifiable {
         var seen: Set<String> = []
 
         func add(dbfId: Int) {
-            guard available?.contains(dbfId) ?? true else { return }
             guard let card = Cards.by(dbfId: dbfId, collectible: false), !card.id.isEmpty else { return }
             guard seen.insert(card.id).inserted else { return }
             ids.append(card.id)
         }
 
-        compGuide.core_cards.forEach { add(dbfId: $0) }
-        compGuide.addon_cards.forEach { add(dbfId: $0) }
+        // Premium guides come with a list filtered by the server, free ones
+        // have to be collected from the guide.
+        if let minionsToPin = compGuide.minions_to_pin {
+            minionsToPin.forEach { add(dbfId: $0) }
+            return ids
+        }
+
+        func addIfAvailable(dbfId: Int) {
+            guard available?.contains(dbfId) ?? true else { return }
+            add(dbfId: dbfId)
+        }
+
+        compGuide.core_cards.forEach { addIfAvailable(dbfId: $0) }
+        compGuide.addon_cards.forEach { addIfAvailable(dbfId: $0) }
         for lines in [whenToCommitLines, commonEnablerLines, Self.howToPlayLines(howToPlay)] {
             for line in lines {
                 for segment in line {
                     if case .card(_, let dbfId) = segment, let dbfId {
-                        add(dbfId: dbfId)
+                        addIfAvailable(dbfId: dbfId)
                     }
                 }
             }
@@ -165,8 +195,10 @@ struct BattlegroundsCompGuideViewModel: Identifiable {
         coreCards = minions(compGuide.core_cards)
         addonCards = minions(compGuide.addon_cards)
         representativeCard = Cards.by(cardId: compGuide.representative_card)
-        tier = compGuide.tier
-        tierColors = Self.tierColors(compGuide.tier)
+        tier = compGuide.adjusted_tier ?? compGuide.tier
+        tierColors = Self.tierColors(tier)
+        baseTier = compGuide.tier
+        baseTierColors = Self.tierColors(compGuide.tier)
         difficulty = compGuide.difficulty
         difficultyColor = Self.difficultyColor(compGuide.difficulty)
         primaryTribe = compGuide.primary_tribe

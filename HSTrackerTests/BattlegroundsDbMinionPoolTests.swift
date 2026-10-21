@@ -7,6 +7,7 @@
 //
 
 import XCTest
+import HearthMirror
 @testable import HSTracker
 
 // Ports HDT's BattlegroundsDbMinionPoolTest: a database built from the pool the

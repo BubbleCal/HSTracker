@@ -5,6 +5,12 @@
       "comment" : "Class = \"NSTextFieldCell\"; title = \"Subscription status\"; ObjectID = \"7ln-3f-To8\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abostatus"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -23,6 +29,12 @@
       "comment" : "Class = \"NSButtonCell\"; title = \"Login to HSReplay.net\"; ObjectID = \"87B-1e-y45\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bei HSReplay.net anmelden"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -95,6 +107,12 @@
       "comment" : "Class = \"NSBox\"; title = \"My Account\"; ObjectID = \"KV0-Rl-jeI\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mein Account"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -119,6 +137,12 @@
       "comment" : "Class = \"NSButtonCell\"; title = \"Find out more\"; ObjectID = \"LV9-Mi-ztK\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mehr erfahren"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -137,6 +161,12 @@
       "comment" : "Class = \"NSTextFieldCell\"; title = \"Thank you for supporting us!\"; ObjectID = \"sW4-mJ-KZE\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Danke für deine Unterstützung!"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -155,6 +185,12 @@
       "comment" : "Class = \"NSTextFieldCell\"; title = \"Login to enable all HSReplay.net features.\"; ObjectID = \"zQQ-GF-3Lg\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Melde dich an, um deine Replays zu sichern und alle Funktionen von HSReplay.net zu nutzen."
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",

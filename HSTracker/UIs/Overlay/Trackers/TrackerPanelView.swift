@@ -296,7 +296,8 @@ struct TrackerPanelView: View {
                             playerType: viewModel.playerType, cardHeight: layout.cardHeight,
                             frameHeight: layout.smallFrameHeight, reset: content.reset,
                             flashing: content.flashing, version: content.version,
-                            hoverKind: hoverKind, scale: layout.fit)
+                            hoverKind: hoverKind, scale: layout.fit,
+                            highlight: viewModel.playerType == .player ? hoverHandler.deckHighlight : nil)
     }
 }
 

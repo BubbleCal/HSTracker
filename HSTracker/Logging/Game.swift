@@ -99,8 +99,10 @@ class Game: NSObject, PowerEventHandler {
     func setHearthstoneActived(flag: Bool) {
         hearthstoneRunState.isActive = flag
         if currentMode == .bacon || isBattlegroundsMatch() {
-            if flag {
-                windowManager.rootOverlay?.viewModel.tier7PreLobby.onFocus()
+            if flag, let tier7PreLobby = windowManager.rootOverlay?.viewModel.tier7PreLobby {
+                DispatchQueue.main.async {
+                    tier7PreLobby.onFocus()
+                }
             }
             updateBattlegroundsSessionVisibility()
         }
@@ -109,6 +111,9 @@ class Game: NSObject, PowerEventHandler {
 	func setSelfActivated(flag: Bool) {
 		self.selfAppActive = flag
         self.updateTrackers()
+        if currentMode == .bacon || isBattlegroundsMatch() {
+            updateBattlegroundsSessionVisibility()
+        }
 	}
     
     func getBattlegroundsBoardStateFor(id: Int) -> BoardSnapshot? {
@@ -154,7 +159,14 @@ class Game: NSObject, PowerEventHandler {
         return gameEntity?[.bacon_buddy_enabled] ?? 0 > 0
     }
     
-    var battlegroundsLobbyInfo: MirrorBattlegroundsLobbyInfo?
+    private var _battlegroundsLobbyInfo: MirrorBattlegroundsLobbyInfo?
+
+    // Set from the BattlegroundsLobbyInfoWatcher thread and read by the log
+    // reader at game end; see battlegroundsStateLock.
+    var battlegroundsLobbyInfo: MirrorBattlegroundsLobbyInfo? {
+        get { battlegroundsStateLock.around { _battlegroundsLobbyInfo } }
+        set { battlegroundsStateLock.around { _battlegroundsLobbyInfo = newValue } }
+    }
 	
 	// MARK: - PowerEventHandler protocol
 	
@@ -204,7 +216,16 @@ class Game: NSObject, PowerEventHandler {
             // do not show gui while spectating
             !(Settings.dontTrackWhileSpectating && self.spectator) &&
                 // do not show gui while game is in background
-                !((Settings.hideAllWhenGameInBackground || Settings.hideAllWhenGameInBackground) && !self.hearthstoneRunState.isActive)
+                isGameInForeground
+    }
+
+    /// Whether the overlay should be up as far as hideAllWhenGameInBackground is
+    /// concerned. HSTracker itself being active counts as the game being in the
+    /// foreground: a click on the overlay can activate HSTracker, which sends
+    /// Hearthstone to the background, and hiding the overlay then would take it
+    /// down out from under the click.
+    var isGameInForeground: Bool {
+        !Settings.hideAllWhenGameInBackground || hearthstoneRunState.isActive || selfAppActive
     }
     
     var shouldShowTracker: Bool {
@@ -599,9 +620,7 @@ class Game: NSObject, PowerEventHandler {
     func updateRootOverlay() {
         DispatchQueue.main.async { [self] in
             guard let win = windowManager.rootOverlay else { return }
-            let hsActive = hearthstoneRunState.isActive
-
-            if (Settings.hideAllWhenGameInBackground && hsActive) || !Settings.hideAllWhenGameInBackground {
+            if isGameInForeground {
                 let frame = SizeHelper.overHearthstoneFrame()
                 let isFullscreen = SizeHelper.hearthstoneWindow.isFullscreen()
                 let fullscreenChanged = rootOverlayLastFullscreenState != nil && rootOverlayLastFullscreenState != isFullscreen
@@ -689,8 +708,7 @@ class Game: NSObject, PowerEventHandler {
             let leftViaScene = SceneHandler.scene != nil && SceneHandler.scene != .gameplay
             let isBG = self.isBattlegroundsMatch() && !self.isInMenu && !leftViaScene && !self.gameEnded
             let show = isBG && Settings.showBobsBuddy &&
-                ((Settings.hideAllWhenGameInBackground && self.hearthstoneRunState.isActive)
-                    || !Settings.hideAllWhenGameInBackground) && !self.hideBobsBuddy
+                self.isGameInForeground && !self.hideBobsBuddy
             self.windowManager.rootOverlay?.viewModel.bobsBuddy.isShown = show
         }
     }
@@ -874,7 +892,7 @@ class Game: NSObject, PowerEventHandler {
                 return
             }
             let show = (!self.isMercenariesMatch() && Settings.showFlavorText) || (self.isMercenariesMatch())
-            if !self.isInMenu && show || (self.isMulliganDone() || self.isMercenariesMatch()) && !self.gameEnded && ((Settings.hideAllWhenGameInBackground && self.hearthstoneRunState.isActive) || !Settings.hideAllWhenGameInBackground) {
+            if !self.isInMenu && show || (self.isMulliganDone() || self.isMercenariesMatch()) && !self.gameEnded && self.isGameInForeground {
                 board.isShown = true
                 // OverlayWindow.IsGameOver, which collapses every slot
                 // rather than hiding the grids.
@@ -908,7 +926,7 @@ class Game: NSObject, PowerEventHandler {
     // OverlayWindow.IsContentVisible: the overlay is hidden while Hearthstone
     // is in the background, if the user asked for that.
     private var isBoardEntryOrderContentVisible: Bool {
-        !Settings.hideAllWhenGameInBackground || hearthstoneRunState.isActive
+        isGameInForeground
     }
 
     // HDT's OverlayWindow.OnPlayZoneStateChanged, fed by the PlayZoneWatcher
@@ -935,8 +953,7 @@ class Game: NSObject, PowerEventHandler {
             // game to keep the button clear of Hearthstone's "Back" button.
             tasks.isInMenu = self.isInMenu
             let show = Settings.showMercsTasks && tasks.isRequested
-                && ((Settings.hideAllWhenGameInBackground && self.hearthstoneRunState.isActive)
-                    || !Settings.hideAllWhenGameInBackground)
+                && self.isGameInForeground
             tasks.isButtonShown = show
             if !show {
                 tasks.isListShown = false
@@ -960,11 +977,17 @@ class Game: NSObject, PowerEventHandler {
         }
     }
         
+    // Called from the BaconWatcher thread. The @Published writes have to happen on
+    // main: setting them here deadlocked against main-thread writes to the same
+    // view model, each side holding the lock the other one wanted (HSTRACKER-2XR).
     func setBaconState(_ mode: SelectedBattlegroundsGameMode, _ isAnyOpen: Bool) {
-        windowManager.rootOverlay?.viewModel.tier7PreLobby.battlegroundsGameMode = mode
-        windowManager.rootOverlay?.viewModel.tier7PreLobby.isModalOpen = !queueEvents.isInQueue && isAnyOpen
+        let isModalOpen = !queueEvents.isInQueue && isAnyOpen
         windowManager.rootOverlay?.viewModel.battlegroundsSession.battlegroundsGameMode = mode
         DispatchQueue.main.async {
+            if let tier7PreLobby = self.windowManager.rootOverlay?.viewModel.tier7PreLobby {
+                tier7PreLobby.battlegroundsGameMode = mode
+                tier7PreLobby.isModalOpen = isModalOpen
+            }
             self.updateTier7PreLobbyVisibility()
             self.updateBattlegroundsGuidesPreLobbyVisibility()
         }
@@ -983,6 +1006,13 @@ class Game: NSObject, PowerEventHandler {
             return
         }
 
+        // hiding the panel resets the game mode and the watcher only emits on change
+        if viewModel.battlegroundsGameMode == .unknown && isInMenu && SceneHandler.scene == .bacon {
+            let mode = MirrorHelper.getSelectedBattlegroundsGameMode()
+            viewModel.battlegroundsGameMode = mode
+            windowManager.rootOverlay?.viewModel.battlegroundsSession.battlegroundsGameMode = mode
+        }
+
         // Hearthstone being in the background isn't a term here, exactly as in
         // HDT: the whole RootOverlay window is hidden for that
         // (Game.updateRootOverlay), so folding it in would only make the panel
@@ -999,12 +1029,12 @@ class Game: NSObject, PowerEventHandler {
             // shown -> hidden transition because that is the only time
             // OverlayElementBehavior.Hide() fires it - it early-returns when
             // the element is already collapsed - and this runs on every lobby
-            // tick. reset() clears battlegroundsGameMode along with the rest,
-            // as HDT's Reset() does; BaconWatcher re-supplies it on its next
-            // change (queueing blurs the lobby, so cancelling one always
-            // produces one), and re-entering BACON restarts the watcher with a
-            // cleared _prev so it reports unconditionally.
-            viewModel.reset()
+            // tick. softReset() clears battlegroundsGameMode, as HDT's
+            // SoftReset() does, but leaves the last state on screen so the
+            // panel refreshes silently the next time it is shown; the next
+            // call re-reads the mode from memory above, since BaconWatcher
+            // only reports changes.
+            viewModel.softReset()
         }
         viewModel.isShown = show
     }
@@ -1036,6 +1066,12 @@ class Game: NSObject, PowerEventHandler {
     // cleared out from under a match that is about to take the panel over via
     // updateBattlegroundsOverlay()'s hand-off - only a genuine leave (back to the
     // main menu, say) clears it here.
+    //
+    // The transition only keeps an open pre-lobby up, it never opens one - as
+    // HDT's `BgsGuidesPreLobbyVisible || SceneHandler.Scene == Mode.BACON`.
+    // Once the match has taken the panel over, a call landing mid-transition
+    // would otherwise re-enter the pre-lobby and swap the match's Tier7 comp
+    // guides for the unfiltered lobby list.
     @MainActor
     func updateBattlegroundsGuidesPreLobbyVisibility() {
         guard let guidesTabs = windowManager.rootOverlay?.viewModel.battlegroundsGuidesTabs else {
@@ -1044,7 +1080,8 @@ class Game: NSObject, PowerEventHandler {
 
         guidesTabs.isInQueue = queueEvents.isInQueue
 
-        let show = isRunning && isBaconSceneOrTransitioningToFromMatch && Settings.showBattlegroundsBrowser && Settings.showBattlegroundsGuidesPreLobby
+        let inScene = guidesTabs.isPreLobby ? isBaconSceneOrTransitioningToFromMatch : SceneHandler.scene == .bacon
+        let show = isRunning && inScene && Settings.showBattlegroundsBrowser && Settings.showBattlegroundsGuidesPreLobby
         if show {
             if !guidesTabs.isPreLobby {
                 let mode = windowManager.rootOverlay?.viewModel.tier7PreLobby.battlegroundsGameMode
@@ -1081,7 +1118,7 @@ class Game: NSObject, PowerEventHandler {
     }
 
     func updateBattlegroundsSessionVisibility(_ isFriendsListOpen: Bool = false) {
-        let show = isRunning && ((Settings.hideAllWhenGameInBackground && hearthstoneRunState.isActive) || !Settings.hideAllWhenGameInBackground) && Settings.showSessionRecap
+        let show = isRunning && isGameInForeground && Settings.showSessionRecap
                 && (
                     (
                         // Scene is not transitioning
@@ -1292,8 +1329,14 @@ class Game: NSObject, PowerEventHandler {
         return MirrorHelper.getMercenariesMapInfo()
     }
     
+    // The race caches and battlegroundsLobbyInfo are read from the log reader,
+    // the watchers, the main thread and detached tasks while reset() and the
+    // lobby info watcher replace them, so every access goes through this lock
+    // (Sentry HSTRACKER-33J, HSTRACKER-33P). The mirror read stays outside it.
+    private let battlegroundsStateLock = UnfairLock()
+
     private var _availableRaces: [Race]?
-    
+
     private var _unavailableRaces: [Race]?
     
     var adventureOpponentId: String?
@@ -1302,36 +1345,36 @@ class Game: NSObject, PowerEventHandler {
     var hideBattlegroundsTurn = false
     
     var availableRaces: [Race]? {
-        if _availableRaces == nil {
-            if let races = MirrorHelper.getAvailableBattlegroundsRaces() {
-                let newRaces = races.compactMap({ x in x.intValue > 0 ? Race.allCases[safeIndex: x.intValue] : nil })
-                logger.info("Battlegrounds available races: \(newRaces) - from mirror \(races)")
-                if newRaces.count > 0 && newRaces.count == races.count {
-                    _availableRaces = newRaces
-                    return _availableRaces
-                }
+        if let cached = battlegroundsStateLock.around({ _availableRaces }) {
+            return cached
+        }
+        if let races = MirrorHelper.getAvailableBattlegroundsRaces() {
+            let newRaces = races.compactMap({ x in x.intValue > 0 ? Race.allCases[safeIndex: x.intValue] : nil })
+            logger.info("Battlegrounds available races: \(newRaces) - from mirror \(races)")
+            if newRaces.count > 0 && newRaces.count == races.count {
+                battlegroundsStateLock.around { _availableRaces = newRaces }
+                return newRaces
             }
         }
-        return _availableRaces
+        return nil
     }
-    
+
     var unavailableRaces: [Race]? {
-        if _unavailableRaces == nil {
-            if let races = availableRaces, races.count > 0 && races[0] != .invalid {
-                var newRaces = [Race]()
-                for race in Database.battlegroundRaces where !races.contains(race) {
-                    newRaces.append(race)
-                }
-                if newRaces.count > 0 {
-                    logger.info("Battlegrounds unavailable races: \(newRaces) - all races \(races)")
-                    _unavailableRaces = newRaces
-                    return _unavailableRaces
-                } else {
-                    return nil
-                }
+        if let cached = battlegroundsStateLock.around({ _unavailableRaces }) {
+            return cached
+        }
+        if let races = availableRaces, races.count > 0 && races[0] != .invalid {
+            var newRaces = [Race]()
+            for race in Database.battlegroundRaces where !races.contains(race) {
+                newRaces.append(race)
+            }
+            if newRaces.count > 0 {
+                logger.info("Battlegrounds unavailable races: \(newRaces) - all races \(races)")
+                battlegroundsStateLock.around { _unavailableRaces = newRaces }
+                return newRaces
             }
         }
-        return _unavailableRaces
+        return nil
     }
 
     var battlegroundsRatingInfo: MirrorBattlegroundRatingInfo? {
@@ -1339,11 +1382,13 @@ class Game: NSObject, PowerEventHandler {
             return info
         }
         
-        _battlegroundsRatingInfo = MirrorHelper.getBattlegroundsRatingInfo()
+        cacheBattlegroundRatingInfo()
         
         logger.debug("Got battlegroundsRatingInfo=\(_battlegroundsRatingInfo ?? MirrorBattlegroundRatingInfo())")
         return _battlegroundsRatingInfo
     }
+
+    private(set) var battlegroundsRatingInfoCachedAt: Date?
     
     /// Read from the arena landing page, so it is only there while that scene is
     /// up - SceneHandler caches it on the way into the draft. The lazy read is
@@ -1760,8 +1805,10 @@ class Game: NSObject, PowerEventHandler {
         }
 		
 		_spectator = nil
-        _availableRaces = nil
-        _unavailableRaces = nil
+        battlegroundsStateLock.around {
+            _availableRaces = nil
+            _unavailableRaces = nil
+        }
         _brawlInfo = nil
         _battlegroundsBoardState?.reset()
         _battlegroundsDeityState?.reset()
@@ -1799,6 +1846,7 @@ class Game: NSObject, PowerEventHandler {
     
     func cacheBattlegroundRatingInfo() {
         _battlegroundsRatingInfo = MirrorHelper.getBattlegroundsRatingInfo()
+        battlegroundsRatingInfoCachedAt = Date()
     }
     
     func cacheArenaRating() {
@@ -2058,8 +2106,10 @@ class Game: NSObject, PowerEventHandler {
         
         windowManager.rootOverlay?.viewModel.linkOpponentDeck.isFriendlyMatch = isFriendlyMatch
         
-        if isBattlegroundsMatch() && currentGameMode == .spectator {
-            windowManager.rootOverlay?.viewModel.tier7PreLobby.reset()
+        if isBattlegroundsMatch() && currentGameMode == .spectator, let tier7PreLobby = windowManager.rootOverlay?.viewModel.tier7PreLobby {
+            DispatchQueue.main.async {
+                tier7PreLobby.reset()
+            }
         }
         
         if isFriendlyMatch {
@@ -2209,7 +2259,17 @@ class Game: NSObject, PowerEventHandler {
         updateActionHistory()
         // Drops the tracker's matchup line, which belongs to the match just left
         updateTrackers()
+        if refreshTier7TrialInMenu {
+            refreshTier7TrialInMenu = false
+            Task.detached {
+                await Tier7Trial.refresh()
+            }
+        }
     }
+
+    // Set when a Battlegrounds match ends; HDT refreshes the Tier7 trial from
+    // HandleInMenu when the last game was Battlegrounds.
+    private var refreshTier7TrialInMenu = false
 	
 	private func generateEndgameStatistics() -> InternalGameStats? {
 		let result = InternalGameStats()
@@ -2461,10 +2521,11 @@ class Game: NSObject, PowerEventHandler {
             windowManager.rootOverlay?.viewModel.battlegroundsHeroPicking.reset()
             windowManager.rootOverlay?.viewModel.battlegroundsQuestPicking.reset()
             windowManager.rootOverlay?.viewModel.battlegroundsTrinketPicking.reset()
-            // GameEventHandler's IsBattlegroundsMatch branch clears the trial
-            // once the match it was activated for is over, so the next game
-            // has to spend a trial of its own rather than riding this token.
-            Tier7Trial.clear()
+            windowManager.rootOverlay?.viewModel.battlegroundsHeroPowerPicking.reset()
+            // The trial is cleared and its status refetched once back in the
+            // menu (see inMenu), so the next game has to spend a trial of its
+            // own rather than riding this token.
+            refreshTier7TrialInMenu = true
             // These mutate @Published properties on ObservableObjects
             // (unlike the legacy KVO-based ViewModel.reset() calls
             // above), which Combine requires happen on the main thread.
@@ -2612,6 +2673,10 @@ class Game: NSObject, PowerEventHandler {
     }
 
     private func updatePostGameBattlegroundsRating(gameStats: InternalGameStats) {
+        if let heroSelectionRating = battlegroundsHeroSelectionRating, heroSelectionRating.gameId == gameId {
+            gameStats.battlegroundsRatingAfter = heroSelectionRating.rating
+            return
+        }
         if let data = UploadMetaData.retryWhileNull(f: MirrorHelper.getBattlegroundsRatingChange, tries: 5, delay: 500) {
             gameStats.battlegroundsRatingAfter = data.ratingNew.intValue
         } else {
@@ -2780,6 +2845,7 @@ class Game: NSObject, PowerEventHandler {
                 self.windowManager.rootOverlay?.viewModel.battlegroundsHeroPicking.reset()
                 self.windowManager.rootOverlay?.viewModel.battlegroundsQuestPicking.reset()
                 self.windowManager.rootOverlay?.viewModel.battlegroundsTrinketPicking.reset()
+                self.windowManager.rootOverlay?.viewModel.battlegroundsHeroPowerPicking.reset()
                 self.hideBattlegroundsHeroPanel()
                 self.hideBattlegroundsTimewarpPanel()
                 self.updateBattlegroundsSessionPanel()
@@ -2792,9 +2858,11 @@ class Game: NSObject, PowerEventHandler {
                     self.onBattlegroundsShoppingStart()
                     OpponentDeadForTracker.shoppingStarted(game: self)
                     BobsBuddyInvoker.instance(gameId: self.gameId, turn: self.turnNumber() - 1)?.startShopping()
-                    let heroPowerIds = self.player.board.filter { x in x.isHeroPower }.compactMap { x in x.cardId }
+                    let heroPowers = self.player.board.filter { x in x.isHeroPower }
+                    let heroPowerIds = heroPowers.compactMap { x in x.cardId }
                     let trinketIds = self.player.trinkets.compactMap({ x in x.cardId })
                     self.battlegroundsMinionsOnHeroPowers(heroPowerIds)
+                    self.windowManager.rootOverlay?.viewModel.battlegroundsHeroGuides.onHeroPowers(heroPowers)
                     self.battlegroundsMinionsOnTrinkets(trinketIds)
                     // From here until combat, the board the Inspiration panel
                     // sends alongside a key minion is the live one.
@@ -2812,9 +2880,13 @@ class Game: NSObject, PowerEventHandler {
         // GameEventHandler's opponent-turn branch: shopping is over, so the
         // Inspiration panel freezes the board it will keep sending for the rest
         // of this turn. Solo only, as in HDT - a duos board changes hands.
-        if player == .opponent && !isInMenu && isBattlegroundsSoloMatch() {
-            DispatchQueue.main.async {
-                self.windowManager.rootOverlay?.viewModel.battlegroundsInspiration.onShoppingEnd()
+        if player == .opponent && !isInMenu && isBattlegroundsMatch() {
+            windowManager.rootOverlay?.viewModel.battlegroundsHeroPowerPicking.reset()
+
+            if isBattlegroundsSoloMatch() {
+                DispatchQueue.main.async {
+                    self.windowManager.rootOverlay?.viewModel.battlegroundsInspiration.onShoppingEnd()
+                }
             }
         }
 
@@ -3260,7 +3332,31 @@ class Game: NSObject, PowerEventHandler {
         }
     }
     
-    private func getBattlegroundsHeroPickStats() async -> BattlegroundsHeroPickStats? {
+    private var initialBattlegroundsHeroPickRequest: Task<Void, Never>?
+
+    // HDT writes this straight into CurrentGameStats, which HSTracker only
+    // builds once the game is over, so it is kept here until then.
+    private var battlegroundsHeroSelectionRating: (gameId: String, rating: Int)?
+
+    // conceding during hero selection skips STATE COMPLETE, and the rating is gone once the end screen is left
+    private func pollBattlegroundsHeroSelectionRating() async {
+        let currentGameId = gameId
+        while currentGameId == gameId && !isInMenu && (gameEntity?[.turn] ?? 0) == 0 {
+            if let data = MirrorHelper.getBattlegroundsRatingChange() {
+                battlegroundsHeroSelectionRating = (currentGameId, data.ratingNew.intValue)
+                return
+            }
+            await Task.sleep(milliseconds: 500)
+        }
+    }
+
+    private func cacheInitialBattlegroundsHeroPickParams(_ heroDbfIds: [Int]) async {
+        if let availableRaces = try? await BattlegroundsUtils.waitForAvailableRaces() {
+            cacheBattlegroundsHeroPickParams(heroDbfIds, availableRaces)
+        }
+    }
+
+    private func getBattlegroundsHeroPickStats(paramsReady: Task<Void, Never>? = nil, parameters: BattlegroundsHeroPickStatsParams? = nil) async -> BattlegroundsHeroPickStats? {
         if spectator {
             return nil
         }
@@ -3275,12 +3371,15 @@ class Game: NSObject, PowerEventHandler {
             return nil
         }
 
-        let userOwnsTier7 = HSReplayAPI.accountData?.is_tier7 ?? false
-        if !userOwnsTier7 && (Tier7Trial.remainingTrials ?? 0) == 0 {
+        if !Tier7Trial.isAvailable {
             return nil
         }
 
-        let parameters = getBattlegroundsHeroPickParams()
+        if let paramsReady {
+            await paramsReady.value
+        }
+
+        let parameters = parameters ?? getBattlegroundsHeroPickParams()
 
         // Avoid using a trial when we can't get the api params anyway.
         guard let parameters else {
@@ -3289,18 +3388,12 @@ class Game: NSObject, PowerEventHandler {
             return nil
         }
 
-        // Use a trial if we can
-        var token: String?
-        if !userOwnsTier7 {
-            if let acc = MirrorHelper.getAccountId() {
-                token = await Tier7Trial.activate(hi: acc.hi.int64Value, lo: acc.lo.int64Value)
-            }
-            if token == nil {
-                // FIXME: add
-                //throw new HeroPickingException("Unable to get trial token")
-                return nil
-            }
+        guard let access = await Tier7Trial.getAccess() else {
+            // FIXME: add
+            //throw new HeroPickingException("Unable to start Tier7 trial")
+            return nil
         }
+        let token = access.trialToken
 
 #if(DEBUG)
         logger.debug("Fetching Battlegrounds Hero Pick stats with parameters=\(parameters)...")
@@ -3310,7 +3403,7 @@ class Game: NSObject, PowerEventHandler {
 
         let isDuos = isBattlegroundsDuosMatch()
         
-        let stats = (token != nil && !userOwnsTier7) ?
+        let stats = token != nil ?
             // trial
             isDuos ? await HSReplayAPI.getTier7DuosHeroPickStats(token: token, parameters: parameters) : await HSReplayAPI.getTier7HeroPickStats(token: token, parameters: parameters) :
             // tier 7
@@ -3336,17 +3429,24 @@ class Game: NSObject, PowerEventHandler {
         let heroes = player.playerEntities.filter { x in x.isHero && (x.has(tag: .bacon_hero_can_be_drafted) || x.has(tag: .bacon_skin)) && !x.has(tag: .bacon_locked_mulligan_hero) }
 
         // refresh the offered heroes
-        snapshotBattlegroundsOfferedHeroes(heroes)
-        cacheBattlegroundsHeroPickParams(true)
+        let offeredHeroIds = snapshotBattlegroundsOfferedHeroes(heroes)
+        updateBattlegroundsHeroPanel(offeredHeroIds, windowManager.rootOverlay?.viewModel.battlegroundsNotifications.parameters)
 
-        defer {
-            battlegroundsHeroPickingLatch -= 1
-        }
-        
         battlegroundsHeroPickingLatch += 1
         let latchOut = battlegroundsHeroPickingLatch
-        var battlegroundsHeroPickStats: BattlegroundsHeroPickStats?
-        battlegroundsHeroPickStats = await getBattlegroundsHeroPickStats()
+
+        // reroll params build on the initial params and echo the ref from its response
+        if let initialRequest = initialBattlegroundsHeroPickRequest {
+            await initialRequest.value
+        }
+
+        // another reroll has happened while waiting, leave the request to that one
+        if latchOut != battlegroundsHeroPickingLatch {
+            return
+        }
+
+        cacheBattlegroundsHeroRerollParams()
+        let battlegroundsHeroPickStats = await getBattlegroundsHeroPickStats()
 
         // another task has updated them since (fast reroll)
         if latchOut != battlegroundsHeroPickingLatch {
@@ -3354,15 +3454,19 @@ class Game: NSObject, PowerEventHandler {
         }
 
         // the stats are no longer relevant
-        if gameEntity?[.step] ?? 0 > Step.begin_mulligan.rawValue || isInMenu || windowManager.rootOverlay?.viewModel.battlegroundsHeroPicking.heroStats == nil {
+        if gameEntity?[.step] ?? 0 > Step.begin_mulligan.rawValue || isInMenu {
             return
         }
 
-        if let stats = battlegroundsHeroPickStats {
-            let heroIds = heroes.sorted(by: { (a, b) -> Bool in return a.zonePosition < b.zonePosition }).compactMap { x in x.card.dbfId }
+        if let stats = battlegroundsHeroPickStats, let heroIds = battlegroundsHeroPickState.offeredHeroDbfIds {
+            updateBattlegroundsHeroPanel(heroIds, stats.toast.parameters)
+
+            if windowManager.rootOverlay?.viewModel.battlegroundsHeroPicking.heroStats == nil {
+                return
+            }
+
             DispatchQueue.main.async { [self] in
                 self.showBattlegroundsHeroPickingStats(heroIds.compactMap({ dbfId in stats.data.first { x in x.hero_dbf_id == dbfId }}), stats.toast.parameters, stats.toast.min_mmr, stats.toast.anomaly_adjusted ?? false)
-                self.showBattlegroundsHeroPanel(heroIds, self.isBattlegroundsDuosMatch(), stats.toast.parameters)
             }
         }
     }
@@ -3380,30 +3484,32 @@ class Game: NSObject, PowerEventHandler {
     
     private var _battlegroundsHeroPickStatsParams: BattlegroundsHeroPickStatsParams?
     
-    func cacheBattlegroundsHeroPickParams(_ isReroll: Bool) {
-        if let _battlegroundsHeroPickStatsParams {
-            // Already set? Probably a reroll - just update the hero dbf ids
-            guard let newHeroDbfIds = battlegroundsHeroPickState.offeredHeroDbfIds else {
-                return
-            }
+    func cacheBattlegroundsHeroPickParams(_ heroDbfIds: [Int], _ availableRaces: [Race]) {
+        _battlegroundsHeroPickStatsParams = BattlegroundsHeroPickStatsParams(hero_dbf_ids: heroDbfIds, minion_types: availableRaces.compactMap { x in Int(Race.allCases.firstIndex(of: x)!) }, anomaly_dbf_id: BattlegroundsUtils.getBattlegroundsAnomalyDbfId(game: gameEntity), deity_dbf_id: BattlegroundsUtils.getBattlegroundsDeityDbfId(game: gameEntity), game_language: "\(Settings.hearthstoneLanguage ?? .enUS)", battlegrounds_rating: battlegroundsRatingInfo?.rating.intValue, is_reroll: false)
+    }
 
-            self._battlegroundsHeroPickStatsParams = BattlegroundsHeroPickStatsParams(hero_dbf_ids: newHeroDbfIds, minion_types: _battlegroundsHeroPickStatsParams.minion_types, anomaly_dbf_id: BattlegroundsUtils.getBattlegroundsAnomalyDbfId(game: gameEntity), deity_dbf_id: BattlegroundsUtils.getBattlegroundsDeityDbfId(game: gameEntity), game_language: "\(Settings.hearthstoneLanguage ?? .enUS)", battlegrounds_rating: battlegroundsRatingInfo?.rating.intValue, is_reroll: isReroll, hero_pick_ref: _battlegroundsHeroPickStatsParams.hero_pick_ref)
+    func cacheBattlegroundsHeroRerollParams() {
+        guard let _battlegroundsHeroPickStatsParams else {
             return
         }
 
-        guard let availableRaces else {
+        guard let newHeroDbfIds = battlegroundsHeroPickState.offeredHeroDbfIds else {
             return
         }
 
-        guard let heroDbfIds = battlegroundsHeroPickState.offeredHeroDbfIds else {
-            return
-        }
-
-        _battlegroundsHeroPickStatsParams = BattlegroundsHeroPickStatsParams(hero_dbf_ids: heroDbfIds, minion_types: availableRaces.compactMap { x in Int(Race.allCases.firstIndex(of: x)!) }, anomaly_dbf_id: BattlegroundsUtils.getBattlegroundsAnomalyDbfId(game: gameEntity), deity_dbf_id: BattlegroundsUtils.getBattlegroundsDeityDbfId(game: gameEntity), game_language: "\(Settings.hearthstoneLanguage ?? .enUS)", battlegrounds_rating: battlegroundsRatingInfo?.rating.intValue, is_reroll: isReroll)
+        self._battlegroundsHeroPickStatsParams = BattlegroundsHeroPickStatsParams(hero_dbf_ids: newHeroDbfIds, minion_types: _battlegroundsHeroPickStatsParams.minion_types, anomaly_dbf_id: BattlegroundsUtils.getBattlegroundsAnomalyDbfId(game: gameEntity), deity_dbf_id: BattlegroundsUtils.getBattlegroundsDeityDbfId(game: gameEntity), game_language: "\(Settings.hearthstoneLanguage ?? .enUS)", battlegrounds_rating: battlegroundsRatingInfo?.rating.intValue, is_reroll: true, hero_pick_ref: _battlegroundsHeroPickStatsParams.hero_pick_ref)
     }
     
     private func getBattlegroundsHeroPickParams() -> BattlegroundsHeroPickStatsParams? {
         return _battlegroundsHeroPickStatsParams
+    }
+
+    func getBattlegroundsHeroPowerPickParams(heroDbfId: Int, heroPowerDbfIds: [Int]) -> BattlegroundsHeroPickStatsParams? {
+        guard let availableRaces else {
+            return nil
+        }
+
+        return BattlegroundsHeroPickStatsParams(hero_dbf_ids: [heroDbfId], hero_power_dbf_ids: heroPowerDbfIds, minion_types: availableRaces.compactMap { x in Race.allCases.firstIndex(of: x) }, anomaly_dbf_id: BattlegroundsUtils.getBattlegroundsAnomalyDbfId(game: gameEntity), deity_dbf_id: BattlegroundsUtils.getBattlegroundsDeityDbfId(game: gameEntity), game_language: "\(Settings.hearthstoneLanguage ?? .enUS)", battlegrounds_rating: currentBattlegroundsRating, is_reroll: false, hero_pick_ref: _battlegroundsHeroPickStatsParams?.hero_pick_ref)
     }
     
     private var _battlegroundsHeroPickState: BattlegroundsHeroPickState?
@@ -3417,8 +3523,9 @@ class Game: NSObject, PowerEventHandler {
         return state
     }
     
-    func snapshotBattlegroundsOfferedHeroes(_ heroes: [Entity]) {
-        _ = battlegroundsHeroPickState.snapshotOfferedHeroes(heroes)
+    @discardableResult
+    func snapshotBattlegroundsOfferedHeroes(_ heroes: [Entity]) -> [Int] {
+        return battlegroundsHeroPickState.snapshotOfferedHeroes(heroes)
     }
     @discardableResult
     func snapshotBattlegroundsHeroPick() -> Int? {
@@ -3503,12 +3610,6 @@ class Game: NSObject, PowerEventHandler {
 
         await Task.sleep(milliseconds: 500)
         
-        var counter = 0
-        while availableRaces == nil && counter < 5 {
-            await Task.sleep(milliseconds: 500)
-            counter += 1
-        }
-        
         updateBattlegroundsSessionPanel()
         
         if isBattlegroundsDuosMatch() {
@@ -3519,12 +3620,18 @@ class Game: NSObject, PowerEventHandler {
             return
         }
 
-        snapshotBattlegroundsOfferedHeroes(heroes)
-        cacheBattlegroundsHeroPickParams(false)
+        if !spectator {
+            Task.detached {
+                await self.pollBattlegroundsHeroSelectionRating()
+            }
+        }
 
-        let heroIds = heroes.sorted(by: { (a, b) -> Bool in a.zonePosition < b.zonePosition }).compactMap { x in x.card.dbfId }
-            
-        async let statsTask = getBattlegroundsHeroPickStats()
+        var heroIds = snapshotBattlegroundsOfferedHeroes(heroes)
+        let heroPickParamsTask = Task { await self.cacheInitialBattlegroundsHeroPickParams(heroIds) }
+        initialBattlegroundsHeroPickRequest = heroPickParamsTask
+
+        let statsTask = Task { await self.getBattlegroundsHeroPickStats(paramsReady: heroPickParamsTask) }
+        initialBattlegroundsHeroPickRequest = Task { _ = await statsTask.value }
                 
         // Wait for the mulligan to be ready. Unlike the constructed guides, the
         // hero panel is put up from here whether or not the pick is still open -
@@ -3535,8 +3642,16 @@ class Game: NSObject, PowerEventHandler {
         
         var battlegroundsHeroPickStats: BattlegroundsHeroPickStats?
         
-        let (finalResults, _) = await (statsTask, waitAndAppear)
+        let (finalResults, _) = await (statsTask.value, waitAndAppear)
         battlegroundsHeroPickStats = finalResults
+
+        // the game ended while the params were waiting for races
+        if isInMenu {
+            return
+        }
+
+        // the stats were requested for the initial heroes, some may have been rerolled since
+        heroIds = battlegroundsHeroPickState.offeredHeroDbfIds ?? heroIds
             
         var toastParams: [String: String]?
             
@@ -4097,6 +4212,12 @@ class Game: NSObject, PowerEventHandler {
                 let offered = offeredEntities.filter { x in x.isHeroPower }
                 let heroPowerIds = (player.board.filter({ x in x.isHeroPower }) + offered).compactMap({ x in x.card.id })
                 battlegroundsMinionsOnHeroPowers(heroPowerIds)
+
+                if entities[choice.sourceEntityId]?.cardId == CardIds.NonCollectible.Neutral.AdventureTavernBrawl {
+                    Task.detached {
+                        await self.handleBattlegroundsFinleyChoice(offered)
+                    }
+                }
             }
         }
         player.offeredEntityIds = choice.offeredEntityIds ?? [Int]()
@@ -4133,6 +4254,31 @@ class Game: NSObject, PowerEventHandler {
         DispatchQueue.main.async {
             self.windowManager.rootOverlay?.viewModel.battlegroundsMinionsGuide.onQuests(quests)
         }
+    }
+
+    private func handleBattlegroundsFinleyChoice(_ offeredHeroPowers: [Entity]) async {
+        guard let heroDbfId = player.hero?.card.dbfId else {
+            return
+        }
+
+        let heroPowerDbfIds = offeredHeroPowers.map { x in x.card.dbfId }
+
+        guard let parameters = getBattlegroundsHeroPowerPickParams(heroDbfId: heroDbfId, heroPowerDbfIds: heroPowerDbfIds) else {
+            return
+        }
+
+        // HDT shows the disabled and error messages from here, but the panel is
+        // only visible once there are stats to show, so neither is ever seen.
+        guard let stats = await getBattlegroundsHeroPickStats(parameters: parameters) else {
+            return
+        }
+
+        // the choice was completed while the stats were loading
+        if !offeredHeroPowers.all({ x in player.offeredEntityIds.contains(x.id) }) {
+            return
+        }
+
+        windowManager.rootOverlay?.viewModel.battlegroundsHeroPowerPicking.setHeroPowerStats(heroPowerDbfIds: heroPowerDbfIds, stats: stats.data, parameters: stats.toast.parameters, minMmr: stats.toast.min_mmr, anomalyAdjusted: stats.toast.anomaly_adjusted ?? false)
     }
 
     @MainActor
@@ -4184,12 +4330,12 @@ class Game: NSObject, PowerEventHandler {
             return nil
         }
         
-        let userOwnsTier7 = HSReplayAPI.accountData?.is_tier7 ?? false
-        if !userOwnsTier7 && Tier7Trial.token == nil {
+        // trinkets are offered after the mulligan, so this only continues a trial from hero picking
+        guard let access = await Tier7Trial.getAccess() else {
             return nil
         }
         
-        if let token = Tier7Trial.token {
+        if let token = access.trialToken {
             return await HSReplayAPI.getTier7TrinketPickStats(token: token, parameters: requestParams)
         } else {
             return await HSReplayAPI.getTier7TrinketPickStats(parameters: requestParams)
@@ -4242,6 +4388,7 @@ class Game: NSObject, PowerEventHandler {
 
     func setChoicesVisible(_ choicesVisible: Bool, _ isShopChoice: Bool, _ cardIds: [String]?) {
         windowManager.rootOverlay?.viewModel.battlegroundsTrinketPicking.choicesVisible = choicesVisible
+        windowManager.rootOverlay?.viewModel.battlegroundsHeroPowerPicking.choicesVisible = choicesVisible
         OverlayOpacityMask.trace("setChoicesVisible visible=\(choicesVisible)"
                                  + " shop=\(isShopChoice)"
                                  + " cards=\(cardIds ?? [String]())"
@@ -4319,6 +4466,12 @@ class Game: NSObject, PowerEventHandler {
     // friends list slides in over the right of the client, under the overlay.
     func setFriendListOpacityMask(_ visible: Bool) {
         onMainOverlay { $0.setFriendListOpacityMask(visible) }
+    }
+
+    // HDT's Watchers.OnAssembleStateChange -> OverlayWindow.SetAssembleOpacityMask. The Assemble
+    // screen covers the board, so the overlay steps aside while it is up.
+    func setAssembleOpacityMask(_ isShowing: Bool) {
+        onMainOverlay { $0.setAssembleOpacityMask(isShowing) }
     }
 
     // HDT's Watchers.OnUiChange -> OverlayWindow.SetGameMenuOpacityMask. The
@@ -4431,7 +4584,7 @@ class Game: NSObject, PowerEventHandler {
         
         let boardCards = args.boardCards
         let userHasTier7 = HSReplayAPI.accountData?.is_tier7 ?? false // TODO: trial active
-        let currentPeriod = RemoteConfig.battlegroundsLiveMetaPeriod
+        let currentPeriod = RemoteConfig.battlegroundsLiveMetaPeriod(isDuos: isBattlegroundsDuosMatch())
         let hasTimewarpMechanic = currentPeriod?.mechanics.firstIndex(of: "timewarp") != nil
         
         if args.isActive && boardCards.count > 0 && userHasTier7 && hasTimewarpMechanic {
@@ -4496,13 +4649,17 @@ class Game: NSObject, PowerEventHandler {
             if isBattlegroundsMatch() {
                 windowManager.rootOverlay?.viewModel.battlegroundsQuestPicking.reset()
                 windowManager.rootOverlay?.viewModel.battlegroundsTrinketPicking.reset()
+                windowManager.rootOverlay?.viewModel.battlegroundsHeroPowerPicking.reset()
                 if source?[.bacon_is_magic_item_discover] ?? 0 > 0 {
                     let chosenTrinketIds = (self.player.trinkets + chosen).compactMap({ x in x.cardId })
                     battlegroundsMinionsOnTrinkets(chosenTrinketIds)
                 }
                 // the entity of a chosen hero power is only created after the choice completes, concat the chosen one
-                let chosenHeroPowerIds = player.board.filter({ x in x.isHeroPower }).compactMap({ x in x.card.id }) + chosen.filter({ x in x.isHeroPower }).compactMap({ x in x.card.id })
-                battlegroundsMinionsOnHeroPowers(chosenHeroPowerIds)
+                let chosenHeroPowers = player.board.filter({ x in x.isHeroPower }) + chosen.filter({ x in x.isHeroPower })
+                battlegroundsMinionsOnHeroPowers(chosenHeroPowers.compactMap({ x in x.card.id }))
+                DispatchQueue.main.async {
+                    self.windowManager.rootOverlay?.viewModel.battlegroundsHeroGuides.onHeroPowers(chosenHeroPowers)
+                }
                 
                 // quest choice
                 if let chosenEntity = chosen.first {
@@ -4561,6 +4718,11 @@ class Game: NSObject, PowerEventHandler {
             .showHeroPick(heroIds: heroIds, duos: duos, anomalyDbfId: anomalyDbfId, parameters: parameters)
     }
     
+    func updateBattlegroundsHeroPanel(_ heroIds: [Int], _ parameters: [String: String]?) {
+        windowManager.rootOverlay?.viewModel.battlegroundsNotifications
+            .updateHeroPick(heroIds: heroIds, parameters: parameters)
+    }
+
     func hideBattlegroundsHeroPanel() {
         windowManager.rootOverlay?.viewModel.battlegroundsNotifications.hideHeroPick()
     }
@@ -4670,18 +4832,19 @@ class Game: NSObject, PowerEventHandler {
         if let hoveredCard {
             // player hand
             if hoveredCard.isHand && isTraditionalHearthstoneMatch {
-                let relatedCards = getRelatedCards(player: player, cardId: hoveredCard.cardId, inHand: true, handPosition: hoveredCard.zonePosition)
-                logger.debug("RightClick: hand hover \(hoveredCard.cardId) at \(hoveredCard.zonePosition), \(relatedCards.count) related cards")
+                let hoveredEntity = player.hand.first { $0.zonePosition == hoveredCard.zonePosition }
+                // Assembled cards take their related cards from their effect half.
+                let effectCardId = RelatedCardsManager.getEffectCardId(hoveredEntity, hoveredCard.cardId)
+                let relatedCards = getRelatedCards(player: player, cardId: effectCardId, inHand: true, handPosition: hoveredCard.zonePosition)
                 // HDT's SetRelatedCardsTrigger(BigCardState): OutfinderInHand gates the hand hover.
                 if relatedCards.count > 0 && Settings.showPlayerRelatedCards &&
-                    !relatedCardsManager.isOutfinderSuppressed(cardId: hoveredCard.cardId, surfaceEnabled: Settings.outfinderInHand) {
+                    !relatedCardsManager.isOutfinderSuppressed(cardId: effectCardId, surfaceEnabled: Settings.outfinderInHand) {
                     let nonNullableRelatedCards = relatedCards.compactMap { x in x }
                     
                     let tooltipGridCards = windowManager.tooltipGridCards
                     tooltipGridCards.setTitle(String.localizedString("Related_Cards", comment: ""))
                     tooltipGridCards.setCardIdsFromCards(nonNullableRelatedCards, 470)
-                    let hoveredEntity = player.hand.first { $0.zonePosition == hoveredCard.zonePosition }
-                    let (statistics, summary, hasLargePool) = relatedCardsManager.getPoolStatistics(cardId: hoveredCard.cardId, relatedCards: relatedCards, player: player, hoveredEntity: hoveredEntity)
+                    let (statistics, summary, hasLargePool) = relatedCardsManager.getPoolStatistics(cardId: effectCardId, relatedCards: relatedCards, player: player, hoveredEntity: hoveredEntity)
                     tooltipGridCards.setPoolStatistics(statistics, relatedCardsSummary: summary, hasLargePool: hasLargePool)
 
                     let frame = SizeHelper.hearthstoneWindow.frame
@@ -4708,7 +4871,7 @@ class Game: NSObject, PowerEventHandler {
                     let tooltipFrame = NSRect(x: Int(x), y: Int(y), width: tooltipGridCards.gridWidth, height: tooltipGridCards.gridHeight)
                     tooltipGridCards.show(frame: tooltipFrame)
                     RelatedCardsRightClickMonitor.shared.setHoveredLargePool(
-                        card: hasLargePool ? Cards.by(cardId: hoveredCard.cardId) : nil,
+                        card: hasLargePool ? Cards.by(cardId: effectCardId) : nil,
                         pool: hasLargePool ? nonNullableRelatedCards : [],
                         anchorFrame: tooltipFrame)
                 } else {
@@ -4851,9 +5014,14 @@ class Game: NSObject, PowerEventHandler {
             self.windowManager.rootOverlay?.viewModel.setCardOpacityMask(state)
             if self.isTraditionalHearthstoneMatch {
                 let isFriendlyCard = state.side == PlayerSide.friendly.rawValue
+                // Assembled cards highlight the synergies of their effect half.
+                let handEntity = isFriendlyCard && state.isHand
+                    ? self.player.hand.first { $0.zonePosition == state.zonePosition }
+                    : nil
+                let highlightCardId = isFriendlyCard ? RelatedCardsManager.getEffectCardId(handEntity, state.cardId) : nil
 
                 self.windowManager.rootOverlay?.viewModel.playerTrackerHover
-                    .highlightPlayerDeckCards(highlightSourceCardId: isFriendlyCard ? state.cardId : nil)
+                    .highlightPlayerDeckCards(highlightSourceCardId: highlightCardId)
             }
             self.updateTooltips()
             // Mirrors HDT's SetAnomalyGuidesTrigger(string cardId), called
@@ -4865,93 +5033,78 @@ class Game: NSObject, PowerEventHandler {
         }
     }
     
-    func setRelatedCardsTrigger(_ state: DiscoverStateArgs) {
-        // Note: To debug behavior here and/or implement new triggers set a translucent
-        // Background (e.g. #40FF0000) on the RelatedCardsTrigger Grid in Overlay.xaml.
+    // The entity behind the hovered Discover option, if the watcher read one.
+    func discoverOfferedEntity(_ state: DiscoverStateArgs) -> Entity? {
+        guard let entityId = state.entityId, entityId > 0 else {
+            return nil
+        }
+        return entities[entityId]
+    }
 
-        // This runs on the DiscoverStateWatcher queue. windowManager.tooltipGridCards
+    // HDT's Watchers.GetAssembleEffectCardId: the card whose related cards the hovered Assemble
+    // half brings, or the half picked for the preview, else the target's own.
+    func assembleEffectCardId(_ state: AssembleStateArgs) -> String? {
+        let target = entities[state.targetEntityId]
+
+        var choice: Entity?
+        if state.hoveredHalf > 0 {
+            let choices = state.choiceEntityIds.compactMap { entities[$0] }
+            choice = RelatedCardsManager.getAssembleChoice(choices, state.hoveredChoiceIndex, state.hoveredHalf)
+        } else if state.selectedChoiceEntityId > 0 {
+            choice = entities[state.selectedChoiceEntityId]
+        }
+
+        if let choice {
+            return RelatedCardsManager.getAssembleChoiceEffectCardId(choice, target)
+        }
+        guard let target else {
+            return nil
+        }
+        return RelatedCardsManager.getEffectCardId(target, target.cardId)
+    }
+
+    /// The related cards of `effectCardId` for a card offered in a choice (Discover, Assemble).
+    /// Nil when there is nothing to show.
+    private func choiceRelatedCards(effectCardId: String) -> [Card?]? {
+        // HDT's SetRelatedCardsTrigger(DiscoverState) gates this one on OutfinderInDeck.
+        guard !relatedCardsManager.isOutfinderSuppressed(cardId: effectCardId, surfaceEnabled: Settings.outfinderInDeck) else {
+            return nil
+        }
+        let relatedCards = getRelatedCards(player: player, cardId: effectCardId)
+        return relatedCards.count > 0 ? relatedCards : nil
+    }
+
+    // HDT's SetRelatedCardsTrigger(DiscoverState) and SetRelatedCardsTrigger(AssembleState)
+    // hang the tooltip off the same RelatedCardsTrigger grid, so both share its reset and placement.
+    private func resetRelatedCardsTrigger() {
+        // HDT opens with vm.Reset() + SetHoveredLargePool(null, null), so every bail-out takes
+        // the previous option's tooltip down with it.
+        DispatchQueue.main.async {
+            let vm = self.windowManager.tooltipGridCards
+            if vm.cards.count > 0 {
+                vm.hide()
+            }
+            RelatedCardsRightClickMonitor.shared.clearHoveredLargePool()
+        }
+    }
+
+    /// Shows `relatedCards` beside the RelatedCardsTrigger rectangle (window-relative points).
+    private func showRelatedCardsTooltip(_ relatedCards: [Card?], effectCardId: String, frame: NSRect,
+                                         left: CGFloat, top: CGFloat, width: CGFloat, height: CGFloat,
+                                         placement: CardTooltipPlacement) {
+        var tooltipPlacement = placement
+
+        // This runs on the watcher queue. windowManager.tooltipGridCards
         // resolves to RelatedCardsTooltipPanel.shared, whose lazy init instantiates an
         // NSPanel, so every access to the panel - reads included - has to be on the main
         // thread.
-        //
-        // HDT opens with vm.Reset() + SetHoveredLargePool(null, null) and only then decides
-        // whether anything replaces them, so every bail-out takes the previous Discover option's
-        // tooltip down with it - moving from an option that has a pool to one that doesn't must
-        // not leave the old grid on screen.
-        func reset() {
-            DispatchQueue.main.async {
-                let vm = self.windowManager.tooltipGridCards
-                if vm.cards.count > 0 {
-                    vm.hide()
-                }
-                RelatedCardsRightClickMonitor.shared.clearHoveredLargePool()
-            }
-        }
-
-        if state.cardId == "" {
-            reset()
-            return
-        }
-
-        // Not ideal. Maybe we re-position the tooltip on size change and canvas.top/left change?
-
-        // HDT's SetRelatedCardsTrigger(DiscoverState) gates this one on OutfinderInDeck.
-        guard Settings.showPlayerRelatedCards,
-              !relatedCardsManager.isOutfinderSuppressed(cardId: state.cardId, surfaceEnabled: Settings.outfinderInDeck) else {
-            reset()
-            return
-        }
-        let relatedCards = getRelatedCards(player: player, cardId: state.cardId)
-        guard relatedCards.count > 0 else {
-            reset()
-            return
-        }
-
-        let frame = SizeHelper.hearthstoneWindow.frame
-
-        // The trigger rectangle: HDT's RelatedCardsTrigger Grid, laid out over the hovered
-        // Discover option, is what the tooltip is placed against - it is not the tooltip's own
-        // frame. top is measured from the top of the Hearthstone window, as Canvas.Top is.
-        let top = frame.height * 0.2
-        let height = frame.height * 0.53
-        let width = frame.height * 0.3
-        var left = 0.0
-        // vm.Reset() leaves TooltipPlacement at PlacementMode.Top - HDT's own name for this enum -
-        // which is what an unrecognized zone size falls back to.
-        var tooltipPlacement = CardTooltipPlacement.top
-
-        switch state.zoneSize {
-        case 4:
-            left = (0.116 + Double(state.zonePosition) * 0.2) * frame.width
-            tooltipPlacement = state.zonePosition < 2 ? .right : .left
-        case 3:
-            let centerPosition = 1
-            let offsetXScale = 0.2
-
-            let relativePosition = state.zonePosition - centerPosition
-            let offsetX = 0.5 - 0.088 + Double(relativePosition) * offsetXScale
-            left = offsetX * frame.width
-            tooltipPlacement = .right
-        case 2:
-            left = state.zonePosition == 0 ? 0.318 * frame.width : 0.518 * frame.width
-            tooltipPlacement = state.zonePosition == 0 ? .left : .right
-        case 1:
-            left = (0.5 - 0.088) * frame.width
-            tooltipPlacement = .left
-        default:
-            // HDT's switch leaves the trigger at its post-Reset zero size, which can never be
-            // hovered, so no tooltip is shown at all.
-            reset()
-            return
-        }
-
         DispatchQueue.main.async {
             let vm = self.windowManager.tooltipGridCards
             vm.setTitle(String.localizedString("Related_Cards", comment: ""))
             // MaxCardGridHeight="470" on the GridCardImages inside this tooltip, same as every
             // other path that shows it.
             vm.setCardIdsFromCards(relatedCards.compactMap({ $0 }), 470)
-            let (statistics, summary, hasLargePool) = self.relatedCardsManager.getPoolStatistics(cardId: state.cardId, relatedCards: relatedCards, player: self.player)
+            let (statistics, summary, hasLargePool) = self.relatedCardsManager.getPoolStatistics(cardId: effectCardId, relatedCards: relatedCards, player: self.player)
             vm.setPoolStatistics(statistics, relatedCardsSummary: summary, hasLargePool: hasLargePool)
             // SetRelatedCardsTrigger(DiscoverState) opens with vm.Scale = Height / 1080.
             vm.setScale(frame.height / 1080)
@@ -5016,12 +5169,132 @@ class Game: NSObject, PowerEventHandler {
                                       width: tooltipWidth, height: tooltipHeight)
             vm.show(frame: tooltipFrame)
             RelatedCardsRightClickMonitor.shared.setHoveredLargePool(
-                card: hasLargePool ? Cards.by(cardId: state.cardId) : nil,
+                card: hasLargePool ? Cards.by(cardId: effectCardId) : nil,
                 pool: hasLargePool ? relatedCards.compactMap({ $0 }) : [],
                 anchorFrame: tooltipFrame)
         }
     }
-    
+
+    func setRelatedCardsTrigger(_ state: DiscoverStateArgs) {
+        // Note: To debug behavior here and/or implement new triggers set a translucent
+        // Background (e.g. #40FF0000) on the RelatedCardsTrigger Grid in Overlay.xaml.
+
+        // Not ideal. Maybe we re-position the tooltip on size change and canvas.top/left change?
+
+        if state.cardId == "" {
+            resetRelatedCardsTrigger()
+            return
+        }
+
+        // Assembled cards take their related cards from their effect half.
+        let effectCardId = RelatedCardsManager.getEffectCardId(discoverOfferedEntity(state), state.cardId)
+
+        guard Settings.showPlayerRelatedCards else {
+            resetRelatedCardsTrigger()
+            return
+        }
+        guard let relatedCards = choiceRelatedCards(effectCardId: effectCardId) else {
+            resetRelatedCardsTrigger()
+            return
+        }
+
+        let frame = SizeHelper.hearthstoneWindow.frame
+
+        // The trigger rectangle: HDT's RelatedCardsTrigger Grid, laid out over the hovered
+        // Discover option, is what the tooltip is placed against - it is not the tooltip's own
+        // frame. top is measured from the top of the Hearthstone window, as Canvas.Top is.
+        let top = frame.height * 0.2
+        let height = frame.height * 0.53
+        let width = frame.height * 0.3
+        var left: CGFloat = 0
+        // vm.Reset() leaves TooltipPlacement at PlacementMode.Top - HDT's own name for this enum -
+        // which is what an unrecognized zone size falls back to.
+        var tooltipPlacement = CardTooltipPlacement.top
+
+        switch state.zoneSize {
+        case 4:
+            left = (0.116 + CGFloat(state.zonePosition) * 0.2) * frame.width
+            tooltipPlacement = state.zonePosition < 2 ? .right : .left
+        case 3:
+            let centerPosition = 1
+            let offsetXScale = 0.2
+
+            let relativePosition = state.zonePosition - centerPosition
+            let offsetX = 0.5 - 0.088 + Double(relativePosition) * offsetXScale
+            left = CGFloat(offsetX) * frame.width
+            tooltipPlacement = .right
+        case 2:
+            left = state.zonePosition == 0 ? 0.318 * frame.width : 0.518 * frame.width
+            tooltipPlacement = state.zonePosition == 0 ? .left : .right
+        case 1:
+            left = (0.5 - 0.088) * frame.width
+            tooltipPlacement = .left
+        default:
+            // HDT's switch leaves the trigger at its post-Reset zero size, which can never be
+            // hovered, so no tooltip is shown at all.
+            resetRelatedCardsTrigger()
+            return
+        }
+
+        showRelatedCardsTooltip(relatedCards, effectCardId: effectCardId, frame: frame,
+                                left: left, top: top, width: width, height: height,
+                                placement: tooltipPlacement)
+    }
+
+    // Assemble screen layout as fractions of the 4:3 play area (x) and of the height (y), measured
+    // at 1920x1080. Each offered card stacks its trigger half over its effect half.
+    private static let assembleChoiceLefts: [CGFloat] = [0.096, 0.659]
+    private static let assembleHalfWidth: CGFloat = 0.262
+    private static let assembleHalfHeight: CGFloat = 0.104
+    private static let assembleTriggerHalfTop: CGFloat = 0.394
+    private static let assembleEffectHalfTop: CGFloat = 0.503
+    private static let assembleTargetLeft: CGFloat = 0.313
+    private static let assembleTargetTop: CGFloat = 0.19
+    private static let assembleTargetWidth: CGFloat = 0.44
+    private static let assembleTargetHeight: CGFloat = 0.496
+
+    func setRelatedCardsTrigger(_ state: AssembleStateArgs, effectCardId: String?) {
+        guard state.isShowing, let effectCardId, !effectCardId.isEmpty else {
+            resetRelatedCardsTrigger()
+            return
+        }
+        guard Settings.showPlayerRelatedCards else {
+            resetRelatedCardsTrigger()
+            return
+        }
+        guard let relatedCards = choiceRelatedCards(effectCardId: effectCardId) else {
+            resetRelatedCardsTrigger()
+            return
+        }
+
+        let frame = SizeHelper.hearthstoneWindow.frame
+
+        let left: CGFloat
+        let top: CGFloat
+        let width: CGFloat
+        let height: CGFloat
+        let tooltipPlacement: CardTooltipPlacement
+        let choiceIndex = state.hoveredChoiceIndex
+        if state.hoveredHalf > 0 && choiceIndex >= 0 && choiceIndex < Game.assembleChoiceLefts.count {
+            left = SizeHelper.getScaledXPos(Game.assembleChoiceLefts[choiceIndex], width: frame.width, ratio: SizeHelper.screenRatio)
+            top = frame.height * (state.hoveredHalf == 1 ? Game.assembleTriggerHalfTop : Game.assembleEffectHalfTop)
+            width = frame.height * Game.assembleHalfWidth
+            height = frame.height * Game.assembleHalfHeight
+            // Away from the center preview.
+            tooltipPlacement = choiceIndex == 0 ? .left : .right
+        } else {
+            left = SizeHelper.getScaledXPos(Game.assembleTargetLeft, width: frame.width, ratio: SizeHelper.screenRatio)
+            top = frame.height * Game.assembleTargetTop
+            width = frame.height * Game.assembleTargetWidth
+            height = frame.height * Game.assembleTargetHeight
+            tooltipPlacement = .right
+        }
+
+        showRelatedCardsTooltip(relatedCards, effectCardId: effectCardId, frame: frame,
+                                left: left, top: top, width: width, height: height,
+                                placement: tooltipPlacement)
+    }
+
     func handlePlayerMaxHealthChange(_ value: Int) {
         player.maxHealth = value
         updatePlayerResourcesWidget()

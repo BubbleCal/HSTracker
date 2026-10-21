@@ -177,17 +177,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSUserNotificationCenterDele
         } else if refresh && hasRefreshToken {
             logger.debug("OAuth token is expired, renewing")
             
-            HSReplayAPI.oauthswift.renewAccessToken(withRefreshToken: credential.oauthRefreshToken, completionHandler: { result in
-                switch result {
-                case .success(let (credential, _, parameters)):
-                    logger.debug("HSReplay: Refreshed OAuthToken")
-                    Settings.hsReplayOAuthToken =  credential.oauthToken
-                    Settings.hsReplayOAuthRefreshToken = credential.oauthRefreshToken
-                    Settings.hsReplayOAuthTokenExpiration = credential.oauthTokenExpiresAt
-                    Settings.hsReplayOAuthScope = parameters["scope"] as? String
-                    HSReplayAPI.updateOAuthCredential()
-                    HSReplayAPI.getAccount().done { result in
-                        switch result {
+            OAuthTokenRefresher.refresh { success in
+                if success {
+                    Task { @MainActor in
+                        switch await HSReplayAPI.getAccount() {
                         case .failed:
                             logger.error("Failed to retrieve account data")
                             logger.info("HSReplay: signed in=false premium=false")
@@ -196,16 +189,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSUserNotificationCenterDele
                             logger.info("Successfully retrieved account data: Username: \(data.username), battletag: \(data.battletag)")
                             logger.info("HSReplay: signed in=true premium=\(data.is_premium)")
                         }
-                    }.catch { error in
-                        logger.error(error)
                     }
-                case .failure(let error):
-                    logger.error(error)
                 }
-            })
+            }
         } else {
-            _ = HSReplayAPI.getAccount().done { result in
-                switch result {
+            Task { @MainActor in
+                switch await HSReplayAPI.getAccount() {
                 case .failed:
                     logger.error("Failed to retrieve account data")
                     logger.info("HSReplay: signed in=false premium=false")
@@ -392,6 +381,27 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSUserNotificationCenterDele
             // failed response by logging it and carrying on.
             options.enableCaptureFailedRequests = false
 
+            // NSAlert.runModal() - ours or Sparkle's - spins the main run loop
+            // in the modal panel mode, which never drains the main dispatch
+            // queue, so the hang tracker reports the whole time an alert sits
+            // waiting for the user as a hang (HSTRACKER-MH, HSTRACKER-2QE,
+            // HSTRACKER-26Z). The event is captured while the main thread is
+            // still in that loop, and CFRunLoop is safe to query from another
+            // thread; the stack frames themselves aren't symbolicated on
+            // device, so they can't be matched instead.
+            options.beforeSend = { event in
+                if event.exceptions?.first?.mechanism?.type == "AppHang",
+                   let mode = CFRunLoopCopyCurrentMode(CFRunLoopGetMain()),
+                   mode.rawValue as String == RunLoop.Mode.modalPanel.rawValue {
+                    return nil
+                }
+                // BobsBuddy failures carry the .NET stacktrace on their exception; the SDK
+                // also attaches the current Swift threads to every event with an exception,
+                // which Sentry would show instead. Only beforeSend runs late enough to
+                // remove them.
+                return BobsBuddySimulationFailure.stripNativeThreads(from: event)
+            }
+
             // Set tracesSampleRate to 1.0 to capture 100% of transactions for performance monitoring.
             // We recommend adjusting this value in production.
             options.tracesSampleRate = 0.0
@@ -491,6 +501,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSUserNotificationCenterDele
             
             self.operationQueue = OperationQueue()
             self.operationQueue.addOperations(operations, waitUntilFinished: true)
+            // The panel expansion used to be saved on every toggle.
+            UserDefaults.standard.removeObject(forKey: "tavern_markers_panel_expanded")
             DispatchQueue.main.async {
                 self.completeSetup()
             }
@@ -867,9 +879,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSUserNotificationCenterDele
         windowMove?.showWindow(self)
     }
     #endif
-    
-    @IBAction func closeWindow(_ sender: AnyObject) {
-    }
     
     @IBAction func openLogDirectory(_ sender: AnyObject) {
         NSWorkspace.shared.activateFileViewerSelecting([Paths.logs])

@@ -185,6 +185,12 @@
       "comment" : "Class = \"NSMenuItem\"; title = \"Bug report...\"; ObjectID = \"3dl-ss-r23\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fehler melden …"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -743,6 +749,12 @@
       "comment" : "Class = \"NSMenuItem\"; title = \"Open logs directory...\"; ObjectID = \"aNE-rT-1XM\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Protokollordner öffnen …"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -944,7 +956,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Einstellungen…"
+            "value" : "Einstellungen …"
           }
         },
         "en" : {
@@ -1121,6 +1133,12 @@
       "comment" : "Class = \"NSMenu\"; title = \"Last replays\"; ObjectID = \"Ck1-T5-ndx\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Letzte Replays"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -2072,7 +2090,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Deck Manager"
+            "value" : "Deck-Manager"
           }
         },
         "en" : {
@@ -2423,6 +2441,12 @@
       "comment" : "Class = \"NSMenuItem\"; title = \"Replays\"; ObjectID = \"RBa-X9-6k6\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Replays"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -3107,6 +3131,12 @@
       "comment" : "Class = \"NSMenuItem\"; title = \"Delete cached images...\"; ObjectID = \"wk0-Ek-O7t\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zwischengespeicherte Bilder löschen …"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",

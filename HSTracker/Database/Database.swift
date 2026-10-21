@@ -111,6 +111,21 @@ class Database {
 
     // list of cards that are incorrectly tagged as BG
     static let battlegroundsExclusions: Set = [ "CORE_LOE_077" ]
+
+    // Multi-class Tavern Brawl heroes have no CLASS tag, only MULTIPLE_CLASSES
+    static let multiClassBrawlHeroes: [String: CardClass] = [
+        "TB_MultiClass_Hero_Lich_King": .deathknight,
+        "TB_MultiClass_Hero_Illidan": .demonhunter,
+        "TB_MultiClass_Hero_Garrosh": .warrior,
+        "TB_MultiClass_Hero_Thrall": .shaman,
+        "TB_MultiClass_Hero_Valeera": .rogue,
+        "TB_MultiClass_Hero_Uther": .paladin,
+        "TB_MultiClass_Hero_Rexxar": .hunter,
+        "TB_MultiClass_Hero_Malfurion": .druid,
+        "TB_MultiClass_Hero_Guldan": .warlock,
+        "TB_MultiClass_Hero_Jaina": .mage,
+        "TB_MultiClass_Hero_Anduin": .priest
+    ]
     
     static var battlegroundRaces = [Race]()
 
@@ -276,6 +291,8 @@ class Database {
             currentCard?.costFrost = intValue
         case GameTag.cost_unholy.rawValue:
             currentCard?.costUnholy = intValue
+        case GameTag.old_god.rawValue:
+            currentCard?.isOldGod = intValue > 0
         case GameTag.multiple_classes.rawValue:
             currentCard?.multipleClasses = intValue
         case GameTag.bacon_triple_upgrade_minion_id.rawValue:
@@ -299,6 +316,8 @@ class Database {
             }
         case GameTag.bacon_heropower_base_hero_id.rawValue:
             currentCard?.baconHeroPowerBaseHeroId = intValue
+        case GameTag.hero_power.rawValue:
+            currentCard?.heroPowerDbfId = intValue
         case GameTag.kabal.rawValue, GameTag.grimy_goons.rawValue, GameTag.jade_lotus.rawValue, GameTag.protoss.rawValue, GameTag.terran.rawValue, GameTag.zerg.rawValue:
             if intValue > 0 {
                 currentCard?.faction = GameTag(rawValue: id)
@@ -349,6 +368,9 @@ class Database {
         }
         guard let card = currentCard else {
             return
+        }
+        if card.playerClass == .neutral, let heroClass = Database.multiClassBrawlHeroes[card.id] {
+            card.playerClass = heroClass
         }
         if let set = card.set {
             card.isStandard = !CardSet.wildSets.contains(set) && !CardSet.classicSets.contains(set)
