@@ -84,6 +84,30 @@ class PowerParserTests: HSTrackerTests {
         parser.handle(logLine: LogLine(namespace: .power, line: line))
     }
 
+    func testGhuunUsesTheRunesOfFetidDevourersPlayedForm() {
+        let counter = BloodRunesPlayedCounter(controlledByPlayer: true, game: game)
+        let cases = [
+            (previousForm: "BE_781t4", previousBlood: 3, playedForm: "BE_781t3", total: "8"),
+            (previousForm: "BE_781t3", previousBlood: 2, playedForm: "BE_781t4", total: "11"),
+            (previousForm: "BE_781t4", previousBlood: 3, playedForm: "BE_781t5", total: "11"),
+            (previousForm: "BE_781t5", previousBlood: 0, playedForm: "BE_781t15", total: "12")
+        ]
+
+        for scenario in cases {
+            let devourer = createEntity(cardId: "BE_781")
+            devourer.info.latestCardId = scenario.previousForm
+            devourer[.cost_blood] = scenario.previousBlood
+            handle("D 15:46:29.6377190 PowerTaskList.DebugPrintPower() - CHANGE_ENTITY - Updating Entity=[entityName=Fetid Devourer id=\(devourer.id) zone=HAND zonePos=1 cardId=\(scenario.previousForm) player=1] CardID=\(scenario.playedForm)")
+
+            XCTAssertEqual(devourer.info.latestCardId, scenario.playedForm)
+            counter.recordPlayedBloodRunes(for: devourer)
+            XCTAssertEqual(counter.counterValue, scenario.total, scenario.playedForm)
+        }
+
+        counter.recordPlayedBloodRunes(for: createEntity(cardId: "BE_287"))
+        XCTAssertEqual(counter.counterValue, "15")
+    }
+
     func testCardRaceTagKeepsNamedAndNumericRaces() {
         let minion = createEntity(cardId: "")
         let races = [("ABERRATION", 126), ("MECHANICAL", 17), ("ALL", 26), ("24", 24), ("INVALID", 0)]

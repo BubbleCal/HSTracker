@@ -61,11 +61,11 @@ class BloodRunesPlayedCounter: NumericCounter {
             return
         }
 
-        let bloodRunes = entity.latestCard.costBlood
-        if bloodRunes <= 0 {
-            return
-        }
+        recordPlayedBloodRunes(for: entity)
+    }
 
-        counter += bloodRunes
+    func recordPlayedBloodRunes(for entity: Entity) {
+        // A transformed card's latestCard holds only its ID. Look up that form's rune costs.
+        counter += Cards.any(byId: entity.info.latestCardId)?.costBlood ?? 0
     }
 }
