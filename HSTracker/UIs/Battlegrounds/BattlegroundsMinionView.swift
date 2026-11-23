@@ -216,6 +216,14 @@ class BattlegroundsMinionView: NSView {
             paragraph.alignment = .center
             attributes[.paragraphStyle] = paragraph
 
+            let textWidth = text.size(withAttributes: attributes).width
+            // Leave a point on each side for the outline.
+            let availableWidth = rect.width - 2
+            if textWidth > availableWidth {
+                let fittedSize = font.pointSize * availableWidth / textWidth
+                attributes[.font] = NSFontManager.shared.convert(font, toSize: fittedSize)
+            }
+
             text.draw(with: rect, options: NSString.DrawingOptions.truncatesLastVisibleLine,
                                         attributes: attributes)
         }
