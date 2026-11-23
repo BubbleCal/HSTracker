@@ -206,6 +206,12 @@ class TagChangeHandler {
         case .step:
             return Step(rawString: rawValue)!.rawValue
 
+        case .cardrace:
+            if let race = Race(rawValue: rawValue.lowercased()) {
+                return Race.lookup(race)
+            }
+            return Int(rawValue) ?? 0
+
         default:
             if let value = Int(rawValue) {
                 return value

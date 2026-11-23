@@ -84,6 +84,16 @@ class PowerParserTests: HSTrackerTests {
         parser.handle(logLine: LogLine(namespace: .power, line: line))
     }
 
+    func testCardRaceTagKeepsNamedAndNumericRaces() {
+        let minion = createEntity(cardId: "")
+        let races = [("ABERRATION", 126), ("MECHANICAL", 17), ("ALL", 26), ("24", 24), ("INVALID", 0)]
+
+        for (value, expected) in races {
+            handle("D 15:46:29.6377190 PowerTaskList.DebugPrintPower() -     TAG_CHANGE Entity=\(minion.id) tag=CARDRACE value=\(value)")
+            XCTAssertEqual(minion[.cardrace], expected, value)
+        }
+    }
+
     func testCreateGameEntity() {
         //let parser = PowerGameStateParser()
     }
