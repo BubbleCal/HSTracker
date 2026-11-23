@@ -93,6 +93,7 @@ struct PlayerResourcesView: View {
                     // verbatim: a plain "\(Int)" interpolation would have the
                     // value run through the locale's number formatter.
                     Text(verbatim: "\(resource.value)")
+                        .foregroundColor(.white)
                         .fixedSize()
                 }
             }
