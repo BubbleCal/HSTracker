@@ -10,10 +10,6 @@ import Foundation
 
 // G'huun: "Battlecry: Steal 6 Health split among the lowest Health enemies. Improved by Blood Runes you've played."
 class BloodRunesPlayedCounter: NumericCounter {
-    override var localizedName: String {
-        return String.localizedString("Counter_BloodRunesPlayed", comment: "")
-    }
-
     override var cardIdToShowInUI: String? {
         return CardIds.Collectible.Deathknight.Ghuun
     }
@@ -43,7 +39,7 @@ class BloodRunesPlayedCounter: NumericCounter {
     }
 
     override func valueToShow() -> String {
-        return String(counter)
+        return String(6 + counter)
     }
 
     override func handleTagChange(tag: GameTag, entity: Entity, value: Int, prevValue: Int) {
